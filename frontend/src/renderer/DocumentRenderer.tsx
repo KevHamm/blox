@@ -4,12 +4,16 @@ export function DocumentRenderer({
   node,
   editingId,
   setEditingId,
-  updateTextById
+  updateTextById,
+  addParagraph,
+  deleteNodeById
 }: {
   node: DocumentNode;
   editingId: string | null;
   setEditingId: (id: string | null) => void;
   updateTextById: (id: string, value: string) => void;
+  addParagraph: (sectionId: string) => void;
+  deleteNodeById: (id: string) => void;
 }) {
   switch (node.type) {
     case "document":
@@ -22,6 +26,8 @@ export function DocumentRenderer({
               editingId={editingId}
               setEditingId={setEditingId}
               updateTextById={updateTextById}
+              addParagraph={addParagraph}
+              deleteNodeById={deleteNodeById}
             />
           ))}
         </div>
@@ -32,15 +38,30 @@ export function DocumentRenderer({
         <div style={{ marginBottom: 16 }}>
           <h2>{node.title}</h2>
 
-          {node.children.map((c) => (
-            <DocumentRenderer
-              key={c.id}
-              node={c}
-              editingId={editingId}
-              setEditingId={setEditingId}
-              updateTextById={updateTextById}
-            />
-          ))}
+          <button onClick={() => addParagraph(node.id)}>
+            + Add paragraph
+          </button>
+
+          <button
+            onClick={() => deleteNodeById(node.id)}
+            style={{ marginLeft: 8 }}
+          >
+            Delete section
+          </button>
+
+          <div style={{ marginTop: 8 }}>
+            {node.children.map((c) => (
+              <DocumentRenderer
+                key={c.id}
+                node={c}
+                editingId={editingId}
+                setEditingId={setEditingId}
+                updateTextById={updateTextById}
+                addParagraph={addParagraph}
+                deleteNodeById={deleteNodeById}
+              />
+            ))}
+          </div>
         </div>
       );
 
@@ -48,14 +69,29 @@ export function DocumentRenderer({
       const isEditing = editingId === node.id;
 
       return isEditing ? (
-        <input
-          autoFocus
-          value={node.text}
-          onChange={(e) => updateTextById(node.id, e.target.value)}
-          onBlur={() => setEditingId(null)}
-        />
+        <div>
+          <input
+            autoFocus
+            value={node.text}
+            onChange={(e) => updateTextById(node.id, e.target.value)}
+            onBlur={() => setEditingId(null)}
+          />
+
+          <button onClick={() => deleteNodeById(node.id)}>
+            Delete
+          </button>
+        </div>
       ) : (
-        <p onClick={() => setEditingId(node.id)}>{node.text}</p>
+        <div>
+          <p onClick={() => setEditingId(node.id)}>{node.text}</p>
+
+          <button onClick={() => deleteNodeById(node.id)}>
+            Delete
+          </button>
+        </div>
       );
+
+    default:
+      return null;
   }
 }
