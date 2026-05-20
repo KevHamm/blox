@@ -1,4 +1,4 @@
-import { DocumentNode } from "../types/document";
+import type { DocumentNode } from "../types/document";
 
 export const sampleDocument: DocumentNode = {
   type: "document",

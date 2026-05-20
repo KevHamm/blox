@@ -1,4 +1,4 @@
-import { DocumentNode } from "../types/document";
+import type { DocumentNode } from "../types/document";
 
 export function DocumentRenderer({ node }: { node: DocumentNode }) {
   switch (node.type) {
