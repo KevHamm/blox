@@ -11,6 +11,11 @@ export default function App() {
   const [editingId, setEditingId] =
     useState<string | null>(null);
 
+  const [dropTarget, setDropTarget] = useState<{
+    id: string | null;
+    position: "above" | "below" | null;
+  }>({ id: null, position: null });
+
   // EDIT paragraph text
   function updateTextById(
     id: string,
@@ -96,10 +101,7 @@ export default function App() {
   }
 
   // MOVE node
-  function moveNode(
-    draggedId: string,
-    targetId: string
-  ) {
+   function moveNode(draggedId: string, targetId: string, position?: "above" | "below") {
     setDoc((prev: any) => {
       const clone = structuredClone(prev);
 
@@ -112,9 +114,7 @@ export default function App() {
         }
 
         if (node.children) {
-          node.children = node.children
-            .map(remove)
-            .filter(Boolean);
+          node.children = node.children.map(remove).filter(Boolean);
         }
 
         return node;
@@ -123,34 +123,19 @@ export default function App() {
       remove(clone);
 
       function insert(node: any): any {
-        if (!node.children) {
+        if (!node.children) return node;
+
+        const index = node.children.findIndex((c: any) => c.id === targetId);
+
+        if (index !== -1 && draggedNode) {
+          const insertIndex =
+            position === "below" ? index + 1 : index;
+
+          node.children.splice(insertIndex, 0, draggedNode);
           return node;
         }
 
-        const index =
-          targetId === "__END__"
-            ? node.children.length
-            : node.children.findIndex(
-                (c: any) =>
-                  c.id === targetId
-              );
-
-        if (
-          index !== -1 &&
-          draggedNode
-        ) {
-          node.children.splice(
-            index,
-            0,
-            draggedNode
-          );
-
-          return node;
-        }
-
-        node.children =
-          node.children.map(insert);
-
+        node.children = node.children.map(insert);
         return node;
       }
 
@@ -196,7 +181,7 @@ export default function App() {
     <div
       style={{
         padding: "40px",
-        paddingRight: "260px",
+        paddingLeft: "260px",
         minHeight: "100vh"
       }}
     >
@@ -255,6 +240,8 @@ export default function App() {
             deleteNodeById
           }
           moveNode={moveNode}
+          dropTarget={dropTarget}
+          setDropTarget={setDropTarget}
         />
       </div>
 

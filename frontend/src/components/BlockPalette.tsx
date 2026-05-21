@@ -16,7 +16,7 @@ export function BlockPalette() {
         borderLeft: "1px solid #ddd",
         padding: 16,
         position: "fixed",
-        right: 0,
+        left: 0,
         top: 0,
         bottom: 0,
         background: "#fafafa"
