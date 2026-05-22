@@ -100,8 +100,12 @@ export default function App() {
     setDoc((prev) => remove(prev));
   }
 
-  // MOVE node
-   function moveNode(draggedId: string, targetId: string, position?: "above" | "below") {
+  // MOVE existing nodes
+  function moveNode(
+    draggedId: string,
+    targetId: string,
+    position?: "above" | "below"
+  ) {
     setDoc((prev: any) => {
       const clone = structuredClone(prev);
 
@@ -114,7 +118,9 @@ export default function App() {
         }
 
         if (node.children) {
-          node.children = node.children.map(remove).filter(Boolean);
+          node.children = node.children
+            .map(remove)
+            .filter(Boolean);
         }
 
         return node;
@@ -125,17 +131,27 @@ export default function App() {
       function insert(node: any): any {
         if (!node.children) return node;
 
-        const index = node.children.findIndex((c: any) => c.id === targetId);
+        const index = node.children.findIndex(
+          (c: any) => c.id === targetId
+        );
 
         if (index !== -1 && draggedNode) {
           const insertIndex =
-            position === "below" ? index + 1 : index;
+            position === "below"
+              ? index + 1
+              : index;
 
-          node.children.splice(insertIndex, 0, draggedNode);
+          node.children.splice(
+            insertIndex,
+            0,
+            draggedNode
+          );
+
           return node;
         }
 
         node.children = node.children.map(insert);
+
         return node;
       }
 
@@ -143,38 +159,69 @@ export default function App() {
     });
   }
 
-  // CREATE new block from sidebar
-  function createBlock(type: string) {
-    console.log("CREATE BLOCK:", type);
-
-    if (type === "section") {
-      setDoc((prev) => ({
-        ...prev,
-        children: [
-          ...prev.children,
-          {
+  // CREATE new blocks from palette
+  function createBlock(
+    type: string,
+    targetId?: string,
+    position?: "above" | "below"
+  ) {
+    const newNode =
+      type === "section"
+        ? {
             id: crypto.randomUUID(),
             type: "section",
             title: "New Section",
             children: []
           }
-        ]
-      }));
-    }
-
-    if (type === "paragraph") {
-      setDoc((prev) => ({
-        ...prev,
-        children: [
-          ...prev.children,
-          {
+        : {
             id: crypto.randomUUID(),
             type: "paragraph",
             text: "New paragraph"
-          }
-        ]
+          };
+
+    // APPEND if no target
+    if (!targetId) {
+      setDoc((prev: any) => ({
+        ...prev,
+        children: [...prev.children, newNode]
       }));
+
+      return;
     }
+
+    // INSERT near target
+    setDoc((prev: any) => {
+      const clone = structuredClone(prev);
+
+      function insert(node: any): any {
+        if (!node.children) return node;
+
+        const index = node.children.findIndex(
+          (c: any) => c.id === targetId
+        );
+
+        if (index !== -1) {
+          const insertIndex =
+            position === "below"
+              ? index + 1
+              : index;
+
+          node.children.splice(
+            insertIndex,
+            0,
+            newNode
+          );
+
+          return node;
+        }
+
+        node.children = node.children.map(insert);
+
+        return node;
+      }
+
+      return insert(clone);
+    });
   }
 
   return (
@@ -199,28 +246,8 @@ export default function App() {
         }}
       />
 
-      {/* DOCUMENT DROP ZONE */}
+      {/* DOCUMENT AREA */}
       <div
-        onDragOver={(e) => {
-          e.preventDefault();
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-
-          const blockType =
-            e.dataTransfer.getData(
-              "application/blox-block"
-            );
-
-          console.log(
-            "DROPPED:",
-            blockType
-          );
-
-          if (blockType) {
-            createBlock(blockType);
-          }
-        }}
         style={{
           minHeight: "400px",
           padding: "20px",
@@ -240,6 +267,7 @@ export default function App() {
             deleteNodeById
           }
           moveNode={moveNode}
+          createBlock={createBlock}
           dropTarget={dropTarget}
           setDropTarget={setDropTarget}
         />
