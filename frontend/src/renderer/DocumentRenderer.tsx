@@ -127,7 +127,6 @@ function SortableSection({
       {...attributes}
       {...listeners}
     >
-      <h2 style={{ color: "#333"}}>{node.title}</h2>
 
       {editingId === node.id ? (
         <input
