@@ -11,11 +11,6 @@ export default function App() {
   const [editingId, setEditingId] =
     useState<string | null>(null);
 
-  const [dropTarget, setDropTarget] = useState<{
-    id: string | null;
-    position: "above" | "below" | null;
-  }>({ id: null, position: null });
-
   // EDIT paragraph text
   function updateTextById(
     id: string,
@@ -100,128 +95,50 @@ export default function App() {
     setDoc((prev) => remove(prev));
   }
 
-  // MOVE existing nodes
-  function moveNode(
-    draggedId: string,
-    targetId: string,
-    position?: "above" | "below"
+  // REORDER paragraphs inside section
+  function reorderSectionChildren(
+    sectionId: string,
+    oldIndex: number,
+    newIndex: number
   ) {
-    setDoc((prev: any) => {
-      const clone = structuredClone(prev);
+    function update(node: any): any {
+      if (
+        node.id === sectionId &&
+        node.type === "section"
+      ) {
+        const updatedChildren = [
+          ...node.children
+        ];
 
-      let draggedNode: any = null;
-
-      function remove(node: any): any {
-        if (node.id === draggedId) {
-          draggedNode = node;
-          return null;
-        }
-
-        if (node.children) {
-          node.children = node.children
-            .map(remove)
-            .filter(Boolean);
-        }
-
-        return node;
-      }
-
-      remove(clone);
-
-      function insert(node: any): any {
-        if (!node.children) return node;
-
-        const index = node.children.findIndex(
-          (c: any) => c.id === targetId
-        );
-
-        if (index !== -1 && draggedNode) {
-          const insertIndex =
-            position === "below"
-              ? index + 1
-              : index;
-
-          node.children.splice(
-            insertIndex,
-            0,
-            draggedNode
+        const [moved] =
+          updatedChildren.splice(
+            oldIndex,
+            1
           );
 
-          return node;
-        }
+        updatedChildren.splice(
+          newIndex,
+          0,
+          moved
+        );
 
-        node.children = node.children.map(insert);
-
-        return node;
+        return {
+          ...node,
+          children: updatedChildren
+        };
       }
 
-      return insert(clone);
-    });
-  }
+      if (node.children) {
+        return {
+          ...node,
+          children: node.children.map(update)
+        };
+      }
 
-  // CREATE new blocks from palette
-  function createBlock(
-    type: string,
-    targetId?: string,
-    position?: "above" | "below"
-  ) {
-    const newNode =
-      type === "section"
-        ? {
-            id: crypto.randomUUID(),
-            type: "section",
-            title: "New Section",
-            children: []
-          }
-        : {
-            id: crypto.randomUUID(),
-            type: "paragraph",
-            text: "New paragraph"
-          };
-
-    // APPEND if no target
-    if (!targetId) {
-      setDoc((prev: any) => ({
-        ...prev,
-        children: [...prev.children, newNode]
-      }));
-
-      return;
+      return node;
     }
 
-    // INSERT near target
-    setDoc((prev: any) => {
-      const clone = structuredClone(prev);
-
-      function insert(node: any): any {
-        if (!node.children) return node;
-
-        const index = node.children.findIndex(
-          (c: any) => c.id === targetId
-        );
-
-        if (index !== -1) {
-          const insertIndex =
-            position === "below"
-              ? index + 1
-              : index;
-
-          node.children.splice(
-            insertIndex,
-            0,
-            newNode
-          );
-
-          return node;
-        }
-
-        node.children = node.children.map(insert);
-
-        return node;
-      }
-
-      return insert(clone);
-    });
+    setDoc((prev) => update(prev));
   }
 
   return (
@@ -246,7 +163,6 @@ export default function App() {
         }}
       />
 
-      {/* DOCUMENT AREA */}
       <div
         style={{
           minHeight: "400px",
@@ -266,10 +182,9 @@ export default function App() {
           deleteNodeById={
             deleteNodeById
           }
-          moveNode={moveNode}
-          createBlock={createBlock}
-          dropTarget={dropTarget}
-          setDropTarget={setDropTarget}
+          reorderSectionChildren={
+            reorderSectionChildren
+          }
         />
       </div>
 

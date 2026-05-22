@@ -1,5 +1,94 @@
 import type { DocumentNode } from "../types/document";
 
+import {
+  DndContext,
+  closestCenter
+} from "@dnd-kit/core";
+
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove
+} from "@dnd-kit/sortable";
+
+import { CSS } from "@dnd-kit/utilities";
+
+function SortableParagraph({
+  node,
+  editingId,
+  setEditingId,
+  updateTextById,
+  deleteNodeById
+}: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition
+  } = useSortable({
+    id: node.id
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(
+      transform
+    ),
+    transition,
+    padding: 6,
+    marginBottom: 6,
+    border: "1px solid #ddd",
+    background: "white",
+    cursor: "grab"
+  };
+
+  const isEditing =
+    editingId === node.id;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      {isEditing ? (
+        <input
+          autoFocus
+          value={node.text}
+          onChange={(e) =>
+            updateTextById(
+              node.id,
+              e.target.value
+            )
+          }
+          onBlur={() =>
+            setEditingId(null)
+          }
+          style={{ width: "100%" }}
+        />
+      ) : (
+        <p
+          onClick={() =>
+            setEditingId(node.id)
+          }
+        >
+          {node.text}
+        </p>
+      )}
+
+      <button
+        onClick={() =>
+          deleteNodeById(node.id)
+        }
+      >
+        Delete
+      </button>
+    </div>
+  );
+}
+
 export function DocumentRenderer({
   node,
   editingId,
@@ -7,10 +96,7 @@ export function DocumentRenderer({
   updateTextById,
   addParagraph,
   deleteNodeById,
-  moveNode,
-  createBlock,
-  dropTarget,
-  setDropTarget
+  reorderSectionChildren
 }: {
   node: DocumentNode;
   editingId: string | null;
@@ -25,27 +111,12 @@ export function DocumentRenderer({
   deleteNodeById: (
     id: string
   ) => void;
-  moveNode: (
-    draggedId: string,
-    targetId: string,
-    position?: "above" | "below"
+
+  reorderSectionChildren: (
+    sectionId: string,
+    oldIndex: number,
+    newIndex: number
   ) => void;
-
-  createBlock: (
-    type: string,
-    targetId?: string,
-    position?: "above" | "below"
-  ) => void;
-
-  dropTarget: {
-    id: string | null;
-    position:
-      | "above"
-      | "below"
-      | null;
-  };
-
-  setDropTarget: (v: any) => void;
 }) {
   switch (node.type) {
     case "document":
@@ -60,10 +131,9 @@ export function DocumentRenderer({
               updateTextById={updateTextById}
               addParagraph={addParagraph}
               deleteNodeById={deleteNodeById}
-              moveNode={moveNode}
-              createBlock={createBlock}
-              dropTarget={dropTarget}
-              setDropTarget={setDropTarget}
+              reorderSectionChildren={
+                reorderSectionChildren
+              }
             />
           ))}
         </div>
@@ -97,177 +167,78 @@ export function DocumentRenderer({
             Delete section
           </button>
 
-          <div style={{ marginTop: 8 }}>
-            {node.children.map((c) => (
-              <DocumentRenderer
-                key={c.id}
-                node={c}
-                editingId={editingId}
-                setEditingId={setEditingId}
-                updateTextById={updateTextById}
-                addParagraph={addParagraph}
-                deleteNodeById={deleteNodeById}
-                moveNode={moveNode}
-                createBlock={createBlock}
-                dropTarget={dropTarget}
-                setDropTarget={setDropTarget}
-              />
-            ))}
-          </div>
-        </div>
-      );
-
-    case "paragraph": {
-      const isEditing =
-        editingId === node.id;
-
-      return (
-        <div
-          draggable={!isEditing}
-          onDragStart={(e) => {
-            e.dataTransfer.setData(
-              "text/plain",
-              node.id
-            );
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-
-            const rect =
-              (
-                e.currentTarget as HTMLElement
-              ).getBoundingClientRect();
-
-            const mid =
-              rect.top +
-              rect.height / 2;
-
-            const position =
-              e.clientY < mid
-                ? "above"
-                : "below";
-
-            setDropTarget({
-              id: node.id,
-              position
-            });
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-
-            const blockType =
-              e.dataTransfer.getData(
-                "application/blox-block"
-              );
-
-            // CREATE NEW BLOCK
-            if (blockType) {
-              createBlock(
-                blockType,
-                node.id,
-                dropTarget.position ??
-                  "above"
-              );
-
-              setDropTarget({
-                id: null,
-                position: null
-              });
-
-              return;
+          <DndContext
+            collisionDetection={
+              closestCenter
             }
+            onDragEnd={(event) => {
+              const {
+                active,
+                over
+              } = event;
 
-            // MOVE EXISTING BLOCK
-            const draggedId =
-              e.dataTransfer.getData(
-                "text/plain"
-              );
+              if (
+                over &&
+                active.id !== over.id
+              ) {
+                const oldIndex =
+                  node.children.findIndex(
+                    (c: any) =>
+                      c.id === active.id
+                  );
 
-            if (
-              draggedId !== node.id
-            ) {
-              moveNode(
-                draggedId,
-                node.id,
-                dropTarget.position ??
-                  "above"
-              );
-            }
+                const newIndex =
+                  node.children.findIndex(
+                    (c: any) =>
+                      c.id === over.id
+                  );
 
-            setDropTarget({
-              id: null,
-              position: null
-            });
-          }}
-          style={{
-            padding: 6,
-            marginBottom: 6,
-            border: "1px solid #ddd",
-            background: "white",
-            cursor: "grab"
-          }}
-        >
-          {/* ABOVE INDICATOR */}
-          {dropTarget.id === node.id &&
-            dropTarget.position ===
-              "above" && (
-              <div
-                style={{
-                  height: 2,
-                  background: "blue",
-                  marginBottom: 4
-                }}
-              />
-            )}
-
-          {isEditing ? (
-            <input
-              autoFocus
-              value={node.text}
-              onChange={(e) =>
-                updateTextById(
+                reorderSectionChildren(
                   node.id,
-                  e.target.value
-                )
+                  oldIndex,
+                  newIndex
+                );
               }
-              onBlur={() =>
-                setEditingId(null)
-              }
-              style={{ width: "100%" }}
-            />
-          ) : (
-            <p
-              onClick={() =>
-                setEditingId(node.id)
+            }}
+          >
+            <SortableContext
+              items={node.children.map(
+                (c) => c.id
+              )}
+              strategy={
+                verticalListSortingStrategy
               }
             >
-              {node.text}
-            </p>
-          )}
-
-          <button
-            onClick={() =>
-              deleteNodeById(node.id)
-            }
-          >
-            Delete
-          </button>
-
-          {/* BELOW INDICATOR */}
-          {dropTarget.id === node.id &&
-            dropTarget.position ===
-              "below" && (
               <div
                 style={{
-                  height: 2,
-                  background: "blue",
-                  marginTop: 4
+                  marginTop: 8
                 }}
-              />
-            )}
+              >
+                {node.children.map(
+                  (c) => (
+                    <SortableParagraph
+                      key={c.id}
+                      node={c}
+                      editingId={
+                        editingId
+                      }
+                      setEditingId={
+                        setEditingId
+                      }
+                      updateTextById={
+                        updateTextById
+                      }
+                      deleteNodeById={
+                        deleteNodeById
+                      }
+                    />
+                  )
+                )}
+              </div>
+            </SortableContext>
+          </DndContext>
         </div>
       );
-    }
 
     default:
       return null;
