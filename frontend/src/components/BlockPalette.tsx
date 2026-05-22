@@ -1,3 +1,48 @@
+import { useDraggable } from "@dnd-kit/core";
+
+function DraggableBlock({
+  type,
+  label,
+  description
+}: {
+  type: string;
+  label: string;
+  description: string;
+}) {
+  const { attributes, listeners, setNodeRef, transform } =
+    useDraggable({
+      id: `palette-${type}`,
+      data: {
+        type,
+        isPaletteItem: true
+      }
+    });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{
+        padding: 12,
+        marginBottom: 10,
+        border: "1px solid #ccc",
+        background: "white",
+        borderRadius: 6,
+        cursor: "grab",
+        transform: transform
+          ? `translate(${transform.x}px, ${transform.y}px)`
+          : undefined
+      }}
+    >
+      <strong>{label}</strong>
+      <div style={{ fontSize: 12, color: "#666" }}>
+        {description}
+      </div>
+    </div>
+  );
+}
+
 export function BlockPalette({
   onReset
 }: {
@@ -7,7 +52,7 @@ export function BlockPalette({
     <div
       style={{
         width: 220,
-        borderRight: "1px solid #0000000",
+        borderRight: "1px solid #ddd",
         padding: 16,
         position: "fixed",
         left: 0,
@@ -19,74 +64,26 @@ export function BlockPalette({
       }}
     >
       <div>
-        <h3 style={{ marginBottom: 12 }}>
-          Blocks
-        </h3>
+        <h3 style={{ marginBottom: 12 }}>Blocks</h3>
 
-        {/* SECTION BLOCK */}
-        <div
-          style={{
-            padding: 12,
-            marginBottom: 10,
-            border: "1px solid #000000",
-            background: "white",
-            borderRadius: 6
-          }}
-        >
-          <strong>Section</strong>
-
-          <div
-            style={{
-              fontSize: 12,
-              color: "#666"
-            }}
-          >
-            Sortable container
-          </div>
-        </div>
-
-        {/* PARAGRAPH BLOCK */}
-        <div
-          style={{
-            padding: 12,
-            border: "1px solid #000000",
-            background: "white",
-            borderRadius: 6
-          }}
-        >
-          <strong>Paragraph</strong>
-
-          <div
-            style={{
-              fontSize: 12,
-              color: "#666"
-            }}
-          >
-            Editable text
-          </div>
-        </div>
-      </div>
-
-      {/* BOTTOM AREA */}
-      <div
-        style={{
-          marginTop: "auto"
-        }}
-      >
-        <hr
-          style={{
-            margin: "16px 0"
-          }}
+        <DraggableBlock
+          type="section"
+          label="Section"
+          description="Container for paragraphs"
         />
 
-        <button
-          onClick={onReset}
-          style={{
-            width: "100%",
-            padding: 10
-          }}
-        >
-          Reset Document
+        <DraggableBlock
+          type="paragraph"
+          label="Paragraph"
+          description="Editable text block"
+        />
+      </div>
+
+      <div style={{ marginTop: "auto" }}>
+        <hr style={{ margin: "16px 0" }} />
+
+        <button onClick={onReset} style={{ width: "100%", padding: 10 }}>
+          Reset
         </button>
       </div>
     </div>

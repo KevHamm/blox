@@ -4,6 +4,11 @@ import { DocumentRenderer } from "./renderer/DocumentRenderer";
 import { BlockPalette } from "./components/BlockPalette";
 import type { DocumentNode } from "./types/document";
 
+import {
+  DndContext,
+  closestCenter
+} from "@dnd-kit/core";
+
 export default function App() {
   const [doc, setDoc] =
     useState<DocumentNode>(sampleDocument);
@@ -11,19 +16,13 @@ export default function App() {
   const [editingId, setEditingId] =
     useState<string | null>(null);
 
-  function updateTextById(
-    id: string,
-    value: string
-  ) {
+  // -----------------------------
+  // UPDATE PARAGRAPH TEXT
+  // -----------------------------
+  function updateTextById(id: string, value: string) {
     function update(node: any): any {
-      if (
-        node.id === id &&
-        node.type === "paragraph"
-      ) {
-        return {
-          ...node,
-          text: value
-        };
+      if (node.id === id && node.type === "paragraph") {
+        return { ...node, text: value };
       }
 
       if (node.children) {
@@ -39,13 +38,13 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
+  // -----------------------------
+  // UPDATE SECTION TITLE
+  // -----------------------------
   function updateSectionTitle(id: string, value: string) {
     function update(node: any): any {
       if (node.id === id && node.type === "section") {
-        return {
-          ...node,
-          title: value
-        };
+        return { ...node, title: value };
       }
 
       if (node.children) {
@@ -61,13 +60,12 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
-
+  // -----------------------------
+  // ADD PARAGRAPH
+  // -----------------------------
   function addParagraph(sectionId: string) {
     function update(node: any): any {
-      if (
-        node.id === sectionId &&
-        node.type === "section"
-      ) {
+      if (node.id === sectionId && node.type === "section") {
         return {
           ...node,
           children: [
@@ -94,11 +92,12 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
+  // -----------------------------
+  // DELETE NODE
+  // -----------------------------
   function deleteNodeById(id: string) {
     function remove(node: any): any {
-      if (node.id === id) {
-        return null;
-      }
+      if (node.id === id) return null;
 
       if (node.children) {
         return {
@@ -115,68 +114,41 @@ export default function App() {
     setDoc((prev) => remove(prev));
   }
 
-  function reorderSectionChildren(
-    sectionId: string,
-    oldIndex: number,
-    newIndex: number
-  ) {
-    function update(node: any): any {
-      if (
-        node.id === sectionId &&
-        node.type === "section"
-      ) {
-        const updatedChildren = [
-          ...node.children
-        ];
+  // -----------------------------
+  // ADD NEW BLOCK (from palette)
+  // -----------------------------
+  function insertNode(type: string) {
+    setDoc((prev: any) => {
+      const newNode =
+        type === "section"
+          ? {
+              id: crypto.randomUUID(),
+              type: "section",
+              title: "New Section",
+              children: []
+            }
+          : {
+              id: crypto.randomUUID(),
+              type: "paragraph",
+              text: "New paragraph"
+            };
 
-        const [moved] =
-          updatedChildren.splice(
-            oldIndex,
-            1
-          );
-
-        updatedChildren.splice(
-          newIndex,
-          0,
-          moved
-        );
-
-        return {
-          ...node,
-          children: updatedChildren
-        };
-      }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
-      return node;
-    }
-
-    setDoc((prev) => update(prev));
+      return {
+        ...prev,
+        children: [...prev.children, newNode]
+      };
+    });
   }
 
-  function reorderSections(
-    oldIndex: number,
-    newIndex: number
-  ) {
+  // -----------------------------
+  // REORDER SECTIONS
+  // -----------------------------
+  function reorderSections(oldIndex: number, newIndex: number) {
     setDoc((prev: any) => {
-      const updated = [
-        ...prev.children
-      ];
+      const updated = [...prev.children];
 
-      const [moved] =
-        updated.splice(oldIndex, 1);
-
-      updated.splice(
-        newIndex,
-        0,
-        moved
-      );
+      const [moved] = updated.splice(oldIndex, 1);
+      updated.splice(newIndex, 0, moved);
 
       return {
         ...prev,
@@ -185,53 +157,79 @@ export default function App() {
     });
   }
 
+  // -----------------------------
+  // MAIN DND HANDLER
+  // -----------------------------
+  function handleDragEnd(event: any) {
+    const { active, over } = event;
+
+    if (!over) return;
+
+    const isPaletteItem =
+      active.data.current?.isPaletteItem;
+
+    // CASE 1: insert from palette
+    if (isPaletteItem) {
+      insertNode(active.data.current.type);
+      return;
+    }
+
+    // CASE 2: reorder sections
+    const oldIndex = doc.children.findIndex(
+      (c: any) => c.id === active.id
+    );
+
+    const newIndex = doc.children.findIndex(
+      (c: any) => c.id === over.id
+    );
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      reorderSections(oldIndex, newIndex);
+    }
+  }
+
+  // -----------------------------
+  // RENDER
+  // -----------------------------
   return (
-    <div
-      style={{
-        background: "#f3f3f3",
-        minHeight: "100vh",
-        padding: "40px",
-        paddingLeft: "260px"
-      }}
+    <DndContext
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
     >
       <div
         style={{
-          maxWidth: 800,
-          margin: "0 auto",
-          background: "white",
-          minHeight: "90vh",
-          padding: 40,
-          boxShadow:
-            "0 2px 12px rgba(0,0,0,0.08)"
+          background: "#f3f3f3",
+          minHeight: "100vh",
+          padding: "40px",
+          paddingLeft: "260px"
         }}
       >
+        <div
+          style={{
+            maxWidth: 800,
+            margin: "0 auto",
+            background: "white",
+            minHeight: "90vh",
+            padding: 40,
+            boxShadow: "0 2px 12px rgba(0,0,0,0.08)"
+          }}
+        >
+          <DocumentRenderer
+            node={doc}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            updateTextById={updateTextById}
+            updateSectionTitle={updateSectionTitle}
+            addParagraph={addParagraph}
+            deleteNodeById={deleteNodeById}
+            reorderSections={reorderSections}
+          />
+        </div>
 
-        <DocumentRenderer
-          node={doc}
-          editingId={editingId}
-          setEditingId={setEditingId}
-          updateTextById={
-            updateTextById
-          }
-          addParagraph={addParagraph}
-          deleteNodeById={
-            deleteNodeById
-          }
-          reorderSectionChildren={
-            reorderSectionChildren
-          }
-          reorderSections={
-            reorderSections
-          }
-          updateSectionTitle={updateSectionTitle}
+        <BlockPalette
+          onReset={() => setDoc(sampleDocument)}
         />
       </div>
-
-      <BlockPalette
-        onReset={() =>
-          setDoc(sampleDocument)
-        }
-      />
-    </div>
+    </DndContext>
   );
 }
