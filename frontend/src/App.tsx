@@ -6,7 +6,11 @@ import type { DocumentNode } from "./types/document";
 
 import {
   DndContext,
-  closestCenter
+  pointerWithin,
+  rectIntersection,
+  PointerSensor,
+  useSensor,
+  useSensors
 } from "@dnd-kit/core";
 
 export default function App() {
@@ -17,7 +21,18 @@ export default function App() {
     useState<string | null>(null);
 
   // -----------------------------
-  // UPDATE PARAGRAPH TEXT
+  // DND SENSORS (CRITICAL FIX)
+  // -----------------------------
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5
+      }
+    })
+  );
+
+  // -----------------------------
+  // UPDATE PARAGRAPH
   // -----------------------------
   function updateTextById(id: string, value: string) {
     function update(node: any): any {
@@ -115,10 +130,15 @@ export default function App() {
   }
 
   // -----------------------------
-  // ADD NEW BLOCK (from palette)
+  // INSERT FROM PALETTE
   // -----------------------------
   function insertNode(type: string) {
     setDoc((prev: any) => {
+      if (!prev || !prev.children) {
+        console.error("Document root invalid:", prev);
+        return prev;
+      }
+
       const newNode =
         type === "section"
           ? {
@@ -133,10 +153,15 @@ export default function App() {
               text: "New paragraph"
             };
 
-      return {
+      const updated = {
         ...prev,
         children: [...prev.children, newNode]
       };
+
+      console.log("INSERTED NODE:", newNode);
+      console.log("UPDATED DOC:", updated);
+      console.log("INSERT CALLED:", type);
+      return updated;
     });
   }
 
@@ -158,34 +183,88 @@ export default function App() {
   }
 
   // -----------------------------
-  // MAIN DND HANDLER
+  // REORDER PARAGRAPHS
+  // -----------------------------
+  function reorderSectionChildren(sectionId: string, oldIndex: number, newIndex: number) {
+    function update(node: any): any {
+      if (node.id === sectionId && node.type === "section") {
+        const updated = [...node.children];
+
+        const [moved] = updated.splice(oldIndex, 1);
+        updated.splice(newIndex, 0, moved);
+
+        return {
+          ...node,
+          children: updated
+        };
+      }
+
+      if (node.children) {
+        return {
+          ...node,
+          children: node.children.map(update)
+        };
+      }
+
+      return node;
+    }
+
+    setDoc((prev) => update(prev));
+  }
+
+  // -----------------------------
+  // GLOBAL DND HANDLER
   // -----------------------------
   function handleDragEnd(event: any) {
+
     const { active, over } = event;
+
+
+    console.log("DROP EVENT:", {
+      active,
+      over,
+      data: active.data.current
+    });
 
     if (!over) return;
 
-    const isPaletteItem =
-      active.data.current?.isPaletteItem;
+    const data = active.data.current;
 
-    // CASE 1: insert from palette
-    if (isPaletteItem) {
-      insertNode(active.data.current.type);
+    // palette insert
+    if (data?.isPaletteItem) {
+      insertNode(data.type);
       return;
     }
 
-    // CASE 2: reorder sections
-    const oldIndex = doc.children.findIndex(
+    // paragraph reorder
+    for (const section of doc.children) {
+      const oldIndex = section.children?.findIndex(
+        (c: any) => c.id === active.id
+      );
+
+      const newIndex = section.children?.findIndex(
+        (c: any) => c.id === over.id
+      );
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        reorderSectionChildren(section.id, oldIndex, newIndex);
+        return;
+      }
+    }
+
+    // section reorder
+    const oldSectionIndex = doc.children.findIndex(
       (c: any) => c.id === active.id
     );
 
-    const newIndex = doc.children.findIndex(
+    const newSectionIndex = doc.children.findIndex(
       (c: any) => c.id === over.id
     );
 
-    if (oldIndex !== -1 && newIndex !== -1) {
-      reorderSections(oldIndex, newIndex);
+    if (oldSectionIndex !== -1 && newSectionIndex !== -1) {
+      reorderSections(oldSectionIndex, newSectionIndex);
     }
+
   }
 
   // -----------------------------
@@ -193,7 +272,8 @@ export default function App() {
   // -----------------------------
   return (
     <DndContext
-      collisionDetection={closestCenter}
+      sensors={sensors}
+      collisionDetection={rectIntersection}
       onDragEnd={handleDragEnd}
     >
       <div
@@ -223,12 +303,11 @@ export default function App() {
             addParagraph={addParagraph}
             deleteNodeById={deleteNodeById}
             reorderSections={reorderSections}
+            reorderSectionChildren={reorderSectionChildren}
           />
         </div>
 
-        <BlockPalette
-          onReset={() => setDoc(sampleDocument)}
-        />
+        <BlockPalette onReset={() => setDoc(sampleDocument)} />
       </div>
     </DndContext>
   );
