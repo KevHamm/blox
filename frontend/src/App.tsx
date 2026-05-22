@@ -39,7 +39,27 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
-  
+  function updateSectionTitle(id: string, value: string) {
+    function update(node: any): any {
+      if (node.id === id && node.type === "section") {
+        return {
+          ...node,
+          title: value
+        };
+      }
+
+      if (node.children) {
+        return {
+          ...node,
+          children: node.children.map(update)
+        };
+      }
+
+      return node;
+    }
+
+    setDoc((prev) => update(prev);
+  }
 
 
   function addParagraph(sectionId: string) {
@@ -231,6 +251,7 @@ export default function App() {
           reorderSections={
             reorderSections
           }
+          updateSectionTitle={updateSectionTitle}
         />
       </div>
 

@@ -129,6 +129,33 @@ function SortableSection({
     >
       <h2 style={{ color: "#333"}}>{node.title}</h2>
 
+      {editingId === node.id ? (
+        <input
+          autoFocus
+          value={node.title}
+          onChange={(e) =>
+            updateSectionTitle(node.id, e.target.value)
+          }
+
+          onBlur={() => setEditingId(null)}
+          style={{
+            fontSize: 20,
+            fontWeight: 600,
+            color: "#333",
+            width: "100%",
+            border: "none",
+            outline: "none"
+            }}
+          />
+        ) : (
+          <h2
+            onClick={() => setEditingId(node.id)}
+            style={{ color: "#333", cursor: "pointer"}}
+          >
+            {node.title}
+          </h2>
+        )}
+
       <button
         onClick={() =>
           addParagraph(node.id)
@@ -255,6 +282,11 @@ export function DocumentRenderer({
   reorderSections: (
     oldIndex: number,
     newIndex: number
+  ) => void;
+
+  updateSectionTitle: (
+    id: string,
+    value: string
   ) => void;
 }) {
   if (node.type !== "document") {
