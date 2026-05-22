@@ -8,8 +8,7 @@ import {
 import {
   SortableContext,
   verticalListSortingStrategy,
-  useSortable,
-  arrayMove
+  useSortable
 } from "@dnd-kit/sortable";
 
 import { CSS } from "@dnd-kit/utilities";
@@ -73,6 +72,7 @@ function SortableParagraph({
           onClick={() =>
             setEditingId(node.id)
           }
+          style={{ color : "333", margin: 0}}
         >
           {node.text}
         </p>
@@ -89,7 +89,7 @@ function SortableParagraph({
   );
 }
 
-export function DocumentRenderer({
+function SortableSection({
   node,
   editingId,
   setEditingId,
@@ -97,17 +97,151 @@ export function DocumentRenderer({
   addParagraph,
   deleteNodeById,
   reorderSectionChildren
+}: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition
+  } = useSortable({
+    id: node.id
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(
+      transform
+    ),
+    transition,
+    marginBottom: 16,
+    padding: 12,
+    border: "1px solid #eee",
+    background: "white",
+    cursor: "grab"
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      <h2 style={{ color: "#333"}}>{node.title}</h2>
+
+      <button
+        onClick={() =>
+          addParagraph(node.id)
+        }
+      >
+        + Add paragraph
+      </button>
+
+      <button
+        onClick={() =>
+          deleteNodeById(node.id)
+        }
+        style={{ marginLeft: 8 }}
+      >
+        Delete section
+      </button>
+
+      {/* PARAGRAPH SORTING */}
+      <DndContext
+        collisionDetection={
+          closestCenter
+        }
+        onDragEnd={(event) => {
+          const { active, over } =
+            event;
+
+          if (
+            over &&
+            active.id !== over.id
+          ) {
+            const oldIndex =
+              node.children.findIndex(
+                (c: any) =>
+                  c.id === active.id
+              );
+
+            const newIndex =
+              node.children.findIndex(
+                (c: any) =>
+                  c.id === over.id
+              );
+
+            reorderSectionChildren(
+              node.id,
+              oldIndex,
+              newIndex
+            );
+          }
+        }}
+      >
+        <SortableContext
+          items={node.children.map(
+            (c: any) => c.id
+          )}
+          strategy={
+            verticalListSortingStrategy
+          }
+        >
+          <div
+            style={{
+              marginTop: 12
+            }}
+          >
+            {node.children.map(
+              (c: any) => (
+                <SortableParagraph
+                  key={c.id}
+                  node={c}
+                  editingId={
+                    editingId
+                  }
+                  setEditingId={
+                    setEditingId
+                  }
+                  updateTextById={
+                    updateTextById
+                  }
+                  deleteNodeById={
+                    deleteNodeById
+                  }
+                />
+              )
+            )}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </div>
+  );
+}
+
+export function DocumentRenderer({
+  node,
+  editingId,
+  setEditingId,
+  updateTextById,
+  addParagraph,
+  deleteNodeById,
+  reorderSectionChildren,
+  reorderSections
 }: {
   node: DocumentNode;
   editingId: string | null;
   setEditingId: (id: string | null) => void;
+
   updateTextById: (
     id: string,
     value: string
   ) => void;
+
   addParagraph: (
     sectionId: string
   ) => void;
+
   deleteNodeById: (
     id: string
   ) => void;
@@ -117,130 +251,83 @@ export function DocumentRenderer({
     oldIndex: number,
     newIndex: number
   ) => void;
+
+  reorderSections: (
+    oldIndex: number,
+    newIndex: number
+  ) => void;
 }) {
-  switch (node.type) {
-    case "document":
-      return (
-        <div>
-          {node.children.map((c) => (
-            <DocumentRenderer
-              key={c.id}
-              node={c}
-              editingId={editingId}
-              setEditingId={setEditingId}
-              updateTextById={updateTextById}
-              addParagraph={addParagraph}
-              deleteNodeById={deleteNodeById}
-              reorderSectionChildren={
-                reorderSectionChildren
-              }
-            />
-          ))}
-        </div>
-      );
-
-    case "section":
-      return (
-        <div
-          style={{
-            marginBottom: 16,
-            padding: 8,
-            border: "1px solid #eee"
-          }}
-        >
-          <h2>{node.title}</h2>
-
-          <button
-            onClick={() =>
-              addParagraph(node.id)
-            }
-          >
-            + Add paragraph
-          </button>
-
-          <button
-            onClick={() =>
-              deleteNodeById(node.id)
-            }
-            style={{ marginLeft: 8 }}
-          >
-            Delete section
-          </button>
-
-          <DndContext
-            collisionDetection={
-              closestCenter
-            }
-            onDragEnd={(event) => {
-              const {
-                active,
-                over
-              } = event;
-
-              if (
-                over &&
-                active.id !== over.id
-              ) {
-                const oldIndex =
-                  node.children.findIndex(
-                    (c: any) =>
-                      c.id === active.id
-                  );
-
-                const newIndex =
-                  node.children.findIndex(
-                    (c: any) =>
-                      c.id === over.id
-                  );
-
-                reorderSectionChildren(
-                  node.id,
-                  oldIndex,
-                  newIndex
-                );
-              }
-            }}
-          >
-            <SortableContext
-              items={node.children.map(
-                (c) => c.id
-              )}
-              strategy={
-                verticalListSortingStrategy
-              }
-            >
-              <div
-                style={{
-                  marginTop: 8
-                }}
-              >
-                {node.children.map(
-                  (c) => (
-                    <SortableParagraph
-                      key={c.id}
-                      node={c}
-                      editingId={
-                        editingId
-                      }
-                      setEditingId={
-                        setEditingId
-                      }
-                      updateTextById={
-                        updateTextById
-                      }
-                      deleteNodeById={
-                        deleteNodeById
-                      }
-                    />
-                  )
-                )}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </div>
-      );
-
-    default:
-      return null;
+  if (node.type !== "document") {
+    return null;
   }
+
+  return (
+    <DndContext
+      collisionDetection={
+        closestCenter
+      }
+      onDragEnd={(event) => {
+        const { active, over } =
+          event;
+
+        if (
+          over &&
+          active.id !== over.id
+        ) {
+          const oldIndex =
+            node.children.findIndex(
+              (c: any) =>
+                c.id === active.id
+            );
+
+          const newIndex =
+            node.children.findIndex(
+              (c: any) =>
+                c.id === over.id
+            );
+
+          reorderSections(
+            oldIndex,
+            newIndex
+          );
+        }
+      }}
+    >
+      <SortableContext
+        items={node.children.map(
+          (c: any) => c.id
+        )}
+        strategy={
+          verticalListSortingStrategy
+        }
+      >
+        <div>
+          {node.children.map(
+            (c: any) => (
+              <SortableSection
+                key={c.id}
+                node={c}
+                editingId={editingId}
+                setEditingId={
+                  setEditingId
+                }
+                updateTextById={
+                  updateTextById
+                }
+                addParagraph={
+                  addParagraph
+                }
+                deleteNodeById={
+                  deleteNodeById
+                }
+                reorderSectionChildren={
+                  reorderSectionChildren
+                }
+              />
+            )
+          )}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
 }

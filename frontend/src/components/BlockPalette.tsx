@@ -1,80 +1,93 @@
-export function BlockPalette() {
-  function onDragStart(
-    e: React.DragEvent,
-    blockType: "section" | "paragraph"
-  ) {
-    e.dataTransfer.setData(
-      "application/blox-block",
-      blockType
-    );
-  }
-
+export function BlockPalette({
+  onReset
+}: {
+  onReset: () => void;
+}) {
   return (
     <div
       style={{
         width: 220,
-        borderLeft: "1px solid #ddd",
+        borderRight: "1px solid #0000000",
         padding: 16,
         position: "fixed",
         left: 0,
         top: 0,
         bottom: 0,
-        background: "#fafafa"
+        background: "#fafafa",
+        display: "flex",
+        flexDirection: "column"
       }}
     >
-      <h3 style={{ marginBottom: 12 }}>
-        Blocks
-      </h3>
+      <div>
+        <h3 style={{ marginBottom: 12 }}>
+          Blocks
+        </h3>
 
-      {/* SECTION BLOCK */}
-      <div
-        draggable
-        onDragStart={(e) =>
-          onDragStart(e, "section")
-        }
-        style={{
-          padding: 12,
-          marginBottom: 10,
-          border: "1px solid #ccc",
-          background: "white",
-          cursor: "grab",
-          borderRadius: 6
-        }}
-      >
-        <strong>Section</strong>
+        {/* SECTION BLOCK */}
         <div
           style={{
-            fontSize: 12,
-            color: "#666"
+            padding: 12,
+            marginBottom: 10,
+            border: "1px solid #000000",
+            background: "white",
+            borderRadius: 6
           }}
         >
-          Container for paragraphs
+          <strong>Section</strong>
+
+          <div
+            style={{
+              fontSize: 12,
+              color: "#666"
+            }}
+          >
+            Sortable container
+          </div>
+        </div>
+
+        {/* PARAGRAPH BLOCK */}
+        <div
+          style={{
+            padding: 12,
+            border: "1px solid #000000",
+            background: "white",
+            borderRadius: 6
+          }}
+        >
+          <strong>Paragraph</strong>
+
+          <div
+            style={{
+              fontSize: 12,
+              color: "#666"
+            }}
+          >
+            Editable text
+          </div>
         </div>
       </div>
 
-      {/* PARAGRAPH BLOCK */}
+      {/* BOTTOM AREA */}
       <div
-        draggable
-        onDragStart={(e) =>
-          onDragStart(e, "paragraph")
-        }
         style={{
-          padding: 12,
-          border: "1px solid #ccc",
-          background: "white",
-          cursor: "grab",
-          borderRadius: 6
+          marginTop: "auto"
         }}
       >
-        <strong>Paragraph</strong>
-        <div
+        <hr
           style={{
-            fontSize: 12,
-            color: "#666"
+            margin: "16px 0"
+          }}
+        />
+
+        <button
+          onClick={onReset}
+          style={{
+            width: "100%",
+            padding: 10
           }}
         >
-          Editable text block
-        </div>
+          Reset Document
+        </button>
       </div>
     </div>
   );

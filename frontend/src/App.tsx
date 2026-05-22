@@ -11,7 +11,6 @@ export default function App() {
   const [editingId, setEditingId] =
     useState<string | null>(null);
 
-  // EDIT paragraph text
   function updateTextById(
     id: string,
     value: string
@@ -40,7 +39,9 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
-  // ADD paragraph
+  
+
+
   function addParagraph(sectionId: string) {
     function update(node: any): any {
       if (
@@ -73,7 +74,6 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
-  // DELETE node
   function deleteNodeById(id: string) {
     function remove(node: any): any {
       if (node.id === id) {
@@ -95,7 +95,26 @@ export default function App() {
     setDoc((prev) => remove(prev));
   }
 
-  // REORDER paragraphs inside section
+  function addSection() {
+    setDoc((prev: any) => {
+      const sectionCount =
+        prev.children.length + 1;
+
+      return {
+        ...prev,
+        children: [
+          ...prev.children,
+          {
+            id: crypto.randomUUID(),
+            type: "section",
+            title: `${sectionCount}. Section`,
+            children: []
+          }
+        ]
+      };
+    });
+  }
+
   function reorderSectionChildren(
     sectionId: string,
     oldIndex: number,
@@ -141,36 +160,60 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
+  function reorderSections(
+    oldIndex: number,
+    newIndex: number
+  ) {
+    setDoc((prev: any) => {
+      const updated = [
+        ...prev.children
+      ];
+
+      const [moved] =
+        updated.splice(oldIndex, 1);
+
+      updated.splice(
+        newIndex,
+        0,
+        moved
+      );
+
+      return {
+        ...prev,
+        children: updated
+      };
+    });
+  }
+
   return (
     <div
       style={{
+        background: "#f3f3f3",
+        minHeight: "100vh",
         padding: "40px",
-        paddingLeft: "260px",
-        minHeight: "100vh"
+        paddingLeft: "260px"
       }}
     >
-      <button
-        onClick={() =>
-          setDoc(sampleDocument)
-        }
-      >
-        Reset
-      </button>
-
-      <hr
-        style={{
-          margin: "20px 0"
-        }}
-      />
-
       <div
         style={{
-          minHeight: "400px",
-          padding: "20px",
-          border: "2px dashed #ccc",
-          borderRadius: "8px"
+          maxWidth: 800,
+          margin: "0 auto",
+          background: "white",
+          minHeight: "90vh",
+          padding: 40,
+          boxShadow:
+            "0 2px 12px rgba(0,0,0,0.08)"
         }}
       >
+        <button
+          onClick={addSection}
+          style={{
+            marginBottom: 20
+          }}
+        >
+          + Add Section
+        </button>
+
         <DocumentRenderer
           node={doc}
           editingId={editingId}
@@ -185,10 +228,17 @@ export default function App() {
           reorderSectionChildren={
             reorderSectionChildren
           }
+          reorderSections={
+            reorderSections
+          }
         />
       </div>
 
-      <BlockPalette />
+      <BlockPalette
+        onReset={() =>
+          setDoc(sampleDocument)
+        }
+      />
     </div>
   );
 }
