@@ -10,12 +10,13 @@ import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
 /* -----------------------------
-   SECTION (ONLY DRAGGABLE UNIT)
+   SECTION (DRAGGABLE)
 ----------------------------- */
 function SortableSection({
   node,
   editingId,
   setEditingId,
+  updateTextById,
   updateSectionTitle,
   addParagraph,
   deleteNodeById
@@ -42,7 +43,7 @@ function SortableSection({
         background: "white"
       }}
     >
-      {/* Drag handle ONLY for section */}
+      {/* Drag handle */}
       <div
         {...attributes}
         {...listeners}
@@ -91,39 +92,58 @@ function SortableSection({
         Delete section
       </button>
 
-      {/* PARAGRAPHS (NOT DRAGGABLE ANYMORE) */}
+      {/* PARAGRAPHS (EDITABLE, NOT DRAGGABLE) */}
       <div style={{ marginTop: 12 }}>
-        {node.children.map((c: any) => (
-          <div
-            key={c.id}
-            style={{
-              padding: 6,
-              marginBottom: 6,
-              border: "1px solid #ddd",
-              background: "white"
-            }}
-          >
-            <p style={{ color: "#333", margin: 0 }}>
-              {c.text}
-            </p>
-          </div>
-        ))}
+        {node.children.map((c: any) => {
+          const isEditing = editingId === c.id;
+
+          return (
+            <div
+              key={c.id}
+              style={{
+                padding: 6,
+                marginBottom: 6,
+                border: "1px solid #ddd",
+                background: "white"
+              }}
+            >
+              {isEditing ? (
+                <input
+                  autoFocus
+                  value={c.text}
+                  onChange={(e) =>
+                    updateTextById(c.id, e.target.value)
+                  }
+                  onBlur={() => setEditingId(null)}
+                  style={{ width: "100%" }}
+                />
+              ) : (
+                <p
+                  onClick={() => setEditingId(c.id)}
+                  style={{ color: "#333", margin: 0 }}
+                >
+                  {c.text}
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
 /* -----------------------------
-   ROOT DOCUMENT
+   DOCUMENT ROOT
 ----------------------------- */
 export function DocumentRenderer({
   node,
   editingId,
   setEditingId,
+  updateTextById,
   updateSectionTitle,
   addParagraph,
-  deleteNodeById,
-  reorderSections
+  deleteNodeById
 }: any) {
   const { setNodeRef: setDropRef } = useDroppable({
     id: "document-root"
@@ -142,6 +162,7 @@ export function DocumentRenderer({
               node={c}
               editingId={editingId}
               setEditingId={setEditingId}
+              updateTextById={updateTextById}
               updateSectionTitle={updateSectionTitle}
               addParagraph={addParagraph}
               deleteNodeById={deleteNodeById}
