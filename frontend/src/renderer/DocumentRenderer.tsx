@@ -78,7 +78,11 @@ function SortableSection({
       ) : (
         <h2
           onClick={() => setEditingId(node.id)}
-          style={{ color: "#333", cursor: "pointer" }}
+          style={{
+            color: "#333",
+            cursor: "pointer",
+            textAlign: "left"
+          }}
         >
           {node.title}
         </h2>
@@ -120,7 +124,10 @@ function SortableSection({
               ) : (
                 <p
                   onClick={() => setEditingId(c.id)}
-                  style={{ color: "#333", margin: 0 }}
+                  style={{
+                    color: "#333",
+                    margin: 0,
+                    textAlign: "left"}}
                 >
                   {c.text}
                 </p>

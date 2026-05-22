@@ -301,12 +301,14 @@ export default function App() {
       >
         <div
           style={{
+            width: "100%",
             maxWidth: 800,
-            margin: "0 auto",
+            margin: "0",
             background: "white",
             minHeight: "90vh",
             padding: 40,
             boxShadow: "0 2px 12px rgba(0,0,0,0.08)"
+            textAlign: "left"
           }}
         >
           <DocumentRenderer
