@@ -10,6 +10,9 @@ import { useDroppable } from "@dnd-kit/core";
 
 import { CSS } from "@dnd-kit/utilities";
 
+/* -----------------------------
+   PARAGRAPH
+------------------------------*/
 function SortableParagraph({
   node,
   editingId,
@@ -30,8 +33,6 @@ function SortableParagraph({
   return (
     <div
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -42,6 +43,21 @@ function SortableParagraph({
         cursor: "grab"
       }}
     >
+      {/* drag handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        style={{
+          cursor: "grab",
+          paddingBottom: 6,
+          fontSize: 12,
+          color: "#666"
+        }}
+      >
+        ☰ Drag
+      </div>
+
+      {/* text */}
       {editingId === node.id ? (
         <input
           autoFocus
@@ -68,6 +84,9 @@ function SortableParagraph({
   );
 }
 
+/* -----------------------------
+   SECTION
+------------------------------*/
 function SortableSection({
   node,
   editingId,
@@ -91,8 +110,6 @@ function SortableSection({
   return (
     <div
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -130,6 +147,7 @@ function SortableSection({
         </h2>
       )}
 
+      {/* controls */}
       <button onClick={() => addParagraph(node.id)}>
         + Add paragraph
       </button>
@@ -138,7 +156,7 @@ function SortableSection({
         Delete section
       </button>
 
-      {/* PARAGRAPHS ROOT (IMPORTANT DROPPABLE SURFACE) */}
+      {/* PARAGRAPHS */}
       <div style={{ minHeight: 20, marginTop: 12 }}>
         <SortableContext
           items={node.children.map((c: any) => c.id)}
@@ -160,6 +178,9 @@ function SortableSection({
   );
 }
 
+/* -----------------------------
+   DOCUMENT ROOT
+------------------------------*/
 export function DocumentRenderer({
   node,
   editingId,
@@ -168,38 +189,45 @@ export function DocumentRenderer({
   updateSectionTitle,
   addParagraph,
   deleteNodeById,
-  reorderSections,
   reorderSectionChildren
-}: any) {
-
-  const { setNodeRef: setDropRef } = useDroppable({
+}: {
+  node: DocumentNode;
+  editingId: string | null;
+  setEditingId: (id: string | null) => void;
+  updateTextById: (id: string, value: string) => void;
+  updateSectionTitle: (id: string, value: string) => void;
+  addParagraph: (sectionId: string) => void;
+  deleteNodeById: (id: string) => void;
+  reorderSectionChildren: (
+    sectionId: string,
+    oldIndex: number,
+    newIndex: number
+  ) => void;
+}) {
+  // droppable root ONLY (no logic here!)
+  const { setNodeRef } = useDroppable({
     id: "document-root"
   });
 
   return (
-    <div
-      ref={setDropRef}
-      style={{ minHeight: 200 }}
-    >
+    <div ref={setNodeRef} style={{ minHeight: 200 }}>
       <SortableContext
         items={node.children.map((c: any) => c.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div>
-          {node.children.map((c: any) => (
-            <SortableSection
-              key={c.id}
-              node={c}
-              editingId={editingId}
-              setEditingId={setEditingId}
-              updateTextById={updateTextById}
-              updateSectionTitle={updateSectionTitle}
-              addParagraph={addParagraph}
-              deleteNodeById={deleteNodeById}
-              reorderSectionChildren={reorderSectionChildren}
-            />
-          ))}
-        </div>
+        {node.children.map((c: any) => (
+          <SortableSection
+            key={c.id}
+            node={c}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            updateTextById={updateTextById}
+            updateSectionTitle={updateSectionTitle}
+            addParagraph={addParagraph}
+            deleteNodeById={deleteNodeById}
+            reorderSectionChildren={reorderSectionChildren}
+          />
+        ))}
       </SortableContext>
     </div>
   );

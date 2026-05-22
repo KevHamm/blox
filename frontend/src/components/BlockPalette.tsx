@@ -5,7 +5,7 @@ function DraggableBlock({
   label,
   description
 }: {
-  type: "section" | "paragraph";
+  type: "section";
   label: string;
   description: string;
 }) {
@@ -72,13 +72,7 @@ export function BlockPalette({
         <DraggableBlock
           type="section"
           label="Section"
-          description="Container for paragraphs"
-        />
-
-        <DraggableBlock
-          type="paragraph"
-          label="Paragraph"
-          description="Editable text block"
+          description="A section with paragraph."
         />
       </div>
 

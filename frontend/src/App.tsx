@@ -7,7 +7,6 @@ import type { DocumentNode } from "./types/document";
 import {
   DndContext,
   pointerWithin,
-  rectIntersection,
   PointerSensor,
   useSensor,
   useSensors
@@ -139,18 +138,27 @@ export default function App() {
         return prev;
       }
 
+      const lorem =
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
+
       const newNode =
         type === "section"
           ? {
               id: crypto.randomUUID(),
               type: "section",
               title: "New Section",
-              children: []
+              children: [
+                {
+                  id: crypto.randomUUID(),
+                  type: "paragraph",
+                  text: lorem
+                }
+              ]
             }
           : {
               id: crypto.randomUUID(),
               type: "paragraph",
-              text: "New paragraph"
+              text: lorem
             };
 
       const updated = {
@@ -159,8 +167,6 @@ export default function App() {
       };
 
       console.log("INSERTED NODE:", newNode);
-      console.log("UPDATED DOC:", updated);
-      console.log("INSERT CALLED:", type);
       return updated;
     });
   }
@@ -216,27 +222,35 @@ export default function App() {
   // GLOBAL DND HANDLER
   // -----------------------------
   function handleDragEnd(event: any) {
-
     const { active, over } = event;
 
-
     console.log("DROP EVENT:", {
-      active,
-      over,
-      data: active.data.current
+      activeId: active?.id,
+      overId: over?.id,
+      data: active?.data?.current
     });
 
-    if (!over) return;
+    const data = active?.data?.current;
 
-    const data = active.data.current;
-
-    // palette insert
+    // NO DROP TARGET, ignore everything except palette insert
     if (data?.isPaletteItem) {
       insertNode(data.type);
       return;
     }
 
-    // paragraph reorder
+    if (!over) return;
+
+    // -----------------------------
+    // 1. PALETTE INSERT
+    // -----------------------------
+    if (data?.isPaletteItem) {
+      insertNode(data.type);
+      return;
+    }
+
+    // -----------------------------
+    // 2. PARAGRAPH REORDER (SAFE)
+    // -----------------------------
     for (const section of doc.children) {
       const oldIndex = section.children?.findIndex(
         (c: any) => c.id === active.id
@@ -252,7 +266,9 @@ export default function App() {
       }
     }
 
-    // section reorder
+    // -----------------------------
+    // 3. SECTION REORDER (FIXED)
+    // -----------------------------
     const oldSectionIndex = doc.children.findIndex(
       (c: any) => c.id === active.id
     );
@@ -264,7 +280,6 @@ export default function App() {
     if (oldSectionIndex !== -1 && newSectionIndex !== -1) {
       reorderSections(oldSectionIndex, newSectionIndex);
     }
-
   }
 
   // -----------------------------
@@ -273,7 +288,7 @@ export default function App() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={rectIntersection}
+      collisionDetection={pointerWithin}
       onDragEnd={handleDragEnd}
     >
       <div
