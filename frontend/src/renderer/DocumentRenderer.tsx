@@ -72,7 +72,7 @@ function SortableParagraph({
           onClick={() =>
             setEditingId(node.id)
           }
-          style={{ color : "333", margin: 0}}
+          style={{ color : "#333", margin: 0}}
         >
           {node.text}
         </p>
@@ -94,6 +94,7 @@ function SortableSection({
   editingId,
   setEditingId,
   updateTextById,
+  updateSectionTitle,
   addParagraph,
   deleteNodeById,
   reorderSectionChildren
@@ -344,6 +345,9 @@ export function DocumentRenderer({
                 }
                 updateTextById={
                   updateTextById
+                }
+                updateSectionTitle={
+                  updateSectionTitle
                 }
                 addParagraph={
                   addParagraph

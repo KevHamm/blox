@@ -58,7 +58,7 @@ export default function App() {
       return node;
     }
 
-    setDoc((prev) => update(prev);
+    setDoc((prev) => update(prev));
   }
 
 
@@ -113,26 +113,6 @@ export default function App() {
     }
 
     setDoc((prev) => remove(prev));
-  }
-
-  function addSection() {
-    setDoc((prev: any) => {
-      const sectionCount =
-        prev.children.length + 1;
-
-      return {
-        ...prev,
-        children: [
-          ...prev.children,
-          {
-            id: crypto.randomUUID(),
-            type: "section",
-            title: `${sectionCount}. Section`,
-            children: []
-          }
-        ]
-      };
-    });
   }
 
   function reorderSectionChildren(
@@ -225,14 +205,6 @@ export default function App() {
             "0 2px 12px rgba(0,0,0,0.08)"
         }}
       >
-        <button
-          onClick={addSection}
-          style={{
-            marginBottom: 20
-          }}
-        >
-          + Add Section
-        </button>
 
         <DocumentRenderer
           node={doc}
