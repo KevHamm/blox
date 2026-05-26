@@ -59,6 +59,65 @@ function Paragraph({
 }
 
 /* -----------------------------
+   TABLE
+----------------------------- */
+function TableBlock({
+  node,
+  updateTableCell
+}: any) {
+  return (
+    <table
+      style={{
+        width: "100%",
+        borderCollapse: "collapse",
+        marginTop: 16,
+        marginBottom: 16
+      }}
+    >
+      <tbody>
+        {node.rows.map(
+          (row: string[], rowIndex: number) => (
+            <tr key={rowIndex}>
+              {row.map(
+                (
+                  cell: string,
+                  colIndex: number
+                ) => (
+                  <td
+                    key={colIndex}
+                    style={{
+                      border: "1px solid #ccc",
+                      padding: 8
+                    }}
+                  >
+                    <input
+                      value={cell}
+                      onChange={(e) =>
+                        updateTableCell(
+                          node.id,
+                          rowIndex,
+                          colIndex,
+                          e.target.value
+                        )
+                      }
+                      style={{
+                        width: "100%",
+                        border: "none",
+                        outline: "none"
+                      }}
+                    />
+                  </td>
+                )
+              )}
+            </tr>
+          )
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+/* -----------------------------
    SUBSECTION
 ----------------------------- */
 function Subsection({
@@ -77,7 +136,6 @@ function Subsection({
         marginLeft: 20
       }}
     >
-      {/* SUBSECTION TITLE */}
       {editingId === node.id ? (
         <input
           autoFocus
@@ -110,7 +168,6 @@ function Subsection({
         </h3>
       )}
 
-      {/* SUBSECTION PARAGRAPHS */}
       {node.children.map((child: any) => (
         <Paragraph
           key={child.id}
@@ -135,6 +192,8 @@ function SortableSection({
   updateTextById,
   updateSectionTitle,
   addSubsection,
+  addTable,
+  updateTableCell,
   deleteNodeById
 }: any) {
   const {
@@ -159,7 +218,6 @@ function SortableSection({
         background: "white"
       }}
     >
-      {/* DRAG HANDLE */}
       <div
         {...attributes}
         {...listeners}
@@ -173,7 +231,6 @@ function SortableSection({
         ☰ Drag Section
       </div>
 
-      {/* SECTION TITLE */}
       {editingId === node.id ? (
         <input
           autoFocus
@@ -209,44 +266,63 @@ function SortableSection({
         + Add subsection
       </button>
 
-      <button onClick={() => deleteNodeById(node.id)}>
+      <button
+        onClick={() => addTable(node.id)}
+        style={{ marginLeft: 8 }}
+      >
+        + Add table
+      </button>
+
+      <button
+        onClick={() => deleteNodeById(node.id)}
+        style={{ marginLeft: 8 }}
+      >
         Delete section
       </button>
 
-      {/* SECTION CONTENT */}
       <div style={{ marginTop: 12 }}>
-        {node.children.map((child: any, childIndex: number) => {
-          // paragraph directly inside section
-          if (child.type === "paragraph") {
-            return (
-              <Paragraph
-                key={child.id}
-                node={child}
-                editingId={editingId}
-                setEditingId={setEditingId}
-                updateTextById={updateTextById}
-              />
-            );
-          }
+        {node.children.map(
+          (child: any, childIndex: number) => {
+            if (child.type === "paragraph") {
+              return (
+                <Paragraph
+                  key={child.id}
+                  node={child}
+                  editingId={editingId}
+                  setEditingId={setEditingId}
+                  updateTextById={updateTextById}
+                />
+              );
+            }
 
-          // subsection
-          if (child.type === "subsection") {
-            return (
-              <Subsection
-                key={child.id}
-                node={child}
-                sectionIndex={index}
-                subsectionIndex={childIndex}
-                editingId={editingId}
-                setEditingId={setEditingId}
-                updateTextById={updateTextById}
-                updateSectionTitle={updateSectionTitle}
-              />
-            );
-          }
+            if (child.type === "subsection") {
+              return (
+                <Subsection
+                  key={child.id}
+                  node={child}
+                  sectionIndex={index}
+                  subsectionIndex={childIndex}
+                  editingId={editingId}
+                  setEditingId={setEditingId}
+                  updateTextById={updateTextById}
+                  updateSectionTitle={updateSectionTitle}
+                />
+              );
+            }
 
-          return null;
-        })}
+            if (child.type === "table") {
+              return (
+                <TableBlock
+                  key={child.id}
+                  node={child}
+                  updateTableCell={updateTableCell}
+                />
+              );
+            }
+
+            return null;
+          }
+        )}
       </div>
     </div>
   );
@@ -262,6 +338,8 @@ export function DocumentRenderer({
   updateTextById,
   updateSectionTitle,
   addSubsection,
+  addTable,
+  updateTableCell,
   deleteNodeById
 }: any) {
   const { setNodeRef: setDropRef } = useDroppable({
@@ -288,6 +366,8 @@ export function DocumentRenderer({
               updateTextById={updateTextById}
               updateSectionTitle={updateSectionTitle}
               addSubsection={addSubsection}
+              addTable={addTable}
+              updateTableCell={updateTableCell}
               deleteNodeById={deleteNodeById}
             />
           ))}

@@ -199,6 +199,73 @@ export default function App() {
     });
   }
 
+  function addTable(sectionId: string) {
+    function update(node: any): any {
+      if (
+        node.id === sectionId &&
+        node.type === "section"
+      ) {
+        return {
+          ...node,
+          children: [
+            ...node.children,
+            {
+              id: crypto.randomUUID(),
+              type: "table",
+              rows: [
+                ["", "", ""],
+                ["", "", ""],
+                ["", "", ""]
+              ]
+            }
+          ]
+        };
+      }
+
+      if (node.children) {
+        return {
+          ...node,
+          children: node.children.map(update)
+        };
+      }
+
+      return node;
+    }
+
+    setDoc((prev) => update(prev));
+  }
+
+  function updateTableCell(
+    tableId: string,
+    rowIndex: number,
+    colIndex: number,
+    value: string
+  ) {
+    function update(node: any): any {
+      if (node.id === tableId) {
+        const updatedRows = [...node.rows];
+
+        updatedRows[rowIndex][colIndex] = value;
+
+        return {
+          ...node,
+          rows: updatedRows
+        };
+      }
+
+      if (node.children) {
+        return {
+          ...node,
+          children: node.children.map(update)
+        };
+      }
+
+      return node;
+    }
+
+    setDoc((prev) => update(prev));
+  }
+
   // -----------------------------
   // REORDER PARAGRAPHS
   // -----------------------------
@@ -329,6 +396,8 @@ export default function App() {
             updateTextById={updateTextById}
             updateSectionTitle={updateSectionTitle}
             addSubsection={addSubsection}
+            addTable={addTable}
+            updateTableCell={updateTableCell}
             deleteNodeById={deleteNodeById}
             reorderSections={reorderSections}
             reorderSectionChildren={reorderSectionChildren}
