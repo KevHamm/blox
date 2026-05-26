@@ -167,6 +167,59 @@ export default function App() {
     input.click();
   }
 
+  function addSubsection(sectionId: string) {
+    const newNode = {
+      id: crypto.randomUUID(),
+      type: "subsection",
+      title: "New Subsection",
+      children: [
+        {
+          id: crypto.randomUUID(),
+          type: "paragraph",
+          text: "Subsection text..."
+        }
+      ]
+    };
+
+    function update(node: any): any {
+      if (node.id === sectionId && node.type === "section") {
+        return { ...node, children: [...node.children, newNode] };
+      }
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
+      return node;
+    }
+
+    setDoc(prev => update(prev));
+  }
+
+
+  function addTable(sectionId: string) {
+    const newTable = {
+      id: crypto.randomUUID(),
+      type: "table",
+      rows: [
+        ["Header 1", "Header 2"],
+        ["Cell 1", "Cell 2"]
+      ],
+      caption: "Table caption"
+    };
+
+    function update(node: any): any {
+      if (node.id === sectionId && node.type === "section") {
+        return { ...node, children: [...node.children, newTable] };
+      }
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
+      return node;
+    }
+
+    setDoc(prev => update(prev));
+  }
+
+
   // -----------------------------
   // FIGURE POSITION
   // -----------------------------
@@ -186,6 +239,45 @@ export default function App() {
 
     setDoc((prev) => update(prev));
   }
+
+  function updateTableCell(id: string, row: number, col: number, value: string) {
+    function update(node: any): any {
+      if (node.id === id && node.type === "table") {
+        const newRows = node.rows.map((r: any[], ri: number) =>
+          ri === row
+            ? r.map((cell, ci) => (ci === col ? value : cell))
+            : r
+        );
+        return { ...node, rows: newRows };
+      }
+
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
+
+      return node;
+    }
+
+    setDoc(prev => update(prev));
+  }
+
+  function deleteNodeById(id: string) {
+    function update(node: any): any {
+      if (!node.children) return node;
+
+      return {
+        ...node,
+        children: node.children
+          .filter((c: any) => c.id !== id)
+          .map(update)
+      };
+    }
+
+    setDoc(prev => update(prev));
+  }
+
+
+
 
   // -----------------------------
   // FIGURE SIZE
@@ -309,6 +401,10 @@ export default function App() {
             updateFigurePosition={updateFigurePosition}
             updateFigureSize={updateFigureSize}
             updateFigureCaption={updateFigureCaption}
+            addSubsection={addSubsection}
+            addTable={addTable}
+            updateTableCell={updateTableCell}
+            deleteNodeById={deleteNodeById}
           />
         </div>
       </div>
