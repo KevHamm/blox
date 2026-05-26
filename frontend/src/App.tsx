@@ -19,8 +19,11 @@ export default function App() {
   const [editingId, setEditingId] =
     useState<string | null>(null);
 
+  const [editingCaptionId, setEditingCaptionId] =
+    useState<string | null>(null);
+
   // -----------------------------
-  // DND SENSORS (CRITICAL FIX)
+  // DND SENSORS
   // -----------------------------
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -31,7 +34,7 @@ export default function App() {
   );
 
   // -----------------------------
-  // UPDATE PARAGRAPH
+  // UPDATE TEXT
   // -----------------------------
   function updateTextById(id: string, value: string) {
     function update(node: any): any {
@@ -75,14 +78,11 @@ export default function App() {
   }
 
   // -----------------------------
-  // ADD PARAGRAPH
+  // ADD SUBSECTION
   // -----------------------------
   function addSubsection(sectionId: string) {
     function update(node: any): any {
-      if (
-        node.id === sectionId &&
-        node.type === "section"
-      ) {
+      if (node.id === sectionId && node.type === "section") {
         return {
           ...node,
           children: [
@@ -96,7 +96,7 @@ export default function App() {
                   id: crypto.randomUUID(),
                   type: "paragraph",
                   text:
-                  "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+                    "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
                 }
               ]
             }
@@ -127,9 +127,7 @@ export default function App() {
       if (node.children) {
         return {
           ...node,
-          children: node.children
-            .map(remove)
-            .filter(Boolean)
+          children: node.children.map(remove).filter(Boolean)
         };
       }
 
@@ -140,15 +138,10 @@ export default function App() {
   }
 
   // -----------------------------
-  // INSERT FROM PALETTE
+  // INSERT NODE (PALETTE)
   // -----------------------------
   function insertNode(type: string) {
     setDoc((prev: any) => {
-      if (!prev || !prev.children) {
-        console.error("Document root invalid:", prev);
-        return prev;
-      }
-
       const lorem =
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
 
@@ -172,39 +165,19 @@ export default function App() {
               text: lorem
             };
 
-      const updated = {
+      return {
         ...prev,
         children: [...prev.children, newNode]
       };
-
-      console.log("INSERTED NODE:", newNode);
-      return updated;
     });
   }
 
   // -----------------------------
-  // REORDER SECTIONS
+  // TABLE
   // -----------------------------
-  function reorderSections(oldIndex: number, newIndex: number) {
-    setDoc((prev: any) => {
-      const updated = [...prev.children];
-
-      const [moved] = updated.splice(oldIndex, 1);
-      updated.splice(newIndex, 0, moved);
-
-      return {
-        ...prev,
-        children: updated
-      };
-    });
-  }
-
   function addTable(sectionId: string) {
     function update(node: any): any {
-      if (
-        node.id === sectionId &&
-        node.type === "section"
-      ) {
+      if (node.id === sectionId && node.type === "section") {
         return {
           ...node,
           children: [
@@ -243,14 +216,9 @@ export default function App() {
   ) {
     function update(node: any): any {
       if (node.id === tableId) {
-        const updatedRows = [...node.rows];
-
-        updatedRows[rowIndex][colIndex] = value;
-
-        return {
-          ...node,
-          rows: updatedRows
-        };
+        const rows = [...node.rows];
+        rows[rowIndex][colIndex] = value;
+        return { ...node, rows };
       }
 
       if (node.children) {
@@ -266,66 +234,68 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
+  // -----------------------------
+  // FIGURE (UPLOAD)
+  // -----------------------------
   function addFigure(sectionId: string) {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
 
-    input.onchange = () => {
-      const file = input.files?.[0];
+    input.onchange = (e: any) => {
+      const file = e.target.files[0];
       if (!file) return;
 
-      const url = URL.createObjectURL(file);
+      const reader = new FileReader();
 
-      function update(node: any): any {
-        if (node.id === sectionId && node.type === "section") {
-          return {
-            ...node,
-            children: [
-              ...node.children,
-              {
-                id: crypto.randomUUID(),
-                type: "figure",
-                src: url,
-                x: 50,
-                y: 50,
-                width: 300,
-                height: 200,
-                fileName: file.name
-              }
-            ]
-          };
+      reader.onload = () => {
+        const url = reader.result as string;
+
+        function update(node: any): any {
+          if (node.id === sectionId && node.type === "section") {
+            return {
+              ...node,
+              children: [
+                ...node.children,
+                {
+                  id: crypto.randomUUID(),
+                  type: "figure",
+                  src: url,
+                  caption: "Figure caption",
+                  x: 50,
+                  y: 50,
+                  width: 300,
+                  height: 200
+                }
+              ]
+            };
+          }
+
+          if (node.children) {
+            return {
+              ...node,
+              children: node.children.map(update)
+            };
+          }
+
+          return node;
         }
 
-        if (node.children) {
-          return {
-            ...node,
-            children: node.children.map(update)
-          };
-        }
+        setDoc((prev) => update(prev));
+      };
 
-        return node;
-      }
-
-      setDoc((prev) => update(prev));
+      reader.readAsDataURL(file);
     };
 
     input.click();
   }
 
-  function updateFigurePosition(
-    figureId: string,
-    x: number,
-    y: number
-  ) {
+  // -----------------------------
+  // FIGURE POSITION
+  // -----------------------------
+  function updateFigurePosition(id: string, x: number, y: number) {
     function update(node: any): any {
-      if (node.id === figureId) {
-        return {
-          ...node,
-          x,
-          y
-        };
-      }
+      if (node.id === id) return { ...node, x, y };
 
       if (node.children) {
         return {
@@ -340,22 +310,19 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
+  // -----------------------------
+  // FIGURE SIZE
+  // -----------------------------
   function updateFigureSize(
-    figureId: string,
+    id: string,
     width: number,
     height: number,
     x: number,
     y: number
   ) {
     function update(node: any): any {
-      if (node.id === figureId) {
-        return {
-          ...node,
-          width,
-          height,
-          x,
-          y
-        };
+      if (node.id === id) {
+        return { ...node, width, height, x, y };
       }
 
       if (node.children) {
@@ -372,20 +339,12 @@ export default function App() {
   }
 
   // -----------------------------
-  // REORDER PARAGRAPHS
+  // FIGURE CAPTION
   // -----------------------------
-  function reorderSectionChildren(sectionId: string, oldIndex: number, newIndex: number) {
+  function updateFigureCaption(id: string, caption: string) {
     function update(node: any): any {
-      if (node.id === sectionId && node.type === "section") {
-        const updated = [...node.children];
-
-        const [moved] = updated.splice(oldIndex, 1);
-        updated.splice(newIndex, 0, moved);
-
-        return {
-          ...node,
-          children: updated
-        };
+      if (node.id === id) {
+        return { ...node, caption };
       }
 
       if (node.children) {
@@ -401,37 +360,26 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
+  // -----------------------------
+  // REORDER SECTIONS
+  // -----------------------------
   function reorderSections(oldIndex: number, newIndex: number) {
     setDoc((prev: any) => {
       const updated = [...prev.children];
-
       const [moved] = updated.splice(oldIndex, 1);
       updated.splice(newIndex, 0, moved);
 
-      return {
-        ...prev,
-        children: updated
-      };
+      return { ...prev, children: updated };
     });
   }
 
   // -----------------------------
-  // GLOBAL DND HANDLER
+  // DRAG END
   // -----------------------------
   function handleDragEnd(event: any) {
     const { active, over } = event;
-
-    console.log("DROP EVENT:", {
-      activeId: active?.id,
-      overId: over?.id,
-      data: active?.data?.current
-    });
-
     const data = active?.data?.current;
 
-    // -----------------------------
-    // 1. PALETTE INSERT (NO DROP TARGET NEEDED)
-    // -----------------------------
     if (data?.isPaletteItem) {
       insertNode(data.type);
       return;
@@ -439,37 +387,11 @@ export default function App() {
 
     if (!over) return;
 
-    // -----------------------------
-    // 2. PARAGRAPH REORDER
-    // -----------------------------
-    for (const section of doc.children) {
-      const oldIndex = section.children?.findIndex(
-        (c: any) => c.id === active.id
-      );
+    const oldIndex = doc.children.findIndex((c: any) => c.id === active.id);
+    const newIndex = doc.children.findIndex((c: any) => c.id === over.id);
 
-      const newIndex = section.children?.findIndex(
-        (c: any) => c.id === over.id
-      );
-
-      if (oldIndex !== -1 && newIndex !== -1) {
-        reorderSectionChildren(section.id, oldIndex, newIndex);
-        return;
-      }
-    }
-
-    // -----------------------------
-    // 3. SECTION REORDER
-    // -----------------------------
-    const oldSectionIndex = doc.children.findIndex(
-      (c: any) => c.id === active.id
-    );
-
-    const newSectionIndex = doc.children.findIndex(
-      (c: any) => c.id === over.id
-    );
-
-    if (oldSectionIndex !== -1 && newSectionIndex !== -1) {
-      reorderSections(oldSectionIndex, newSectionIndex);
+    if (oldIndex !== -1 && newIndex !== -1) {
+      reorderSections(oldIndex, newIndex);
     }
   }
 
@@ -486,19 +408,17 @@ export default function App() {
         style={{
           background: "#f3f3f3",
           minHeight: "100vh",
-          padding: "40px",
-          paddingLeft: "260px"
+          padding: 40,
+          paddingLeft: 260
         }}
       >
         <div
           style={{
-            width: "100%",
             maxWidth: 800,
-            margin: "0",
+            margin: "0 auto",
             background: "white",
             minHeight: "90vh",
             padding: 40,
-            boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
             textAlign: "left"
           }}
         >
@@ -514,9 +434,10 @@ export default function App() {
             updateFigurePosition={updateFigurePosition}
             updateFigureSize={updateFigureSize}
             updateTableCell={updateTableCell}
+            updateFigureCaption={updateFigureCaption}
+            setEditingCaptionId={setEditingCaptionId}
+            editingCaptionId={editingCaptionId}
             deleteNodeById={deleteNodeById}
-            reorderSections={reorderSections}
-            reorderSectionChildren={reorderSectionChildren}
           />
         </div>
 
