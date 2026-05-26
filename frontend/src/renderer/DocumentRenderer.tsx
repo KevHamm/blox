@@ -1,5 +1,3 @@
-import type { DocumentNode } from "../types/document";
-
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -8,6 +6,8 @@ import {
 
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+
+import { Rnd } from "react-rnd";
 
 /* -----------------------------
    PARAGRAPH
@@ -25,12 +25,11 @@ function Paragraph({
       style={{
         padding: 6,
         marginBottom: 6,
-        border: "1px solid #ddd",
-        background: "white"
+        background: "transparent"
       }}
     >
       {isEditing ? (
-        <input
+        <textarea
           autoFocus
           value={node.text}
           onChange={(e) =>
@@ -39,6 +38,11 @@ function Paragraph({
           onBlur={() => setEditingId(null)}
           style={{
             width: "100%",
+            minHeight: 120,
+            resize: "vertical",
+            padding: 8,
+            border: "1px solid #ddd",
+            outline: "none",
             textAlign: "left"
           }}
         />
@@ -48,7 +52,8 @@ function Paragraph({
           style={{
             color: "#333",
             margin: 0,
-            textAlign: "left"
+            textAlign: "left",
+            cursor: "pointer"
           }}
         >
           {node.text}
@@ -61,10 +66,7 @@ function Paragraph({
 /* -----------------------------
    TABLE
 ----------------------------- */
-function TableBlock({
-  node,
-  updateTableCell
-}: any) {
+function TableBlock({ node, updateTableCell }: any) {
   return (
     <table
       style={{
@@ -75,45 +77,84 @@ function TableBlock({
       }}
     >
       <tbody>
-        {node.rows.map(
-          (row: string[], rowIndex: number) => (
-            <tr key={rowIndex}>
-              {row.map(
-                (
-                  cell: string,
-                  colIndex: number
-                ) => (
-                  <td
-                    key={colIndex}
-                    style={{
-                      border: "1px solid #ccc",
-                      padding: 8
-                    }}
-                  >
-                    <input
-                      value={cell}
-                      onChange={(e) =>
-                        updateTableCell(
-                          node.id,
-                          rowIndex,
-                          colIndex,
-                          e.target.value
-                        )
-                      }
-                      style={{
-                        width: "100%",
-                        border: "none",
-                        outline: "none"
-                      }}
-                    />
-                  </td>
-                )
-              )}
-            </tr>
-          )
-        )}
+        {node.rows.map((row: string[], rowIndex: number) => (
+          <tr key={rowIndex}>
+            {row.map((cell: string, colIndex: number) => (
+              <td
+                key={colIndex}
+                style={{
+                  border: "1px solid #ccc",
+                  padding: 8
+                }}
+              >
+                <input
+                  value={cell}
+                  onChange={(e) =>
+                    updateTableCell(
+                      node.id,
+                      rowIndex,
+                      colIndex,
+                      e.target.value
+                    )
+                  }
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    outline: "none"
+                  }}
+                />
+              </td>
+            ))}
+          </tr>
+        ))}
       </tbody>
     </table>
+  );
+}
+
+/* -----------------------------
+   FIGURE
+----------------------------- */
+function FigureBlock({
+  node,
+  updateFigurePosition,
+  updateFigureSize
+}: any) {
+  return (
+    <Rnd
+      size={{ width: node.width, height: node.height }}
+      position={{ x: node.x, y: node.y }}
+      bounds="parent"
+      onDragStop={(e, d) =>
+        updateFigurePosition(node.id, d.x, d.y)
+      }
+      onResizeStop={(e, dir, ref, delta, position) => {
+        updateFigureSize(
+          node.id,
+          parseInt(ref.style.width),
+          parseInt(ref.style.height),
+          position.x,
+          position.y
+        );
+      }}
+      style={{
+        border: "1px solid #ccc",
+        background: "white",
+        overflow: "hidden",
+        zIndex: 20
+      }}
+    >
+      <img
+        src={node.src}
+        alt=""
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          pointerEvents: "none"
+        }}
+      />
+    </Rnd>
   );
 }
 
@@ -130,12 +171,7 @@ function Subsection({
   updateSectionTitle
 }: any) {
   return (
-    <div
-      style={{
-        marginTop: 20,
-        marginLeft: 20
-      }}
-    >
+    <div style={{ marginTop: 20, marginLeft: 20 }}>
       {editingId === node.id ? (
         <input
           autoFocus
@@ -147,7 +183,6 @@ function Subsection({
           style={{
             fontSize: 18,
             fontWeight: 600,
-            color: "#333",
             width: "100%",
             border: "none",
             outline: "none",
@@ -158,13 +193,12 @@ function Subsection({
         <h3
           onClick={() => setEditingId(node.id)}
           style={{
-            color: "#333",
             cursor: "pointer",
-            textAlign: "left"
+            textAlign: "left",
+            color: "#333"
           }}
         >
-          {sectionIndex + 1}.{subsectionIndex + 1}{" "}
-          {node.title}
+          {sectionIndex + 1}.{subsectionIndex + 1} {node.title}
         </h3>
       )}
 
@@ -193,18 +227,16 @@ function SortableSection({
   updateSectionTitle,
   addSubsection,
   addTable,
+  addFigure,
+  updateFigurePosition,
+  updateFigureSize,
   updateTableCell,
   deleteNodeById
 }: any) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition
-  } = useSortable({
-    id: node.id
-  });
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: node.id });
+
+  let subsectionCounter = 0;
 
   return (
     <div
@@ -215,7 +247,10 @@ function SortableSection({
         marginBottom: 16,
         padding: 12,
         border: "1px solid #eee",
-        background: "white"
+        background: "white",
+        position: "relative",
+        minHeight: 400,
+        textAlign: "left"
       }}
     >
       <div
@@ -223,9 +258,9 @@ function SortableSection({
         {...listeners}
         style={{
           cursor: "grab",
-          paddingBottom: 8,
           fontSize: 12,
-          color: "#888"
+          color: "#888",
+          marginBottom: 8
         }}
       >
         ☰ Drag Section
@@ -242,7 +277,6 @@ function SortableSection({
           style={{
             fontSize: 22,
             fontWeight: 700,
-            color: "#333",
             width: "100%",
             border: "none",
             outline: "none",
@@ -252,11 +286,7 @@ function SortableSection({
       ) : (
         <h2
           onClick={() => setEditingId(node.id)}
-          style={{
-            color: "#333",
-            cursor: "pointer",
-            textAlign: "left"
-          }}
+          style={{ cursor: "pointer", color: "#333" }}
         >
           {index + 1} {node.title}
         </h2>
@@ -266,11 +296,12 @@ function SortableSection({
         + Add subsection
       </button>
 
-      <button
-        onClick={() => addTable(node.id)}
-        style={{ marginLeft: 8 }}
-      >
+      <button onClick={() => addTable(node.id)} style={{ marginLeft: 8 }}>
         + Add table
+      </button>
+
+      <button onClick={() => addFigure(node.id)} style={{ marginLeft: 8 }}>
+        + Add figure
       </button>
 
       <button
@@ -281,48 +312,57 @@ function SortableSection({
       </button>
 
       <div style={{ marginTop: 12 }}>
-        {node.children.map(
-          (child: any, childIndex: number) => {
-            if (child.type === "paragraph") {
-              return (
-                <Paragraph
-                  key={child.id}
-                  node={child}
-                  editingId={editingId}
-                  setEditingId={setEditingId}
-                  updateTextById={updateTextById}
-                />
-              );
-            }
-
-            if (child.type === "subsection") {
-              return (
-                <Subsection
-                  key={child.id}
-                  node={child}
-                  sectionIndex={index}
-                  subsectionIndex={childIndex}
-                  editingId={editingId}
-                  setEditingId={setEditingId}
-                  updateTextById={updateTextById}
-                  updateSectionTitle={updateSectionTitle}
-                />
-              );
-            }
-
-            if (child.type === "table") {
-              return (
-                <TableBlock
-                  key={child.id}
-                  node={child}
-                  updateTableCell={updateTableCell}
-                />
-              );
-            }
-
-            return null;
+        {node.children.map((child: any, i: number) => {
+          if (child.type === "paragraph") {
+            return (
+              <Paragraph
+                key={child.id}
+                node={child}
+                editingId={editingId}
+                setEditingId={setEditingId}
+                updateTextById={updateTextById}
+              />
+            );
           }
-        )}
+
+          if (child.type === "subsection") {
+            return (
+              <Subsection
+                key={child.id}
+                node={child}
+                sectionIndex={index}
+                subsectionIndex={subsectionCounter++}
+                editingId={editingId}
+                setEditingId={setEditingId}
+                updateTextById={updateTextById}
+                updateSectionTitle={updateSectionTitle}
+              />
+            );
+          }
+
+          if (child.type === "table") {
+            return (
+              <TableBlock
+                key={child.id}
+                node={child}
+                updateTableCell={updateTableCell}
+              />
+            );
+          }
+
+          if (child.type === "figure") {
+            return (
+              <FigureBlock
+                key={child.id}
+                node={child}
+                updateFigurePosition={updateFigurePosition}
+                updateFigureSize={updateFigureSize}
+              />
+            );
+          }
+
+          return null;
+        })}
       </div>
     </div>
   );
@@ -339,39 +379,40 @@ export function DocumentRenderer({
   updateSectionTitle,
   addSubsection,
   addTable,
+  addFigure,
+  updateFigurePosition,
+  updateFigureSize,
   updateTableCell,
   deleteNodeById
 }: any) {
-  const { setNodeRef: setDropRef } = useDroppable({
+  const { setNodeRef } = useDroppable({
     id: "document-root"
   });
 
   return (
-    <div
-      ref={setDropRef}
-      style={{ minHeight: 200 }}
-    >
+    <div ref={setNodeRef} style={{ minHeight: 200 }}>
       <SortableContext
         items={node.children.map((c: any) => c.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div>
-          {node.children.map((c: any, index: number) => (
-            <SortableSection
-              key={c.id}
-              node={c}
-              index={index}
-              editingId={editingId}
-              setEditingId={setEditingId}
-              updateTextById={updateTextById}
-              updateSectionTitle={updateSectionTitle}
-              addSubsection={addSubsection}
-              addTable={addTable}
-              updateTableCell={updateTableCell}
-              deleteNodeById={deleteNodeById}
-            />
-          ))}
-        </div>
+        {node.children.map((c: any, index: number) => (
+          <SortableSection
+            key={c.id}
+            node={c}
+            index={index}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            updateTextById={updateTextById}
+            updateSectionTitle={updateSectionTitle}
+            addSubsection={addSubsection}
+            addTable={addTable}
+            addFigure={addFigure}
+            updateFigurePosition={updateFigurePosition}
+            updateFigureSize={updateFigureSize}
+            updateTableCell={updateTableCell}
+            deleteNodeById={deleteNodeById}
+          />
+        ))}
       </SortableContext>
     </div>
   );

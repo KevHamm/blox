@@ -266,6 +266,104 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
+  function addFigure(sectionId: string) {
+    const url = window.prompt("Image URL");
+
+    if (!url) return;
+
+    function update(node: any): any {
+      if (
+        node.id === sectionId &&
+        node.type === "section"
+      ) {
+        return {
+          ...node,
+          children: [
+            ...node.children,
+            {
+              id: crypto.randomUUID(),
+              type: "figure",
+              src: url,
+              x: 50,
+              y: 50,
+              width: 300,
+              height: 200
+            }
+          ]
+        };
+      }
+
+      if (node.children) {
+        return {
+          ...node,
+          children: node.children.map(update)
+        };
+      }
+
+      return node;
+    }
+
+    setDoc((prev) => update(prev));
+  }
+
+  function updateFigurePosition(
+    figureId: string,
+    x: number,
+    y: number
+  ) {
+    function update(node: any): any {
+      if (node.id === figureId) {
+        return {
+          ...node,
+          x,
+          y
+        };
+      }
+
+      if (node.children) {
+        return {
+          ...node,
+          children: node.children.map(update)
+        };
+      }
+
+      return node;
+    }
+
+    setDoc((prev) => update(prev));
+  }
+
+  function updateFigureSize(
+    figureId: string,
+    width: number,
+    height: number,
+    x: number,
+    y: number
+  ) {
+    function update(node: any): any {
+      if (node.id === figureId) {
+        return {
+          ...node,
+          width,
+          height,
+          x,
+          y
+        };
+      }
+
+      if (node.children) {
+        return {
+          ...node,
+          children: node.children.map(update)
+        };
+      }
+
+      return node;
+    }
+
+    setDoc((prev) => update(prev));
+  }
+
   // -----------------------------
   // REORDER PARAGRAPHS
   // -----------------------------
@@ -296,6 +394,20 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
+  function reorderSections(oldIndex: number, newIndex: number) {
+    setDoc((prev: any) => {
+      const updated = [...prev.children];
+
+      const [moved] = updated.splice(oldIndex, 1);
+      updated.splice(newIndex, 0, moved);
+
+      return {
+        ...prev,
+        children: updated
+      };
+    });
+  }
+
   // -----------------------------
   // GLOBAL DND HANDLER
   // -----------------------------
@@ -310,7 +422,9 @@ export default function App() {
 
     const data = active?.data?.current;
 
-    // NO DROP TARGET, ignore everything except palette insert
+    // -----------------------------
+    // 1. PALETTE INSERT (NO DROP TARGET NEEDED)
+    // -----------------------------
     if (data?.isPaletteItem) {
       insertNode(data.type);
       return;
@@ -319,15 +433,7 @@ export default function App() {
     if (!over) return;
 
     // -----------------------------
-    // 1. PALETTE INSERT
-    // -----------------------------
-    if (data?.isPaletteItem) {
-      insertNode(data.type);
-      return;
-    }
-
-    // -----------------------------
-    // 2. PARAGRAPH REORDER (SAFE)
+    // 2. PARAGRAPH REORDER
     // -----------------------------
     for (const section of doc.children) {
       const oldIndex = section.children?.findIndex(
@@ -345,7 +451,7 @@ export default function App() {
     }
 
     // -----------------------------
-    // 3. SECTION REORDER (FIXED)
+    // 3. SECTION REORDER
     // -----------------------------
     const oldSectionIndex = doc.children.findIndex(
       (c: any) => c.id === active.id
@@ -397,6 +503,9 @@ export default function App() {
             updateSectionTitle={updateSectionTitle}
             addSubsection={addSubsection}
             addTable={addTable}
+            addFigure={addFigure}
+            updateFigurePosition={updateFigurePosition}
+            updateFigureSize={updateFigureSize}
             updateTableCell={updateTableCell}
             deleteNodeById={deleteNodeById}
             reorderSections={reorderSections}
