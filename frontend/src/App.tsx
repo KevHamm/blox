@@ -12,23 +12,16 @@ import {
 } from "@dnd-kit/core";
 
 export default function App() {
-  const [doc, setDoc] =
-    useState<DocumentNode>(sampleDocument);
+  const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
 
-  const [editingId, setEditingId] =
-    useState<string | null>(null);
-
-  const [editingCaptionId, setEditingCaptionId] =
-    useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // -----------------------------
   // DND SENSORS
   // -----------------------------
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5
-      }
+      activationConstraint: { distance: 5 }
     })
   );
 
@@ -40,47 +33,38 @@ export default function App() {
       if (node.id === id && node.type === "paragraph") {
         return { ...node, text: value };
       }
-
       if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
+        return { ...node, children: node.children.map(update) };
       }
-
       return node;
     }
-
-    setDoc((prev) => update(prev));
+    setDoc(prev => update(prev));
   }
 
   // -----------------------------
-  // UPDATE SECTION TITLE
+  // UPDATE TITLES
   // -----------------------------
   function updateSectionTitle(id: string, value: string) {
     function update(node: any): any {
-      if (node.id === id && node.type === "section") {
+      if (
+        node.id === id &&
+        (node.type === "section" || node.type === "subsection")
+      ) {
         return { ...node, title: value };
       }
-
       if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
+        return { ...node, children: node.children.map(update) };
       }
-
       return node;
     }
-
-    setDoc((prev) => update(prev));
+    setDoc(prev => update(prev));
   }
 
   // -----------------------------
-  // ADD SECTION (NEW BUTTON USES THIS)
+  // ADD SECTION
   // -----------------------------
   function insertNode(type: string) {
-    setDoc((prev: any) => {
+    setDoc(prev => {
       const lorem =
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
 
@@ -104,15 +88,173 @@ export default function App() {
               text: lorem
             };
 
-      return {
-        ...prev,
-        children: [...prev.children, newNode]
-      };
+      return { ...prev, children: [...prev.children, newNode] };
     });
   }
 
   // -----------------------------
-  // FIGURE (UPLOAD)
+  // ADD SUBSECTION
+  // -----------------------------
+  function addSubsection(sectionId: string) {
+    const newNode = {
+      id: crypto.randomUUID(),
+      type: "subsection",
+      title: "New Subsection",
+      children: [
+        {
+          id: crypto.randomUUID(),
+          type: "paragraph",
+          text: "Subsection text..."
+        }
+      ]
+    };
+
+    function update(node: any): any {
+      if (node.id === sectionId && node.type === "section") {
+        return { ...node, children: [...node.children, newNode] };
+      }
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
+      return node;
+    }
+
+    setDoc(prev => update(prev));
+  }
+
+  // -----------------------------
+  // ADD TABLE
+  // -----------------------------
+  function addTable(sectionId: string) {
+    const newTable = {
+      id: crypto.randomUUID(),
+      type: "table",
+      rows: [
+        ["Header 1", "Header 2"],
+        ["Cell 1", "Cell 2"]
+      ],
+      caption: "Table caption"
+    };
+
+    function update(node: any): any {
+      if (node.id === sectionId && node.type === "section") {
+        return { ...node, children: [...node.children, newTable] };
+      }
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
+      return node;
+    }
+
+    setDoc(prev => update(prev));
+  }
+
+  // -----------------------------
+  // UPDATE TABLE CELL
+  // -----------------------------
+  function updateTableCell(id: string, row: number, col: number, value: string) {
+    function update(node: any): any {
+      if (node.id === id && node.type === "table") {
+        const newRows = node.rows.map((r: any[], ri: number) =>
+          ri === row ? r.map((cell, ci) => (ci === col ? value : cell)) : r
+        );
+        return { ...node, rows: newRows };
+      }
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
+      return node;
+    }
+    setDoc(prev => update(prev));
+  }
+
+  // -----------------------------
+  // ADD ROW
+  // -----------------------------
+  function addTableRow(tableId: string) {
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") {
+        const colCount = node.rows[0]?.length || 1;
+        const newRow = Array(colCount).fill("New Cell");
+        return { ...node, rows: [...node.rows, newRow] };
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
+    setDoc(prev => update(prev));
+  }
+
+  // -----------------------------
+  // DELETE LAST ROW
+  // -----------------------------
+  function deleteTableRow(tableId: string) {
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") {
+        if (node.rows.length <= 1) return node;
+        return { ...node, rows: node.rows.slice(0, -1) };
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
+    setDoc(prev => update(prev));
+  }
+
+  // -----------------------------
+  // ADD COLUMN
+  // -----------------------------
+  function addTableColumn(tableId: string) {
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") {
+        const newRows = node.rows.map((row: string[]) => [...row, "New"]);
+        return { ...node, rows: newRows };
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
+    setDoc(prev => update(prev));
+  }
+
+  // -----------------------------
+  // DELETE LAST COLUMN
+  // -----------------------------
+  function deleteTableColumn(tableId: string) {
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") {
+        const colCount = node.rows[0]?.length || 0;
+        if (colCount <= 1) return node;
+
+        const newRows = node.rows.map((row: string[]) =>
+          row.slice(0, -1)
+        );
+
+        return { ...node, rows: newRows };
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
+    setDoc(prev => update(prev));
+  }
+
+  // -----------------------------
+  // UNIVERSAL DELETE NODE
+  // -----------------------------
+  function deleteNodeById(id: string) {
+    function update(node: any): any {
+      if (!node.children) return node;
+
+      return {
+        ...node,
+        children: node.children
+          .filter((c: any) => c.id !== id)
+          .map(update)
+      };
+    }
+
+    setDoc(prev => update(prev));
+  }
+
+  // -----------------------------
+  // FIGURE UPLOAD
   // -----------------------------
   function addFigure(sectionId: string) {
     const input = document.createElement("input");
@@ -149,16 +291,13 @@ export default function App() {
           }
 
           if (node.children) {
-            return {
-              ...node,
-              children: node.children.map(update)
-            };
+            return { ...node, children: node.children.map(update) };
           }
 
           return node;
         }
 
-        setDoc((prev) => update(prev));
+        setDoc(prev => update(prev));
       };
 
       reader.readAsDataURL(file);
@@ -167,166 +306,28 @@ export default function App() {
     input.click();
   }
 
-  function addSubsection(sectionId: string) {
-    const newNode = {
-      id: crypto.randomUUID(),
-      type: "subsection",
-      title: "New Subsection",
-      children: [
-        {
-          id: crypto.randomUUID(),
-          type: "paragraph",
-          text: "Subsection text..."
-        }
-      ]
-    };
-
-    function update(node: any): any {
-      if (node.id === sectionId && node.type === "section") {
-        return { ...node, children: [...node.children, newNode] };
-      }
-      if (node.children) {
-        return { ...node, children: node.children.map(update) };
-      }
-      return node;
-    }
-
-    setDoc(prev => update(prev));
-  }
-
-
-  function addTable(sectionId: string) {
-    const newTable = {
-      id: crypto.randomUUID(),
-      type: "table",
-      rows: [
-        ["Header 1", "Header 2"],
-        ["Cell 1", "Cell 2"]
-      ],
-      caption: "Table caption"
-    };
-
-    function update(node: any): any {
-      if (node.id === sectionId && node.type === "section") {
-        return { ...node, children: [...node.children, newTable] };
-      }
-      if (node.children) {
-        return { ...node, children: node.children.map(update) };
-      }
-      return node;
-    }
-
-    setDoc(prev => update(prev));
-  }
-
-
   // -----------------------------
   // FIGURE POSITION
   // -----------------------------
   function updateFigurePosition(id: string, x: number, y: number) {
     function update(node: any): any {
       if (node.id === id) return { ...node, x, y };
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
-
-    setDoc((prev) => update(prev));
-  }
-
-  function updateTableCell(id: string, row: number, col: number, value: string) {
-    function update(node: any): any {
-      if (node.id === id && node.type === "table") {
-        const newRows = node.rows.map((r: any[], ri: number) =>
-          ri === row
-            ? r.map((cell, ci) => (ci === col ? value : cell))
-            : r
-        );
-        return { ...node, rows: newRows };
-      }
-
-      if (node.children) {
-        return { ...node, children: node.children.map(update) };
-      }
-
-      return node;
-    }
-
     setDoc(prev => update(prev));
   }
-
-  function deleteNodeById(id: string) {
-    function update(node: any): any {
-      if (!node.children) return node;
-
-      return {
-        ...node,
-        children: node.children
-          .filter((c: any) => c.id !== id)
-          .map(update)
-      };
-    }
-
-    setDoc(prev => update(prev));
-  }
-
-
-
 
   // -----------------------------
   // FIGURE SIZE
   // -----------------------------
-  function updateFigureSize(
-    id: string,
-    width: number,
-    height: number,
-    x: number,
-    y: number
-  ) {
+  function updateFigureSize(id: string, width: number, height: number, x: number, y: number) {
     function update(node: any): any {
-      if (node.id === id) {
-        return { ...node, width, height, x, y };
-      }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
+      if (node.id === id) return { ...node, width, height, x, y };
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
-
-    setDoc((prev) => update(prev));
-  }
-
-  // -----------------------------
-  // FIGURE CAPTION
-  // -----------------------------
-  function updateFigureCaption(id: string, caption: string) {
-    function update(node: any): any {
-      if (node.id === id) {
-        return { ...node, caption };
-      }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
-      return node;
-    }
-
-    setDoc((prev) => update(prev));
+    setDoc(prev => update(prev));
   }
 
   // -----------------------------
@@ -334,21 +335,15 @@ export default function App() {
   // -----------------------------
   function handleDragEnd(event: any) {
     const { active, over } = event;
-
     if (!over) return;
 
-    const oldIndex = doc.children.findIndex(
-      (c: any) => c.id === active.id
-    );
-    const newIndex = doc.children.findIndex(
-      (c: any) => c.id === over.id
-    );
+    const oldIndex = doc.children.findIndex((c: any) => c.id === active.id);
+    const newIndex = doc.children.findIndex((c: any) => c.id === over.id);
 
     if (oldIndex !== -1 && newIndex !== -1) {
       const updated = [...doc.children];
       const [moved] = updated.splice(oldIndex, 1);
       updated.splice(newIndex, 0, moved);
-
       setDoc({ ...doc, children: updated });
     }
   }
@@ -362,13 +357,7 @@ export default function App() {
       collisionDetection={pointerWithin}
       onDragEnd={handleDragEnd}
     >
-      <div
-        style={{
-          background: "#f3f3f3",
-          minHeight: "100vh",
-          padding: 40
-        }}
-      >
+      <div style={{ background: "#f3f3f3", minHeight: "100vh", padding: 40 }}>
         <div
           style={{
             maxWidth: 800,
@@ -379,14 +368,9 @@ export default function App() {
             textAlign: "left"
           }}
         >
-          {/* NEW BUTTON INSIDE DOCUMENT */}
           <button
             onClick={() => insertNode("section")}
-            style={{
-              marginBottom: 20,
-              padding: "8px 12px",
-              cursor: "pointer"
-            }}
+            style={{ marginBottom: 20, padding: "8px 12px", cursor: "pointer" }}
           >
             + Add Section
           </button>
@@ -397,14 +381,17 @@ export default function App() {
             setEditingId={setEditingId}
             updateTextById={updateTextById}
             updateSectionTitle={updateSectionTitle}
+            addSubsection={addSubsection}
+            addTable={addTable}
             addFigure={addFigure}
             updateFigurePosition={updateFigurePosition}
             updateFigureSize={updateFigureSize}
-            updateFigureCaption={updateFigureCaption}
-            addSubsection={addSubsection}
-            addTable={addTable}
             updateTableCell={updateTableCell}
+            deleteTableColumn={deleteTableColumn}
             deleteNodeById={deleteNodeById}
+            addTableRow={addTableRow}
+            deleteTableRow={deleteTableRow}
+            addTableColumn={addTableColumn}
           />
         </div>
       </div>

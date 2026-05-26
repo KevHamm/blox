@@ -36,11 +36,7 @@ function Paragraph({ node, editingId, setEditingId, updateTextById }: any) {
       ) : (
         <p
           onClick={() => setEditingId(node.id)}
-          style={{
-            margin: 0,
-            cursor: "pointer",
-            textAlign: "left"
-          }}
+          style={{ margin: 0, cursor: "pointer", textAlign: "left" }}
         >
           {node.text}
         </p>
@@ -52,34 +48,74 @@ function Paragraph({ node, editingId, setEditingId, updateTextById }: any) {
 /* -----------------------------
    TABLE
 ----------------------------- */
-function TableBlock({ node, updateTableCell }: any) {
+function TableBlock({
+  node,
+  updateTableCell,
+  deleteTableColumn,
+  deleteNodeById,
+  addTableRow,
+  deleteTableRow,
+  addTableColumn
+}: any) {
   return (
-    <table
-      style={{
-        width: "100%",
-        borderCollapse: "collapse",
-        marginTop: 16,
-        marginBottom: 16
-      }}
-    >
-      <tbody>
-        {node.rows.map((row: string[], r: number) => (
-          <tr key={r}>
-            {row.map((cell: string, c: number) => (
-              <td key={c} style={{ border: "1px solid #ccc", padding: 8 }}>
-                <input
-                  value={cell}
-                  onChange={(e) =>
-                    updateTableCell(node.id, r, c, e.target.value)
-                  }
-                  style={{ width: "100%", border: "none", outline: "none" }}
-                />
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div style={{ marginTop: 20, marginBottom: 20 }}>
+      {/* TABLE CONTROL BAR */}
+      <div style={{ marginBottom: 8 }}>
+        <button onClick={() => addTableRow(node.id)}>+ Row</button>
+        <button onClick={() => deleteTableRow(node.id)} style={{ marginLeft: 6 }}>
+          – Row
+        </button>
+        <button onClick={() => addTableColumn(node.id)} style={{ marginLeft: 6 }}>
+          + Column
+        </button>
+        <button onClick={() => deleteTableColumn(node.id)} style={{ marginLeft: 6 }}>
+          – Column
+        </button>
+        <button
+          onClick={() => deleteNodeById(node.id)}
+          style={{
+            marginLeft: 12,
+            background: "red",
+            color: "white",
+            border: "none",
+            padding: "4px 8px",
+            cursor: "pointer"
+          }}
+        >
+          Delete Table
+        </button>
+      </div>
+
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          marginTop: 4
+        }}
+      >
+        <tbody>
+          {node.rows.map((row: string[], r: number) => (
+            <tr key={r}>
+              {row.map((cell: string, c: number) => (
+                <td key={c} style={{ border: "1px solid #ccc", padding: 8 }}>
+                  <input
+                    value={cell}
+                    onChange={(e) =>
+                      updateTableCell(node.id, r, c, e.target.value)
+                    }
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      outline: "none"
+                    }}
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -89,7 +125,8 @@ function TableBlock({ node, updateTableCell }: any) {
 function FigureBlock({
   node,
   updateFigurePosition,
-  updateFigureSize
+  updateFigureSize,
+  deleteNodeById
 }: any) {
   return (
     <Rnd
@@ -115,9 +152,28 @@ function FigureBlock({
         zIndex: 50
       }}
     >
+      <button
+        onClick={() => deleteNodeById(node.id)}
+        style={{
+          position: "absolute",
+          top: -10,
+          right: -10,
+          zIndex: 100,
+          background: "red",
+          color: "white",
+          border: "none",
+          borderRadius: "50%",
+          width: 24,
+          height: 24,
+          cursor: "pointer"
+        }}
+      >
+        ×
+      </button>
+
       <img
         src={node.src}
-        alt={node.fileName || "figure"}
+        alt="figure"
         style={{
           width: "100%",
           height: "100%",
@@ -139,35 +195,49 @@ function Subsection({
   editingId,
   setEditingId,
   updateTextById,
-  updateSectionTitle
+  updateSectionTitle,
+  deleteNodeById
 }: any) {
   return (
     <div style={{ marginTop: 20, marginLeft: 20 }}>
-      {editingId === node.id ? (
-        <input
-          autoFocus
-          value={node.title}
-          onChange={(e) =>
-            updateSectionTitle(node.id, e.target.value)
-          }
-          onBlur={() => setEditingId(null)}
+      <div style={{ display: "flex", alignItems: "center" }}>
+        {editingId === node.id ? (
+          <input
+            autoFocus
+            value={node.title}
+            onChange={(e) => updateSectionTitle(node.id, e.target.value)}
+            onBlur={() => setEditingId(null)}
+            style={{
+              fontSize: 18,
+              fontWeight: 600,
+              width: "100%",
+              border: "none",
+              outline: "none",
+              textAlign: "left"
+            }}
+          />
+        ) : (
+          <h3
+            onClick={() => setEditingId(node.id)}
+            style={{ cursor: "pointer", textAlign: "left", marginRight: 10 }}
+          >
+            {sectionIndex + 1}.{subsectionIndex + 1} {node.title}
+          </h3>
+        )}
+
+        <button
+          onClick={() => deleteNodeById(node.id)}
           style={{
-            fontSize: 18,
-            fontWeight: 600,
-            width: "100%",
+            background: "red",
+            color: "white",
             border: "none",
-            outline: "none",
-            textAlign: "left"
+            padding: "4px 8px",
+            cursor: "pointer"
           }}
-        />
-      ) : (
-        <h3
-          onClick={() => setEditingId(node.id)}
-          style={{ cursor: "pointer", textAlign: "left" }}
         >
-          {sectionIndex + 1}.{subsectionIndex + 1} {node.title}
-        </h3>
-      )}
+          Delete Subsection
+        </button>
+      </div>
 
       {node.children.map((child: any) => (
         <Paragraph
@@ -198,7 +268,11 @@ function SortableSection({
   updateFigurePosition,
   updateFigureSize,
   updateTableCell,
-  deleteNodeById
+  deleteTableColumn,
+  deleteNodeById,
+  addTableRow,
+  deleteTableRow,
+  addTableColumn
 }: any) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: node.id });
@@ -220,7 +294,6 @@ function SortableSection({
         textAlign: "left"
       }}
     >
-      {/* drag handle */}
       <div
         {...attributes}
         {...listeners}
@@ -234,14 +307,11 @@ function SortableSection({
         ☰ Drag Section
       </div>
 
-      {/* title */}
       {editingId === node.id ? (
         <input
           autoFocus
           value={node.title}
-          onChange={(e) =>
-            updateSectionTitle(node.id, e.target.value)
-          }
+          onChange={(e) => updateSectionTitle(node.id, e.target.value)}
           onBlur={() => setEditingId(null)}
           style={{
             fontSize: 22,
@@ -261,7 +331,6 @@ function SortableSection({
         </h2>
       )}
 
-      {/* buttons */}
       <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
       <button onClick={() => addTable(node.id)} style={{ marginLeft: 8 }}>
         + Table
@@ -270,12 +339,11 @@ function SortableSection({
         + Figure
       </button>
       <button onClick={() => deleteNodeById(node.id)} style={{ marginLeft: 8 }}>
-        Delete
+        Delete Section
       </button>
 
-      {/* content */}
       <div style={{ marginTop: 12 }}>
-        {node.children.map((child: any, i: number) => {
+        {node.children.map((child: any) => {
           if (child.type === "paragraph") {
             return (
               <Paragraph
@@ -299,6 +367,7 @@ function SortableSection({
                 setEditingId={setEditingId}
                 updateTextById={updateTextById}
                 updateSectionTitle={updateSectionTitle}
+                deleteNodeById={deleteNodeById}
               />
             );
           }
@@ -309,6 +378,11 @@ function SortableSection({
                 key={child.id}
                 node={child}
                 updateTableCell={updateTableCell}
+                deleteTableColumn={deleteTableColumn}
+                deleteNodeById={deleteNodeById}
+                addTableRow={addTableRow}
+                deleteTableRow={deleteTableRow}
+                addTableColumn={addTableColumn}
               />
             );
           }
@@ -320,6 +394,7 @@ function SortableSection({
                 node={child}
                 updateFigurePosition={updateFigurePosition}
                 updateFigureSize={updateFigureSize}
+                deleteNodeById={deleteNodeById}
               />
             );
           }
@@ -349,7 +424,11 @@ export function DocumentRenderer(props: any) {
     updateFigurePosition,
     updateFigureSize,
     updateTableCell,
-    deleteNodeById
+    deleteTableColumn,
+    deleteNodeById,
+    addTableRow,
+    deleteTableRow,
+    addTableColumn
   } = props;
 
   return (
@@ -357,7 +436,7 @@ export function DocumentRenderer(props: any) {
       ref={setNodeRef}
       style={{
         minHeight: 200,
-        position: "relative" // IMPORTANT for free-floating figures
+        position: "relative"
       }}
     >
       <SortableContext
@@ -379,7 +458,11 @@ export function DocumentRenderer(props: any) {
             updateFigurePosition={updateFigurePosition}
             updateFigureSize={updateFigureSize}
             updateTableCell={updateTableCell}
+            deleteTableColumn={deleteTableColumn}
             deleteNodeById={deleteNodeById}
+            addTableRow={addTableRow}
+            deleteTableRow={deleteTableRow}
+            addTableColumn={addTableColumn}
           />
         ))}
       </SortableContext>
