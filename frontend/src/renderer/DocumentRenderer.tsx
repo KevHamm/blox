@@ -21,13 +21,7 @@ function Paragraph({
   const isEditing = editingId === node.id;
 
   return (
-    <div
-      style={{
-        padding: 6,
-        marginBottom: 6,
-        background: "transparent"
-      }}
-    >
+    <div style={{ padding: 6, marginBottom: 6 }}>
       {isEditing ? (
         <textarea
           autoFocus
@@ -39,7 +33,6 @@ function Paragraph({
           style={{
             width: "100%",
             minHeight: 120,
-            resize: "vertical",
             padding: 8,
             border: "1px solid #ddd",
             outline: "none",
@@ -50,10 +43,9 @@ function Paragraph({
         <p
           onClick={() => setEditingId(node.id)}
           style={{
-            color: "#333",
             margin: 0,
-            textAlign: "left",
-            cursor: "pointer"
+            cursor: "pointer",
+            textAlign: "left"
           }}
         >
           {node.text}
@@ -72,8 +64,7 @@ function TableBlock({ node, updateTableCell }: any) {
       style={{
         width: "100%",
         borderCollapse: "collapse",
-        marginTop: 16,
-        marginBottom: 16
+        margin: "16px 0"
       }}
     >
       <tbody>
@@ -82,10 +73,7 @@ function TableBlock({ node, updateTableCell }: any) {
             {row.map((cell: string, colIndex: number) => (
               <td
                 key={colIndex}
-                style={{
-                  border: "1px solid #ccc",
-                  padding: 8
-                }}
+                style={{ border: "1px solid #ccc", padding: 8 }}
               >
                 <input
                   value={cell}
@@ -113,7 +101,7 @@ function TableBlock({ node, updateTableCell }: any) {
 }
 
 /* -----------------------------
-   FIGURE
+   FIGURE (UPLOAD FIXED)
 ----------------------------- */
 function FigureBlock({
   node,
@@ -140,13 +128,12 @@ function FigureBlock({
       style={{
         border: "1px solid #ccc",
         background: "white",
-        overflow: "hidden",
-        zIndex: 20
+        overflow: "hidden"
       }}
     >
       <img
         src={node.src}
-        alt=""
+        alt="figure"
         style={{
           width: "100%",
           height: "100%",
@@ -171,7 +158,7 @@ function Subsection({
   updateSectionTitle
 }: any) {
   return (
-    <div style={{ marginTop: 20, marginLeft: 20 }}>
+    <div style={{ marginLeft: 20, marginTop: 16 }}>
       {editingId === node.id ? (
         <input
           autoFocus
@@ -181,9 +168,8 @@ function Subsection({
           }
           onBlur={() => setEditingId(null)}
           style={{
-            fontSize: 18,
-            fontWeight: 600,
             width: "100%",
+            fontSize: 16,
             border: "none",
             outline: "none",
             textAlign: "left"
@@ -192,11 +178,7 @@ function Subsection({
       ) : (
         <h3
           onClick={() => setEditingId(node.id)}
-          style={{
-            cursor: "pointer",
-            textAlign: "left",
-            color: "#333"
-          }}
+          style={{ cursor: "pointer", textAlign: "left" }}
         >
           {sectionIndex + 1}.{subsectionIndex + 1} {node.title}
         </h3>
@@ -244,71 +226,39 @@ function SortableSection({
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        marginBottom: 16,
         padding: 12,
+        marginBottom: 16,
         border: "1px solid #eee",
         background: "white",
-        position: "relative",
         minHeight: 400,
         textAlign: "left"
       }}
     >
-      <div
-        {...attributes}
-        {...listeners}
-        style={{
-          cursor: "grab",
-          fontSize: 12,
-          color: "#888",
-          marginBottom: 8
-        }}
-      >
+      <div {...attributes} {...listeners} style={{ cursor: "grab" }}>
         ☰ Drag Section
       </div>
 
-      {editingId === node.id ? (
-        <input
-          autoFocus
-          value={node.title}
-          onChange={(e) =>
-            updateSectionTitle(node.id, e.target.value)
-          }
-          onBlur={() => setEditingId(null)}
-          style={{
-            fontSize: 22,
-            fontWeight: 700,
-            width: "100%",
-            border: "none",
-            outline: "none",
-            textAlign: "left"
-          }}
-        />
-      ) : (
-        <h2
-          onClick={() => setEditingId(node.id)}
-          style={{ cursor: "pointer", color: "#333" }}
-        >
-          {index + 1} {node.title}
-        </h2>
-      )}
+      <h2
+        onClick={() => setEditingId(node.id)}
+        style={{ textAlign: "left" }}
+      >
+        {index + 1} {node.title}
+      </h2>
 
       <button onClick={() => addSubsection(node.id)}>
         + Add subsection
       </button>
 
-      <button onClick={() => addTable(node.id)} style={{ marginLeft: 8 }}>
+      <button onClick={() => addTable(node.id)}>
         + Add table
       </button>
 
-      <button onClick={() => addFigure(node.id)} style={{ marginLeft: 8 }}>
+      <button onClick={() => addFigure(node.id)}>
         + Add figure
       </button>
 
-      <button
-        onClick={() => deleteNodeById(node.id)}
-        style={{ marginLeft: 8 }}
-      >
-        Delete section
+      <button onClick={() => deleteNodeById(node.id)}>
+        Delete
       </button>
 
       <div style={{ marginTop: 12 }}>
@@ -385,9 +335,7 @@ export function DocumentRenderer({
   updateTableCell,
   deleteNodeById
 }: any) {
-  const { setNodeRef } = useDroppable({
-    id: "document-root"
-  });
+  const { setNodeRef } = useDroppable({ id: "document-root" });
 
   return (
     <div ref={setNodeRef} style={{ minHeight: 200 }}>

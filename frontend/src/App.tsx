@@ -267,43 +267,50 @@ export default function App() {
   }
 
   function addFigure(sectionId: string) {
-    const url = window.prompt("Image URL");
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
 
-    if (!url) return;
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
 
-    function update(node: any): any {
-      if (
-        node.id === sectionId &&
-        node.type === "section"
-      ) {
-        return {
-          ...node,
-          children: [
-            ...node.children,
-            {
-              id: crypto.randomUUID(),
-              type: "figure",
-              src: url,
-              x: 50,
-              y: 50,
-              width: 300,
-              height: 200
-            }
-          ]
-        };
+      const url = URL.createObjectURL(file);
+
+      function update(node: any): any {
+        if (node.id === sectionId && node.type === "section") {
+          return {
+            ...node,
+            children: [
+              ...node.children,
+              {
+                id: crypto.randomUUID(),
+                type: "figure",
+                src: url,
+                x: 50,
+                y: 50,
+                width: 300,
+                height: 200,
+                fileName: file.name
+              }
+            ]
+          };
+        }
+
+        if (node.children) {
+          return {
+            ...node,
+            children: node.children.map(update)
+          };
+        }
+
+        return node;
       }
 
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
+      setDoc((prev) => update(prev));
+    };
 
-      return node;
-    }
-
-    setDoc((prev) => update(prev));
+    input.click();
   }
 
   function updateFigurePosition(
