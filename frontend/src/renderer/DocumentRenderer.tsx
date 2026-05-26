@@ -10,7 +10,122 @@ import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
 /* -----------------------------
-   SECTION (DRAGGABLE)
+   PARAGRAPH
+----------------------------- */
+function Paragraph({
+  node,
+  editingId,
+  setEditingId,
+  updateTextById
+}: any) {
+  const isEditing = editingId === node.id;
+
+  return (
+    <div
+      style={{
+        padding: 6,
+        marginBottom: 6,
+        border: "1px solid #ddd",
+        background: "white"
+      }}
+    >
+      {isEditing ? (
+        <input
+          autoFocus
+          value={node.text}
+          onChange={(e) =>
+            updateTextById(node.id, e.target.value)
+          }
+          onBlur={() => setEditingId(null)}
+          style={{
+            width: "100%",
+            textAlign: "left"
+          }}
+        />
+      ) : (
+        <p
+          onClick={() => setEditingId(node.id)}
+          style={{
+            color: "#333",
+            margin: 0,
+            textAlign: "left"
+          }}
+        >
+          {node.text}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* -----------------------------
+   SUBSECTION
+----------------------------- */
+function Subsection({
+  node,
+  sectionIndex,
+  subsectionIndex,
+  editingId,
+  setEditingId,
+  updateTextById,
+  updateSectionTitle
+}: any) {
+  return (
+    <div
+      style={{
+        marginTop: 20,
+        marginLeft: 20
+      }}
+    >
+      {/* SUBSECTION TITLE */}
+      {editingId === node.id ? (
+        <input
+          autoFocus
+          value={node.title}
+          onChange={(e) =>
+            updateSectionTitle(node.id, e.target.value)
+          }
+          onBlur={() => setEditingId(null)}
+          style={{
+            fontSize: 18,
+            fontWeight: 600,
+            color: "#333",
+            width: "100%",
+            border: "none",
+            outline: "none",
+            textAlign: "left"
+          }}
+        />
+      ) : (
+        <h3
+          onClick={() => setEditingId(node.id)}
+          style={{
+            color: "#333",
+            cursor: "pointer",
+            textAlign: "left"
+          }}
+        >
+          {sectionIndex + 1}.{subsectionIndex + 1}{" "}
+          {node.title}
+        </h3>
+      )}
+
+      {/* SUBSECTION PARAGRAPHS */}
+      {node.children.map((child: any) => (
+        <Paragraph
+          key={child.id}
+          node={child}
+          editingId={editingId}
+          setEditingId={setEditingId}
+          updateTextById={updateTextById}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* -----------------------------
+   SECTION
 ----------------------------- */
 function SortableSection({
   node,
@@ -19,7 +134,7 @@ function SortableSection({
   setEditingId,
   updateTextById,
   updateSectionTitle,
-  addParagraph,
+  addSubsection,
   deleteNodeById
 }: any) {
   const {
@@ -68,8 +183,8 @@ function SortableSection({
           }
           onBlur={() => setEditingId(null)}
           style={{
-            fontSize: 20,
-            fontWeight: 600,
+            fontSize: 22,
+            fontWeight: 700,
             color: "#333",
             width: "100%",
             border: "none",
@@ -90,56 +205,47 @@ function SortableSection({
         </h2>
       )}
 
-      <button onClick={() => addParagraph(node.id)}>
-        + Add paragraph
+      <button onClick={() => addSubsection(node.id)}>
+        + Add subsection
       </button>
 
       <button onClick={() => deleteNodeById(node.id)}>
         Delete section
       </button>
 
-      {/* PARAGRAPHS */}
+      {/* SECTION CONTENT */}
       <div style={{ marginTop: 12 }}>
-        {node.children.map((c: any) => {
-          const isEditing = editingId === c.id;
+        {node.children.map((child: any, childIndex: number) => {
+          // paragraph directly inside section
+          if (child.type === "paragraph") {
+            return (
+              <Paragraph
+                key={child.id}
+                node={child}
+                editingId={editingId}
+                setEditingId={setEditingId}
+                updateTextById={updateTextById}
+              />
+            );
+          }
 
-          return (
-            <div
-              key={c.id}
-              style={{
-                padding: 6,
-                marginBottom: 6,
-                border: "1px solid #ddd",
-                background: "white"
-              }}
-            >
-              {isEditing ? (
-                <input
-                  autoFocus
-                  value={c.text}
-                  onChange={(e) =>
-                    updateTextById(c.id, e.target.value)
-                  }
-                  onBlur={() => setEditingId(null)}
-                  style={{
-                    width: "100%",
-                    textAlign: "left"
-                  }}
-                />
-              ) : (
-                <p
-                  onClick={() => setEditingId(c.id)}
-                  style={{
-                    color: "#333",
-                    margin: 0,
-                    textAlign: "left"
-                  }}
-                >
-                  {c.text}
-                </p>
-              )}
-            </div>
-          );
+          // subsection
+          if (child.type === "subsection") {
+            return (
+              <Subsection
+                key={child.id}
+                node={child}
+                sectionIndex={index}
+                subsectionIndex={childIndex}
+                editingId={editingId}
+                setEditingId={setEditingId}
+                updateTextById={updateTextById}
+                updateSectionTitle={updateSectionTitle}
+              />
+            );
+          }
+
+          return null;
         })}
       </div>
     </div>
@@ -155,7 +261,7 @@ export function DocumentRenderer({
   setEditingId,
   updateTextById,
   updateSectionTitle,
-  addParagraph,
+  addSubsection,
   deleteNodeById
 }: any) {
   const { setNodeRef: setDropRef } = useDroppable({
@@ -163,7 +269,10 @@ export function DocumentRenderer({
   });
 
   return (
-    <div ref={setDropRef} style={{ minHeight: 200 }}>
+    <div
+      ref={setDropRef}
+      style={{ minHeight: 200 }}
+    >
       <SortableContext
         items={node.children.map((c: any) => c.id)}
         strategy={verticalListSortingStrategy}
@@ -178,7 +287,7 @@ export function DocumentRenderer({
               setEditingId={setEditingId}
               updateTextById={updateTextById}
               updateSectionTitle={updateSectionTitle}
-              addParagraph={addParagraph}
+              addSubsection={addSubsection}
               deleteNodeById={deleteNodeById}
             />
           ))}

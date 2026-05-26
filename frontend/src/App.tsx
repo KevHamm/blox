@@ -77,17 +77,28 @@ export default function App() {
   // -----------------------------
   // ADD PARAGRAPH
   // -----------------------------
-  function addParagraph(sectionId: string) {
+  function addSubsection(sectionId: string) {
     function update(node: any): any {
-      if (node.id === sectionId && node.type === "section") {
+      if (
+        node.id === sectionId &&
+        node.type === "section"
+      ) {
         return {
           ...node,
           children: [
             ...node.children,
             {
               id: crypto.randomUUID(),
-              type: "paragraph",
-              text: "New paragraph"
+              type: "subsection",
+              title: "Subsection",
+              children: [
+                {
+                  id: crypto.randomUUID(),
+                  type: "paragraph",
+                  text:
+                  "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+                }
+              ]
             }
           ]
         };
@@ -317,7 +328,7 @@ export default function App() {
             setEditingId={setEditingId}
             updateTextById={updateTextById}
             updateSectionTitle={updateSectionTitle}
-            addParagraph={addParagraph}
+            addSubsection={addSubsection}
             deleteNodeById={deleteNodeById}
             reorderSections={reorderSections}
             reorderSectionChildren={reorderSectionChildren}
