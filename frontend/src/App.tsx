@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { sampleDocument } from "./data/sampleDocument";
 import { DocumentRenderer } from "./renderer/DocumentRenderer";
-import { BlockPalette } from "./components/BlockPalette";
 import type { DocumentNode } from "./types/document";
 
 import {
@@ -78,67 +77,7 @@ export default function App() {
   }
 
   // -----------------------------
-  // ADD SUBSECTION
-  // -----------------------------
-  function addSubsection(sectionId: string) {
-    function update(node: any): any {
-      if (node.id === sectionId && node.type === "section") {
-        return {
-          ...node,
-          children: [
-            ...node.children,
-            {
-              id: crypto.randomUUID(),
-              type: "subsection",
-              title: "Subsection",
-              children: [
-                {
-                  id: crypto.randomUUID(),
-                  type: "paragraph",
-                  text:
-                    "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
-                }
-              ]
-            }
-          ]
-        };
-      }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
-      return node;
-    }
-
-    setDoc((prev) => update(prev));
-  }
-
-  // -----------------------------
-  // DELETE NODE
-  // -----------------------------
-  function deleteNodeById(id: string) {
-    function remove(node: any): any {
-      if (node.id === id) return null;
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(remove).filter(Boolean)
-        };
-      }
-
-      return node;
-    }
-
-    setDoc((prev) => remove(prev));
-  }
-
-  // -----------------------------
-  // INSERT NODE (PALETTE)
+  // ADD SECTION (NEW BUTTON USES THIS)
   // -----------------------------
   function insertNode(type: string) {
     setDoc((prev: any) => {
@@ -150,7 +89,7 @@ export default function App() {
           ? {
               id: crypto.randomUUID(),
               type: "section",
-              title: "New Section",
+              title: "Section",
               children: [
                 {
                   id: crypto.randomUUID(),
@@ -170,68 +109,6 @@ export default function App() {
         children: [...prev.children, newNode]
       };
     });
-  }
-
-  // -----------------------------
-  // TABLE
-  // -----------------------------
-  function addTable(sectionId: string) {
-    function update(node: any): any {
-      if (node.id === sectionId && node.type === "section") {
-        return {
-          ...node,
-          children: [
-            ...node.children,
-            {
-              id: crypto.randomUUID(),
-              type: "table",
-              rows: [
-                ["", "", ""],
-                ["", "", ""],
-                ["", "", ""]
-              ]
-            }
-          ]
-        };
-      }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
-      return node;
-    }
-
-    setDoc((prev) => update(prev));
-  }
-
-  function updateTableCell(
-    tableId: string,
-    rowIndex: number,
-    colIndex: number,
-    value: string
-  ) {
-    function update(node: any): any {
-      if (node.id === tableId) {
-        const rows = [...node.rows];
-        rows[rowIndex][colIndex] = value;
-        return { ...node, rows };
-      }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
-      return node;
-    }
-
-    setDoc((prev) => update(prev));
   }
 
   // -----------------------------
@@ -361,37 +238,26 @@ export default function App() {
   }
 
   // -----------------------------
-  // REORDER SECTIONS
-  // -----------------------------
-  function reorderSections(oldIndex: number, newIndex: number) {
-    setDoc((prev: any) => {
-      const updated = [...prev.children];
-      const [moved] = updated.splice(oldIndex, 1);
-      updated.splice(newIndex, 0, moved);
-
-      return { ...prev, children: updated };
-    });
-  }
-
-  // -----------------------------
   // DRAG END
   // -----------------------------
   function handleDragEnd(event: any) {
     const { active, over } = event;
-    const data = active?.data?.current;
-
-    if (data?.isPaletteItem) {
-      insertNode(data.type);
-      return;
-    }
 
     if (!over) return;
 
-    const oldIndex = doc.children.findIndex((c: any) => c.id === active.id);
-    const newIndex = doc.children.findIndex((c: any) => c.id === over.id);
+    const oldIndex = doc.children.findIndex(
+      (c: any) => c.id === active.id
+    );
+    const newIndex = doc.children.findIndex(
+      (c: any) => c.id === over.id
+    );
 
     if (oldIndex !== -1 && newIndex !== -1) {
-      reorderSections(oldIndex, newIndex);
+      const updated = [...doc.children];
+      const [moved] = updated.splice(oldIndex, 1);
+      updated.splice(newIndex, 0, moved);
+
+      setDoc({ ...doc, children: updated });
     }
   }
 
@@ -408,8 +274,7 @@ export default function App() {
         style={{
           background: "#f3f3f3",
           minHeight: "100vh",
-          padding: 40,
-          paddingLeft: 260
+          padding: 40
         }}
       >
         <div
@@ -422,26 +287,30 @@ export default function App() {
             textAlign: "left"
           }}
         >
+          {/* NEW BUTTON INSIDE DOCUMENT */}
+          <button
+            onClick={() => insertNode("section")}
+            style={{
+              marginBottom: 20,
+              padding: "8px 12px",
+              cursor: "pointer"
+            }}
+          >
+            + Add Section
+          </button>
+
           <DocumentRenderer
             node={doc}
             editingId={editingId}
             setEditingId={setEditingId}
             updateTextById={updateTextById}
             updateSectionTitle={updateSectionTitle}
-            addSubsection={addSubsection}
-            addTable={addTable}
             addFigure={addFigure}
             updateFigurePosition={updateFigurePosition}
             updateFigureSize={updateFigureSize}
-            updateTableCell={updateTableCell}
             updateFigureCaption={updateFigureCaption}
-            setEditingCaptionId={setEditingCaptionId}
-            editingCaptionId={editingCaptionId}
-            deleteNodeById={deleteNodeById}
           />
         </div>
-
-        <BlockPalette onReset={() => setDoc(sampleDocument)} />
       </div>
     </DndContext>
   );
