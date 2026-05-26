@@ -14,6 +14,7 @@ import { CSS } from "@dnd-kit/utilities";
 ----------------------------- */
 function SortableSection({
   node,
+  index,
   editingId,
   setEditingId,
   updateTextById,
@@ -43,7 +44,7 @@ function SortableSection({
         background: "white"
       }}
     >
-      {/* Drag handle */}
+      {/* DRAG HANDLE */}
       <div
         {...attributes}
         {...listeners}
@@ -72,7 +73,8 @@ function SortableSection({
             color: "#333",
             width: "100%",
             border: "none",
-            outline: "none"
+            outline: "none",
+            textAlign: "left"
           }}
         />
       ) : (
@@ -84,7 +86,7 @@ function SortableSection({
             textAlign: "left"
           }}
         >
-          {node.title}
+          {index + 1} {node.title}
         </h2>
       )}
 
@@ -96,7 +98,7 @@ function SortableSection({
         Delete section
       </button>
 
-      {/* PARAGRAPHS (EDITABLE, NOT DRAGGABLE) */}
+      {/* PARAGRAPHS */}
       <div style={{ marginTop: 12 }}>
         {node.children.map((c: any) => {
           const isEditing = editingId === c.id;
@@ -119,7 +121,10 @@ function SortableSection({
                     updateTextById(c.id, e.target.value)
                   }
                   onBlur={() => setEditingId(null)}
-                  style={{ width: "100%" }}
+                  style={{
+                    width: "100%",
+                    textAlign: "left"
+                  }}
                 />
               ) : (
                 <p
@@ -127,7 +132,8 @@ function SortableSection({
                   style={{
                     color: "#333",
                     margin: 0,
-                    textAlign: "left"}}
+                    textAlign: "left"
+                  }}
                 >
                   {c.text}
                 </p>
@@ -163,10 +169,11 @@ export function DocumentRenderer({
         strategy={verticalListSortingStrategy}
       >
         <div>
-          {node.children.map((c: any) => (
+          {node.children.map((c: any, index: number) => (
             <SortableSection
               key={c.id}
               node={c}
+              index={index}
               editingId={editingId}
               setEditingId={setEditingId}
               updateTextById={updateTextById}

@@ -307,7 +307,7 @@ export default function App() {
             background: "white",
             minHeight: "90vh",
             padding: 40,
-            boxShadow: "0 2px 12px rgba(0,0,0,0.08)"
+            boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
             textAlign: "left"
           }}
         >
