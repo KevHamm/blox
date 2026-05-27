@@ -196,7 +196,8 @@ function Subsection({
   setEditingId,
   updateTextById,
   updateSectionTitle,
-  deleteNodeById
+  deleteNodeById,
+  lineHeight
 }: any) {
   return (
     <div style={{ marginTop: 20, marginLeft: 20 }}>
@@ -250,6 +251,7 @@ function Subsection({
           editingId={editingId}
           setEditingId={setEditingId}
           updateTextById={updateTextById}
+          lineHeight={lineHeight}
         />
       ))}
     </div>
@@ -371,6 +373,7 @@ function SortableSection({
                 updateTextById={updateTextById}
                 updateSectionTitle={updateSectionTitle}
                 deleteNodeById={deleteNodeById}
+                lineHeight={lineHeight}
               />
             )}
 
