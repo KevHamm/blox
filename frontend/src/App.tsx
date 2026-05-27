@@ -75,7 +75,7 @@ export default function App() {
   // -----------------------------
   function insertNode(type: string) {
     const lorem =
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit.";
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
 
     const lorem_full =
       "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
@@ -109,6 +109,12 @@ export default function App() {
   // SUBSECTION
   // -----------------------------
   function addSubsection(sectionId: string) {
+    const lorem_full =
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed eiusmod tempor incidunt ut labore et dolore magna aliqua." +
+      "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquid ex ea commodi consequat." +
+      "Quis aute iure reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur." +
+      "Excepteur sint obcaecat cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+
     const newNode = {
       id: crypto.randomUUID(),
       type: "subsection",
@@ -117,7 +123,7 @@ export default function App() {
         {
           id: crypto.randomUUID(),
           type: "paragraph",
-          text: "Lorem ipsum..."
+          text: lorem_full
         }
       ]
     };
