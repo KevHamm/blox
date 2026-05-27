@@ -287,9 +287,7 @@ function SortableSection({
         transform: CSS.Transform.toString(transform),
         transition,
         marginBottom: 20,
-        padding: 16,
-        border: "1px solid #eee",
-        background: "white"
+        padding: 16
       }}
     >
       {/* drag handle */}

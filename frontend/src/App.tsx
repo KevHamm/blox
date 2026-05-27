@@ -16,12 +16,14 @@ export default function App() {
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+
   // -----------------------------
   // LAYOUT STATE
   // -----------------------------
   const [layout, setLayout] = useState({
     textWidth: 650,
-    lineHeight: 1.6
+    lineHeight: 1.6,
+    columns: 1
   });
 
   // -----------------------------
@@ -421,6 +423,37 @@ export default function App() {
             }
           />
           <div>{layout.lineHeight}</div>
+
+          <hr />
+
+          {/* Column Toggle */}
+          <label>Layout</label>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button
+              onClick={() => setLayout({ ...layout, columns: 1})}
+              style={{
+                padding: "6px 10px",
+                background: layout.columns === 1 ? "#000" : "eee",
+                color: layout.columns === 1 ? "fff" : "000",
+                border: "none"
+              }}
+            >
+              1 column
+            </button>
+
+            <button
+              onClick={() => setLayout({ ...layout, columns: 2})}
+              style={{
+                padding: "6px 10px",
+                background: layout.columns === 2 ? "#000" : "eee",
+                color: layout.columns === 2 ? "fff" : "000",
+                border: "none"
+              }}
+            >
+              2 columns
+            </button>
+          </div>
         </div>
 
         {/* ---------------- DOCUMENT AREA ---------------- */}
@@ -439,7 +472,14 @@ export default function App() {
               padding: 40,
               background: "white",
               minHeight: "1123px",
-              boxSizing: "border-box"
+              margin: "0 auto",
+              boxSizing: "border-box",
+              color: "#000",
+
+              lineHeight: layout.lineHeight,
+
+              columnCount: layout.columns,
+              columnGap: layout.columns === 2 ? 40 : 0
             }}
           >
             {/* TEXT COLUMN (THIS IS WHAT YOU CONTROL) */}
