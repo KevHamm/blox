@@ -205,12 +205,28 @@ export default function App() {
   function addTableColumn(tableId: string) {
     function update(node: any): any {
       if (node.id === tableId && node.type === "table") {
-        const newRows = node.rows.map((row: string[]) => [...row, "New"]);
+        const colCount = node.rows[0]?.length || 0;
+
+        const newRows = node.rows.map((row: string[], rowIndex: number) => [
+          ...row,
+          rowIndex === 0
+            ? `Header ${colCount + 1}`
+            : `Cell ${rowIndex + 1}-${colCount + 1}`
+        ]);
+
         return { ...node, rows: newRows };
       }
-      if (node.children) return { ...node, children: node.children.map(update) };
+
+      if (node.children) {
+        return {
+          ...node,
+          children: node.children.map(update)
+        };
+      }
+
       return node;
     }
+
     setDoc(prev => update(prev));
   }
 
@@ -303,18 +319,71 @@ export default function App() {
   // -----------------------------
   function handleDragEnd(event: any) {
     const { active, over } = event;
-    if (!over) return;
 
-    const oldIndex = doc.children.findIndex((c: any) => c.id === active.id);
-    const newIndex = doc.children.findIndex((c: any) => c.id === over.id);
+    if (!over || active.id === over.id) return;
 
-    if (oldIndex !== -1 && newIndex !== -1) {
+    // ---------------------------------
+    // TOP-LEVEL SECTION MOVE
+    // ---------------------------------
+    const topOldIndex = doc.children.findIndex(
+      (c: any) => c.id === active.id
+    );
+
+    const topNewIndex = doc.children.findIndex(
+      (c: any) => c.id === over.id
+    );
+
+    if (topOldIndex !== -1 && topNewIndex !== -1) {
       const updated = [...doc.children];
-      const [moved] = updated.splice(oldIndex, 1);
-      updated.splice(newIndex, 0, moved);
-      setDoc({ ...doc, children: updated });
+
+      const [moved] = updated.splice(topOldIndex, 1);
+
+      updated.splice(topNewIndex, 0, moved);
+
+      setDoc({
+        ...doc,
+        children: updated
+      });
+
+      return;
     }
+
+  // ---------------------------------
+  // SECTION CHILD MOVE
+  // ---------------------------------
+  function update(node: any): any {
+    if (!node.children) return node;
+
+    const oldIndex = node.children.findIndex(
+      (c: any) => c.id === active.id
+    );
+
+    const newIndex = node.children.findIndex(
+      (c: any) => c.id === over.id
+    );
+
+    // move inside this section
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const updatedChildren = [...node.children];
+
+      const [moved] = updatedChildren.splice(oldIndex, 1);
+
+      updatedChildren.splice(newIndex, 0, moved);
+
+      return {
+        ...node,
+        children: updatedChildren
+      };
+    }
+
+    return {
+      ...node,
+      children: node.children.map(update)
+    };
   }
+
+  setDoc((prev: any) => update(prev));
+}
 
   // -----------------------------
   // RENDER
