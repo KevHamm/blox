@@ -13,7 +13,6 @@ import {
 
 export default function App() {
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
-
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // -----------------------------
@@ -33,9 +32,7 @@ export default function App() {
       if (node.id === id && node.type === "paragraph") {
         return { ...node, text: value };
       }
-      if (node.children) {
-        return { ...node, children: node.children.map(update) };
-      }
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
     setDoc(prev => update(prev));
@@ -52,9 +49,7 @@ export default function App() {
       ) {
         return { ...node, title: value };
       }
-      if (node.children) {
-        return { ...node, children: node.children.map(update) };
-      }
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
     setDoc(prev => update(prev));
@@ -64,10 +59,16 @@ export default function App() {
   // ADD SECTION
   // -----------------------------
   function insertNode(type: string) {
-    setDoc(prev => {
-      const lorem =
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
+    const lorem =
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
 
+    const lorem_full =
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed eiusmod tempor incidunt ut labore et " +
+      "dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquid ex ea " +
+      "commodi consequat. Quis aute iure reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. " +
+      "Excepteur sint obcaecat cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+
+    setDoc(prev => {
       const newNode =
         type === "section"
           ? {
@@ -85,7 +86,7 @@ export default function App() {
           : {
               id: crypto.randomUUID(),
               type: "paragraph",
-              text: lorem
+              text: lorem_full
             };
 
       return { ...prev, children: [...prev.children, newNode] };
@@ -96,6 +97,12 @@ export default function App() {
   // ADD SUBSECTION
   // -----------------------------
   function addSubsection(sectionId: string) {
+    const lorem_full =
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed eiusmod tempor incidunt ut labore et " +
+      "dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquid ex ea " +
+      "commodi consequat. Quis aute iure reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. " +
+      "Excepteur sint obcaecat cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+
     const newNode = {
       id: crypto.randomUUID(),
       type: "subsection",
@@ -104,7 +111,7 @@ export default function App() {
         {
           id: crypto.randomUUID(),
           type: "paragraph",
-          text: "Subsection text..."
+          text: lorem_full
         }
       ]
     };
@@ -113,9 +120,7 @@ export default function App() {
       if (node.id === sectionId && node.type === "section") {
         return { ...node, children: [...node.children, newNode] };
       }
-      if (node.children) {
-        return { ...node, children: node.children.map(update) };
-      }
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
 
@@ -132,17 +137,14 @@ export default function App() {
       rows: [
         ["Header 1", "Header 2"],
         ["Cell 1", "Cell 2"]
-      ],
-      caption: "Table caption"
+      ]
     };
 
     function update(node: any): any {
       if (node.id === sectionId && node.type === "section") {
         return { ...node, children: [...node.children, newTable] };
       }
-      if (node.children) {
-        return { ...node, children: node.children.map(update) };
-      }
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
 
@@ -160,9 +162,7 @@ export default function App() {
         );
         return { ...node, rows: newRows };
       }
-      if (node.children) {
-        return { ...node, children: node.children.map(update) };
-      }
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
     setDoc(prev => update(prev));
@@ -254,7 +254,7 @@ export default function App() {
   }
 
   // -----------------------------
-  // FIGURE UPLOAD
+  // ADD FIGURE (BLOCK ELEMENT)
   // -----------------------------
   function addFigure(sectionId: string) {
     const input = document.createElement("input");
@@ -279,21 +279,13 @@ export default function App() {
                 {
                   id: crypto.randomUUID(),
                   type: "figure",
-                  src: url,
-                  caption: "Figure caption",
-                  x: 50,
-                  y: 50,
-                  width: 300,
-                  height: 200
+                  src: url
                 }
               ]
             };
           }
 
-          if (node.children) {
-            return { ...node, children: node.children.map(update) };
-          }
-
+          if (node.children) return { ...node, children: node.children.map(update) };
           return node;
         }
 
@@ -307,31 +299,7 @@ export default function App() {
   }
 
   // -----------------------------
-  // FIGURE POSITION
-  // -----------------------------
-  function updateFigurePosition(id: string, x: number, y: number) {
-    function update(node: any): any {
-      if (node.id === id) return { ...node, x, y };
-      if (node.children) return { ...node, children: node.children.map(update) };
-      return node;
-    }
-    setDoc(prev => update(prev));
-  }
-
-  // -----------------------------
-  // FIGURE SIZE
-  // -----------------------------
-  function updateFigureSize(id: string, width: number, height: number, x: number, y: number) {
-    function update(node: any): any {
-      if (node.id === id) return { ...node, width, height, x, y };
-      if (node.children) return { ...node, children: node.children.map(update) };
-      return node;
-    }
-    setDoc(prev => update(prev));
-  }
-
-  // -----------------------------
-  // DRAG END
+  // DRAG END (SECTION ORDER)
   // -----------------------------
   function handleDragEnd(event: any) {
     const { active, over } = event;
@@ -364,13 +332,12 @@ export default function App() {
             margin: "0 auto",
             background: "white",
             minHeight: "90vh",
-            padding: 40,
-            textAlign: "left"
+            padding: 40
           }}
         >
           <button
             onClick={() => insertNode("section")}
-            style={{ marginBottom: 20, padding: "8px 12px", cursor: "pointer" }}
+            style={{ marginBottom: 20, padding: "8px 12px" }}
           >
             + Add Section
           </button>
@@ -384,8 +351,6 @@ export default function App() {
             addSubsection={addSubsection}
             addTable={addTable}
             addFigure={addFigure}
-            updateFigurePosition={updateFigurePosition}
-            updateFigureSize={updateFigureSize}
             updateTableCell={updateTableCell}
             deleteTableColumn={deleteTableColumn}
             deleteNodeById={deleteNodeById}

@@ -7,16 +7,33 @@ import {
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
-import { Rnd } from "react-rnd";
+// SORTABLE WRAPPER FOR CHILDREN
+function SortableItem({ id, children }: any) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id });
 
-/* -----------------------------
-   PARAGRAPH
------------------------------ */
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        marginBottom: 12
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// PARAGRAPH
 function Paragraph({ node, editingId, setEditingId, updateTextById }: any) {
   const isEditing = editingId === node.id;
 
   return (
-    <div style={{ padding: 6, marginBottom: 6 }}>
+    <div style={{ padding: 6 }}>
       {isEditing ? (
         <textarea
           autoFocus
@@ -29,14 +46,13 @@ function Paragraph({ node, editingId, setEditingId, updateTextById }: any) {
             resize: "vertical",
             padding: 8,
             border: "1px solid #ddd",
-            outline: "none",
-            textAlign: "left"
+            outline: "none"
           }}
         />
       ) : (
         <p
           onClick={() => setEditingId(node.id)}
-          style={{ margin: 0, cursor: "pointer", textAlign: "left" }}
+          style={{ margin: 0, cursor: "pointer" }}
         >
           {node.text}
         </p>
@@ -58,8 +74,8 @@ function TableBlock({
   addTableColumn
 }: any) {
   return (
-    <div style={{ marginTop: 20, marginBottom: 20 }}>
-      {/* TABLE CONTROL BAR */}
+    <div style={{ marginTop: 20 }}>
+      {/* CONTROL BAR */}
       <div style={{ marginBottom: 8 }}>
         <button onClick={() => addTableRow(node.id)}>+ Row</button>
         <button onClick={() => deleteTableRow(node.id)} style={{ marginLeft: 6 }}>
@@ -71,6 +87,7 @@ function TableBlock({
         <button onClick={() => deleteTableColumn(node.id)} style={{ marginLeft: 6 }}>
           – Column
         </button>
+
         <button
           onClick={() => deleteNodeById(node.id)}
           style={{
@@ -89,8 +106,7 @@ function TableBlock({
       <table
         style={{
           width: "100%",
-          borderCollapse: "collapse",
-          marginTop: 4
+          borderCollapse: "collapse"
         }}
       >
         <tbody>
@@ -120,51 +136,26 @@ function TableBlock({
 }
 
 /* -----------------------------
-   FIGURE (FREE FLOATING)
+   FIGURE (BLOCK ELEMENT)
 ----------------------------- */
-function FigureBlock({
-  node,
-  updateFigurePosition,
-  updateFigureSize,
-  deleteNodeById
-}: any) {
+function FigureBlock({ node, deleteNodeById }: any) {
   return (
-    <Rnd
-      size={{ width: node.width, height: node.height }}
-      position={{ x: node.x, y: node.y }}
-      onDragStop={(e, d) => updateFigurePosition(node.id, d.x, d.y)}
-      onResizeStop={(e, dir, ref, delta, position) => {
-        updateFigureSize(
-          node.id,
-          parseInt(ref.style.width),
-          parseInt(ref.style.height),
-          position.x,
-          position.y
-        );
-      }}
-      enableResizing
-      dragAxis="both"
+    <div
       style={{
-        position: "absolute",
         border: "1px solid #ccc",
         background: "white",
-        overflow: "hidden",
-        zIndex: 50
+        padding: 8,
+        margin: "12px 0"
       }}
     >
       <button
         onClick={() => deleteNodeById(node.id)}
         style={{
-          position: "absolute",
-          top: -10,
-          right: -10,
-          zIndex: 100,
+          float: "right",
           background: "red",
           color: "white",
           border: "none",
-          borderRadius: "50%",
-          width: 24,
-          height: 24,
+          padding: "2px 6px",
           cursor: "pointer"
         }}
       >
@@ -176,18 +167,18 @@ function FigureBlock({
         alt="figure"
         style={{
           width: "100%",
-          height: "100%",
+          height: "auto",
           objectFit: "contain",
-          pointerEvents: "none"
+          display: "block",
+          marginTop: 8
         }}
       />
-    </Rnd>
+    </div>
   );
 }
 
-/* -----------------------------
-   SUBSECTION
------------------------------ */
+// SUBSECTION
+
 function Subsection({
   node,
   sectionIndex,
@@ -212,14 +203,13 @@ function Subsection({
               fontWeight: 600,
               width: "100%",
               border: "none",
-              outline: "none",
-              textAlign: "left"
+              outline: "none"
             }}
           />
         ) : (
           <h3
             onClick={() => setEditingId(node.id)}
-            style={{ cursor: "pointer", textAlign: "left", marginRight: 10 }}
+            style={{ cursor: "pointer", marginRight: 10 }}
           >
             {sectionIndex + 1}.{subsectionIndex + 1} {node.title}
           </h3>
@@ -252,9 +242,7 @@ function Subsection({
   );
 }
 
-/* -----------------------------
-   SECTION
------------------------------ */
+// SECTION
 function SortableSection({
   node,
   index,
@@ -265,8 +253,6 @@ function SortableSection({
   addSubsection,
   addTable,
   addFigure,
-  updateFigurePosition,
-  updateFigureSize,
   updateTableCell,
   deleteTableColumn,
   deleteNodeById,
@@ -288,12 +274,10 @@ function SortableSection({
         marginBottom: 20,
         padding: 16,
         border: "1px solid #eee",
-        background: "white",
-        position: "relative",
-        minHeight: 400,
-        textAlign: "left"
+        background: "white"
       }}
     >
+      {/* drag handle */}
       <div
         {...attributes}
         {...listeners}
@@ -307,6 +291,7 @@ function SortableSection({
         ☰ Drag Section
       </div>
 
+      {/* title */}
       {editingId === node.id ? (
         <input
           autoFocus
@@ -318,8 +303,7 @@ function SortableSection({
             fontWeight: 700,
             width: "100%",
             border: "none",
-            outline: "none",
-            textAlign: "left"
+            outline: "none"
           }}
         />
       ) : (
@@ -331,6 +315,7 @@ function SortableSection({
         </h2>
       )}
 
+      {/* buttons */}
       <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
       <button onClick={() => addTable(node.id)} style={{ marginLeft: 8 }}>
         + Table
@@ -342,24 +327,24 @@ function SortableSection({
         Delete Section
       </button>
 
-      <div style={{ marginTop: 12 }}>
-        {node.children.map((child: any) => {
-          if (child.type === "paragraph") {
-            return (
+      {/* SORTABLE CHILDREN */}
+      <SortableContext
+        items={node.children.map((c: any) => c.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        {node.children.map((child: any) => (
+          <SortableItem key={child.id} id={child.id}>
+            {child.type === "paragraph" && (
               <Paragraph
-                key={child.id}
                 node={child}
                 editingId={editingId}
                 setEditingId={setEditingId}
                 updateTextById={updateTextById}
               />
-            );
-          }
+            )}
 
-          if (child.type === "subsection") {
-            return (
+            {child.type === "subsection" && (
               <Subsection
-                key={child.id}
                 node={child}
                 sectionIndex={index}
                 subsectionIndex={subsectionCounter++}
@@ -369,13 +354,10 @@ function SortableSection({
                 updateSectionTitle={updateSectionTitle}
                 deleteNodeById={deleteNodeById}
               />
-            );
-          }
+            )}
 
-          if (child.type === "table") {
-            return (
+            {child.type === "table" && (
               <TableBlock
-                key={child.id}
                 node={child}
                 updateTableCell={updateTableCell}
                 deleteTableColumn={deleteTableColumn}
@@ -384,85 +366,49 @@ function SortableSection({
                 deleteTableRow={deleteTableRow}
                 addTableColumn={addTableColumn}
               />
-            );
-          }
+            )}
 
-          if (child.type === "figure") {
-            return (
+            {child.type === "figure" && (
               <FigureBlock
-                key={child.id}
                 node={child}
-                updateFigurePosition={updateFigurePosition}
-                updateFigureSize={updateFigureSize}
                 deleteNodeById={deleteNodeById}
               />
-            );
-          }
-
-          return null;
-        })}
-      </div>
+            )}
+          </SortableItem>
+        ))}
+      </SortableContext>
     </div>
   );
 }
 
-/* -----------------------------
-   DOCUMENT ROOT
------------------------------ */
+// DOCUMENT ROOT
 export function DocumentRenderer(props: any) {
   const { setNodeRef } = useDroppable({ id: "document-root" });
 
-  const {
-    node,
-    editingId,
-    setEditingId,
-    updateTextById,
-    updateSectionTitle,
-    addSubsection,
-    addTable,
-    addFigure,
-    updateFigurePosition,
-    updateFigureSize,
-    updateTableCell,
-    deleteTableColumn,
-    deleteNodeById,
-    addTableRow,
-    deleteTableRow,
-    addTableColumn
-  } = props;
-
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        minHeight: 200,
-        position: "relative"
-      }}
-    >
+    <div ref={setNodeRef} style={{ minHeight: 200 }}>
       <SortableContext
-        items={node.children.map((c: any) => c.id)}
+        items={props.node.children.map((c: any) => c.id)}
         strategy={verticalListSortingStrategy}
       >
-        {node.children.map((c: any, index: number) => (
+        {props.node.children.map((c: any, index: number) => (
           <SortableSection
             key={c.id}
             node={c}
             index={index}
-            editingId={editingId}
-            setEditingId={setEditingId}
-            updateTextById={updateTextById}
-            updateSectionTitle={updateSectionTitle}
-            addSubsection={addSubsection}
-            addTable={addTable}
-            addFigure={addFigure}
-            updateFigurePosition={updateFigurePosition}
-            updateFigureSize={updateFigureSize}
-            updateTableCell={updateTableCell}
-            deleteTableColumn={deleteTableColumn}
-            deleteNodeById={deleteNodeById}
-            addTableRow={addTableRow}
-            deleteTableRow={deleteTableRow}
-            addTableColumn={addTableColumn}
+            editingId={props.editingId}
+            setEditingId={props.setEditingId}
+            updateTextById={props.updateTextById}
+            updateSectionTitle={props.updateSectionTitle}
+            addSubsection={props.addSubsection}
+            addTable={props.addTable}
+            addFigure={props.addFigure}
+            updateTableCell={props.updateTableCell}
+            deleteTableColumn={props.deleteTableColumn}
+            deleteNodeById={props.deleteNodeById}
+            addTableRow={props.addTableRow}
+            deleteTableRow={props.deleteTableRow}
+            addTableColumn={props.addTableColumn}
           />
         ))}
       </SortableContext>
