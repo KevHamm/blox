@@ -56,6 +56,15 @@
   }
 }
 
+body {
+  font-family: "KaTeX_Main", "Times New Roman", serif;
+  line-height: 1.6;
+}
+
+* {
+  font-family: inherit;
+}
+
 #center {
   display: flex;
   flex-direction: column;

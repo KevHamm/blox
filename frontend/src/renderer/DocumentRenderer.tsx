@@ -6,6 +6,7 @@ import {
 
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import "katex/dist/katex.min.css";
 
 // SORTABLE WRAPPER FOR CHILDREN
 function SortableItem({ id, children }: any) {
@@ -46,7 +47,8 @@ function Paragraph({ node, editingId, setEditingId, updateTextById }: any) {
             resize: "vertical",
             padding: 8,
             border: "1px solid #ddd",
-            outline: "none"
+            outline: "none",
+            textAlign: "left"
           }}
         />
       ) : (

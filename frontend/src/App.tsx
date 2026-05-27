@@ -2,6 +2,7 @@ import { useState } from "react";
 import { sampleDocument } from "./data/sampleDocument";
 import { DocumentRenderer } from "./renderer/DocumentRenderer";
 import type { DocumentNode } from "./types/document";
+import "katex/dist/katex.min.css";
 
 import {
   DndContext,
