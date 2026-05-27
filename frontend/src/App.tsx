@@ -17,6 +17,14 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // -----------------------------
+  // LAYOUT STATE
+  // -----------------------------
+  const [layout, setLayout] = useState({
+    textWidth: 650,
+    lineHeight: 1.6
+  });
+
+  // -----------------------------
   // DND SENSORS
   // -----------------------------
   const sensors = useSensors(
@@ -33,7 +41,9 @@ export default function App() {
       if (node.id === id && node.type === "paragraph") {
         return { ...node, text: value };
       }
-      if (node.children) return { ...node, children: node.children.map(update) };
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
       return node;
     }
     setDoc(prev => update(prev));
@@ -50,24 +60,23 @@ export default function App() {
       ) {
         return { ...node, title: value };
       }
-      if (node.children) return { ...node, children: node.children.map(update) };
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
       return node;
     }
     setDoc(prev => update(prev));
   }
 
   // -----------------------------
-  // ADD SECTION
+  // INSERT NODE
   // -----------------------------
   function insertNode(type: string) {
     const lorem =
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit.";
 
     const lorem_full =
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed eiusmod tempor incidunt ut labore et " +
-      "dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquid ex ea " +
-      "commodi consequat. Quis aute iure reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. " +
-      "Excepteur sint obcaecat cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
 
     setDoc(prev => {
       const newNode =
@@ -95,15 +104,9 @@ export default function App() {
   }
 
   // -----------------------------
-  // ADD SUBSECTION
+  // SUBSECTION
   // -----------------------------
   function addSubsection(sectionId: string) {
-    const lorem_full =
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed eiusmod tempor incidunt ut labore et " +
-      "dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquid ex ea " +
-      "commodi consequat. Quis aute iure reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. " +
-      "Excepteur sint obcaecat cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-
     const newNode = {
       id: crypto.randomUUID(),
       type: "subsection",
@@ -112,7 +115,7 @@ export default function App() {
         {
           id: crypto.randomUUID(),
           type: "paragraph",
-          text: lorem_full
+          text: "Lorem ipsum..."
         }
       ]
     };
@@ -121,7 +124,9 @@ export default function App() {
       if (node.id === sectionId && node.type === "section") {
         return { ...node, children: [...node.children, newNode] };
       }
-      if (node.children) return { ...node, children: node.children.map(update) };
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
       return node;
     }
 
@@ -129,7 +134,7 @@ export default function App() {
   }
 
   // -----------------------------
-  // ADD TABLE
+  // TABLE
   // -----------------------------
   function addTable(sectionId: string) {
     const newTable = {
@@ -145,7 +150,9 @@ export default function App() {
       if (node.id === sectionId && node.type === "section") {
         return { ...node, children: [...node.children, newTable] };
       }
-      if (node.children) return { ...node, children: node.children.map(update) };
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
       return node;
     }
 
@@ -153,19 +160,44 @@ export default function App() {
   }
 
   // -----------------------------
-  // UPDATE TABLE CELL
+  // TABLE CELL UPDATE
   // -----------------------------
-  function updateTableCell(id: string, row: number, col: number, value: string) {
+  function updateTableCell(
+    id: string,
+    row: number,
+    col: number,
+    value: string
+  ) {
     function update(node: any): any {
       if (node.id === id && node.type === "table") {
         const newRows = node.rows.map((r: any[], ri: number) =>
-          ri === row ? r.map((cell, ci) => (ci === col ? value : cell)) : r
+          ri === row ? r.map((c, ci) => (ci === col ? value : c)) : r
         );
         return { ...node, rows: newRows };
       }
-      if (node.children) return { ...node, children: node.children.map(update) };
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
       return node;
     }
+    setDoc(prev => update(prev));
+  }
+
+  // -----------------------------
+  // DELETE NODE
+  // -----------------------------
+  function deleteNodeById(id: string) {
+    function update(node: any): any {
+      if (!node.children) return node;
+
+      return {
+        ...node,
+        children: node.children
+          .filter((c: any) => c.id !== id)
+          .map(update)
+      };
+    }
+
     setDoc(prev => update(prev));
   }
 
@@ -253,24 +285,6 @@ export default function App() {
   }
 
   // -----------------------------
-  // UNIVERSAL DELETE NODE
-  // -----------------------------
-  function deleteNodeById(id: string) {
-    function update(node: any): any {
-      if (!node.children) return node;
-
-      return {
-        ...node,
-        children: node.children
-          .filter((c: any) => c.id !== id)
-          .map(update)
-      };
-    }
-
-    setDoc(prev => update(prev));
-  }
-
-  // -----------------------------
   // ADD FIGURE (BLOCK ELEMENT)
   // -----------------------------
   function addFigure(sectionId: string) {
@@ -316,75 +330,37 @@ export default function App() {
   }
 
   // -----------------------------
-  // DRAG END (SECTION ORDER)
+  // DRAG END
   // -----------------------------
   function handleDragEnd(event: any) {
     const { active, over } = event;
-
     if (!over || active.id === over.id) return;
 
-    // ---------------------------------
-    // TOP-LEVEL SECTION MOVE
-    // ---------------------------------
-    const topOldIndex = doc.children.findIndex(
-      (c: any) => c.id === active.id
-    );
+    function update(node: any): any {
+      if (!node.children) return node;
 
-    const topNewIndex = doc.children.findIndex(
-      (c: any) => c.id === over.id
-    );
+      const oldIndex = node.children.findIndex(
+        (c: any) => c.id === active.id
+      );
+      const newIndex = node.children.findIndex(
+        (c: any) => c.id === over.id
+      );
 
-    if (topOldIndex !== -1 && topNewIndex !== -1) {
-      const updated = [...doc.children];
-
-      const [moved] = updated.splice(topOldIndex, 1);
-
-      updated.splice(topNewIndex, 0, moved);
-
-      setDoc({
-        ...doc,
-        children: updated
-      });
-
-      return;
-    }
-
-  // ---------------------------------
-  // SECTION CHILD MOVE
-  // ---------------------------------
-  function update(node: any): any {
-    if (!node.children) return node;
-
-    const oldIndex = node.children.findIndex(
-      (c: any) => c.id === active.id
-    );
-
-    const newIndex = node.children.findIndex(
-      (c: any) => c.id === over.id
-    );
-
-    // move inside this section
-    if (oldIndex !== -1 && newIndex !== -1) {
-      const updatedChildren = [...node.children];
-
-      const [moved] = updatedChildren.splice(oldIndex, 1);
-
-      updatedChildren.splice(newIndex, 0, moved);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const updated = [...node.children];
+        const [moved] = updated.splice(oldIndex, 1);
+        updated.splice(newIndex, 0, moved);
+        return { ...node, children: updated };
+      }
 
       return {
         ...node,
-        children: updatedChildren
+        children: node.children.map(update)
       };
     }
 
-    return {
-      ...node,
-      children: node.children.map(update)
-    };
+    setDoc(prev => update(prev));
   }
-
-  setDoc((prev: any) => update(prev));
-}
 
   // -----------------------------
   // RENDER
@@ -395,39 +371,110 @@ export default function App() {
       collisionDetection={pointerWithin}
       onDragEnd={handleDragEnd}
     >
-      <div style={{ background: "#f3f3f3", minHeight: "100vh", padding: 40 }}>
+      <div
+        style={{
+          display: "flex",
+          minHeight: "100vh",
+          background: "#f3f3f3"
+        }}
+      >
+        {/* ---------------- LEFT SIDEBAR ---------------- */}
         <div
           style={{
-            maxWidth: 800,
-            margin: "0 auto",
-            background: "white",
-            minHeight: "90vh",
+            width: 260,
+            padding: 20,
+            borderRight: "1px solid #ddd",
+            background: "white"
+          }}
+        >
+          <h3>Typography</h3>
+
+          <label>Text Width</label>
+          <input
+            type="range"
+            min={400}
+            max={900}
+            value={layout.textWidth}
+            onChange={(e) =>
+              setLayout({
+                ...layout,
+                textWidth: Number(e.target.value)
+              })
+            }
+          />
+          <div>{layout.textWidth}px</div>
+
+          <hr />
+
+          <label>Line Spacing</label>
+          <input
+            type="range"
+            min={1}
+            max={2.5}
+            step={0.1}
+            value={layout.lineHeight}
+            onChange={(e) =>
+              setLayout({
+                ...layout,
+                lineHeight: Number(e.target.value)
+              })
+            }
+          />
+          <div>{layout.lineHeight}</div>
+        </div>
+
+        {/* ---------------- DOCUMENT AREA ---------------- */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            justifyContent: "center",
             padding: 40
           }}
         >
-          <button
-            onClick={() => insertNode("section")}
-            style={{ marginBottom: 20, padding: "8px 12px" }}
+          {/* A4 PAGE */}
+          <div
+            style={{
+              width: 794,
+              padding: 40,
+              background: "white",
+              minHeight: "1123px",
+              boxSizing: "border-box"
+            }}
           >
-            + Add Section
-          </button>
+            {/* TEXT COLUMN (THIS IS WHAT YOU CONTROL) */}
+            <div
+              style={{
+                maxWidth: layout.textWidth,
+                margin: "0 auto"
+              }}
+            >
+              <button
+                onClick={() => insertNode("section")}
+                style={{ marginBottom: 20, padding: "8px 12px" }}
+              >
+                + Add Section
+              </button>
 
-          <DocumentRenderer
-            node={doc}
-            editingId={editingId}
-            setEditingId={setEditingId}
-            updateTextById={updateTextById}
-            updateSectionTitle={updateSectionTitle}
-            addSubsection={addSubsection}
-            addTable={addTable}
-            addFigure={addFigure}
-            updateTableCell={updateTableCell}
-            deleteTableColumn={deleteTableColumn}
-            deleteNodeById={deleteNodeById}
-            addTableRow={addTableRow}
-            deleteTableRow={deleteTableRow}
-            addTableColumn={addTableColumn}
-          />
+              <DocumentRenderer
+                node={doc}
+                editingId={editingId}
+                setEditingId={setEditingId}
+                updateTextById={updateTextById}
+                updateSectionTitle={updateSectionTitle}
+                addSubsection={addSubsection}
+                addTable={addTable}
+                addFigure={addFigure}
+                updateTableCell={updateTableCell}
+                deleteTableColumn={deleteTableColumn}
+                deleteNodeById={deleteNodeById}
+                addTableRow={addTableRow}
+                deleteTableRow={deleteTableRow}
+                addTableColumn={addTableColumn}
+                lineHeight={layout.lineHeight}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </DndContext>

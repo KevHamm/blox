@@ -30,7 +30,7 @@ function SortableItem({ id, children }: any) {
 }
 
 // PARAGRAPH
-function Paragraph({ node, editingId, setEditingId, updateTextById }: any) {
+function Paragraph({ node, editingId, setEditingId, updateTextById, lineHeight}: any) {
   const isEditing = editingId === node.id;
 
   return (
@@ -48,7 +48,8 @@ function Paragraph({ node, editingId, setEditingId, updateTextById }: any) {
             padding: 8,
             border: "1px solid #ddd",
             outline: "none",
-            textAlign: "left"
+            textAlign: "left",
+            lineHeight: lineHeight ?? 1.6
           }}
         />
       ) : (
@@ -58,7 +59,8 @@ function Paragraph({ node, editingId, setEditingId, updateTextById }: any) {
             margin: 0,
             cursor: "pointer",
             textAlign: "left",
-            width: "100%"
+            width: "100%",
+            lineHeight: lineHeight ?? 1.6
           }}
         >
           {node.text}
@@ -270,7 +272,8 @@ function SortableSection({
   deleteNodeById,
   addTableRow,
   deleteTableRow,
-  addTableColumn
+  addTableColumn,
+  lineHeight
 }: any) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: node.id });
@@ -356,6 +359,7 @@ function SortableSection({
                 editingId={editingId}
                 setEditingId={setEditingId}
                 updateTextById={updateTextById}
+                lineHeight={lineHeight}
               />
             )}
 
@@ -425,6 +429,7 @@ export function DocumentRenderer(props: any) {
             addTableRow={props.addTableRow}
             deleteTableRow={props.deleteTableRow}
             addTableColumn={props.addTableColumn}
+            lineHeight={props.lineHeight}
           />
         ))}
       </SortableContext>
