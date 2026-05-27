@@ -52,7 +52,12 @@ function Paragraph({ node, editingId, setEditingId, updateTextById }: any) {
       ) : (
         <p
           onClick={() => setEditingId(node.id)}
-          style={{ margin: 0, cursor: "pointer" }}
+          style={{
+            margin: 0,
+            cursor: "pointer",
+            textAlign: "left",
+            width: "100%"
+          }}
         >
           {node.text}
         </p>
@@ -209,7 +214,12 @@ function Subsection({
         ) : (
           <h3
             onClick={() => setEditingId(node.id)}
-            style={{ cursor: "pointer", marginRight: 10 }}
+            style={{
+              cursor: "pointer",
+              marginRight: 10,
+              textAlign: "left",
+              width: "100%"
+            }}
           >
             {sectionIndex + 1}.{subsectionIndex + 1} {node.title}
           </h3>
@@ -309,7 +319,11 @@ function SortableSection({
       ) : (
         <h2
           onClick={() => setEditingId(node.id)}
-          style={{ cursor: "pointer" }}
+          style={{
+            cursor: "pointer",
+            textAlign: "left",
+            width: "100%"
+          }}
         >
           {index + 1} {node.title}
         </h2>
