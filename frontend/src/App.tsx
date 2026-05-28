@@ -615,7 +615,8 @@ export default function App() {
                       background: "transparent",
                       color: "var(--text)",
                       fontFamily: "var(--heading)",
-                      letterSpacing: "-0.5px"
+                      letterSpacing: "-0.5px",
+                      fontVariantLigatures: "normal"
                     }}
                   />
                 </div>
