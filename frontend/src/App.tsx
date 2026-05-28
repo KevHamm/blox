@@ -567,11 +567,14 @@ export default function App() {
         >
           <div
             style={{
-              width: 794,
-              padding: 40,
+              width: 816,
+              minHeight: 1056,
+              padding: "96px 72px",
               background: "white",
-              minHeight: "1123px",
               boxSizing: "border-box",
+              color: "#000",
+              fontFamily: "var(--sans)",
+              textAlign: "left",
               lineHeight: layout.lineHeight
             }}
           >
@@ -596,7 +599,8 @@ export default function App() {
               >
                 <div
                   style={{
-                    marginBottom: 40,
+                    marginTop: 80,
+                    marginBottom: 60,
                     textAlign: "center",
                     columnSpan: "all"
                   }}
@@ -606,8 +610,11 @@ export default function App() {
                     onChange={(e) => setDocumentTitle(e.target.value)}
                     placeholder="Document Title"
                     style={{
-                      fontSize: 42,
+                      fontSize: 34,
                       fontWeight: 500,
+                      marginTop: 40,
+                      columnSpan: "all",
+                      borderBottom: "1px solid val(--border)",
                       border: "none",
                       outline: "none",
                       textAlign: "center",

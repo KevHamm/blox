@@ -102,7 +102,6 @@ function TableBlock({
         <button
           onClick={() => deleteNodeById(node.id)}
           style={{
-            marginLeft: 12,
             background: "red",
             color: "white",
             border: "none",
@@ -203,7 +202,7 @@ function Subsection({
   fontSize
 }: any) {
   return (
-    <div style={{ marginTop: 20, marginLeft: 20 }}>
+    <div style={{ marginTop: 20 }}>
       <div style={{ display: "flex", alignItems: "center" }}>
         {editingId === node.id ? (
           <input
