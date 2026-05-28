@@ -15,6 +15,7 @@ import {
 export default function App() {
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [documentTitle, setDocumentTitle] = useState("Untitled Document");
 
   // -----------------------------
   // LAYOUT STATE
@@ -22,7 +23,8 @@ export default function App() {
   const [layout, setLayout] = useState({
     textWidth: 650,
     lineHeight: 1.6,
-    columns: 1
+    columns: 1,
+    fontSize: 16
   });
 
   // -----------------------------
@@ -33,6 +35,19 @@ export default function App() {
       activationConstraint: { distance: 5 }
     })
   );
+
+  // ----------------------------
+  // LOREM TEXT
+  // ----------------------------
+
+  const lorem =
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
+
+  const lorem_full = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed eiusmod tempor" +
+                     "incidunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation" +
+                     "ullamco laboris nisi ut aliquid ex ea commodi consequat. Quisaute iure reprehenderit in" +
+                     "voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint obcaecat cupiditat" +
+                     "non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
 
   // -----------------------------
   // UPDATE TEXT
@@ -79,8 +94,6 @@ export default function App() {
   // INSERT SECTION
   // -----------------------------
   function insertNode(type: string) {
-    const lorem =
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
 
     setDoc((prev) => {
       const newNode =
@@ -100,7 +113,7 @@ export default function App() {
           : {
               id: crypto.randomUUID(),
               type: "paragraph",
-              text: lorem
+              text: lorem_full
             };
 
       return {
@@ -122,8 +135,7 @@ export default function App() {
         {
           id: crypto.randomUUID(),
           type: "paragraph",
-          text:
-            "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+          text: lorem_full
         }
       ]
     };
@@ -504,6 +516,25 @@ export default function App() {
 
           <hr />
 
+          <label>Font Size</label>
+
+          <input
+            type="range"
+            min={10}
+            max={28}
+            step={1}
+            value={layout.fontSize}
+            onChange={(e) =>
+              setLayout({
+                ...layout,
+                fontSize: Number(e.target.value)
+              })
+            }
+          />
+          <div>{layout.fontSize}px</div>
+
+          <hr />
+
           <label>Layout</label>
 
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -563,6 +594,32 @@ export default function App() {
                     layout.columns === 2 ? 40 : 0
                 }}
               >
+                <div
+                  style={{
+                    marginBottom: 40,
+                    textAlign: "center",
+                    columnSpan: "all"
+                  }}
+                >
+                  <input
+                    value={documentTitle}
+                    onChange={(e) => setDocumentTitle(e.target.value)}
+                    placeholder="Document Title"
+                    style={{
+                      fontSize: 42,
+                      fontWeight: 500,
+                      border: "none",
+                      outline: "none",
+                      textAlign: "center",
+                      width: "100%",
+                      background: "transparent",
+                      color: "var(--text)",
+                      fontFamily: "var(--heading)",
+                      letterSpacing: "-0.5px"
+                    }}
+                  />
+                </div>
+
                 <button
                   onClick={() => insertNode("section")}
                   style={{
@@ -589,6 +646,7 @@ export default function App() {
                   deleteTableRow={deleteTableRow}
                   addTableColumn={addTableColumn}
                   lineHeight={layout.lineHeight}
+                  fontSize={layout.fontSize}
                 />
               </div>
             </div>
