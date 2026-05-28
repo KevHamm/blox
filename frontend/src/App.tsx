@@ -421,32 +421,95 @@ export default function App() {
   }
 
   // -----------------------------
+  // MOVE SECTION UP / DOWN
+  // -----------------------------
+  function moveSection(sectionId: string, direction: -1 | 1) {
+    setDoc((prev) => {
+      const index = prev.children.findIndex((c: any) => c.id === sectionId);
+      if (index === -1) return prev;
+
+      const newIndex = index + direction;
+      if (newIndex < 0 || newIndex >= prev.children.length) return prev;
+
+      const updated = [...prev.children];
+      const [moved] = updated.splice(index, 1);
+      updated.splice(newIndex, 0, moved);
+
+      return {
+        ...prev,
+        children: updated
+      };
+    });
+  }
+
+  // -----------------------------
+  // MOVE SUBSECTION UP / DOWN
+  // -----------------------------
+  function moveSubsection(id: string, dir: -1 | 1) {
+    setDoc((prev) => {
+      const copy = structuredClone(prev);
+
+      function findSection(node: any) {
+        if (!node.children) return;
+
+        const subsections = node.children.filter(
+          (c: any) => c.type === "subsection"
+        );
+
+        const index = subsections.findIndex((s: any) => s.id === id);
+        if (index === -1) {
+          node.children.forEach(findSection);
+          return;
+        }
+
+        const newIndex = index + dir;
+        if (newIndex < 0 || newIndex >= subsections.length) return;
+
+        // map subsection positions inside full children array
+        const subsectionPositions = node.children
+          .map((c: any, i: number) => ({ c, i }))
+          .filter(x => x.c.type === "subsection");
+
+        const from = subsectionPositions[index].i;
+        const to = subsectionPositions[newIndex].i;
+
+        const temp = node.children[from];
+        node.children[from] = node.children[to];
+        node.children[to] = temp;
+      }
+
+      findSection(copy);
+      return copy;
+    });
+  }
+
+  // -----------------------------
   // DRAG END
   // -----------------------------
   function handleDragEnd(event: any) {
     const { active, over } = event;
 
-    if (!over || active.id === over.id) return;
+    if (!over || active.id === over.id ) return;
 
-    const oldIndex = doc.children.findIndex(
-      (c: any) => c.id === active.id
-    );
+    setDoc((prev) => {
+      const oldIndex = prev.children.findIndex(
+       (c: any) => c.id === active.id
+      );
 
-    const newIndex = doc.children.findIndex(
-      (c: any) => c.id === over.id
-    );
+      const newIndex = prev.children.findIndex(
+        (c: any) => c.id === over.id
+      );
 
-    if (oldIndex === -1 || newIndex === -1) return;
+      if (oldIndex === -1 || newIndex === -1) return prev;
 
-    const updated = [...doc.children];
+      const updated = [...prev.children];
+      const [moved] = updated.splice(oldIndex, 1);
+      updated.splice(newIndex, 0, moved);
 
-    const [moved] = updated.splice(oldIndex, 1);
-
-    updated.splice(newIndex, 0, moved);
-
-    setDoc({
-      ...doc,
-      children: updated
+      return {
+        ...prev,
+        children: updated
+      };
     });
   }
 
@@ -643,6 +706,7 @@ export default function App() {
                 <DocumentRenderer
                   node={doc}
                   editingId={editingId}
+                  setDoc={setDoc}
                   setEditingId={setEditingId}
                   updateTextById={updateTextById}
                   updateSectionTitle={updateSectionTitle}
@@ -657,6 +721,8 @@ export default function App() {
                   addTableColumn={addTableColumn}
                   lineHeight={layout.lineHeight}
                   fontSize={layout.fontSize}
+                  moveSection={moveSection}
+                  moveSubsection={moveSubsection}
                 />
               </div>
             </div>

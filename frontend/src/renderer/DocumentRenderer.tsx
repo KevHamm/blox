@@ -1,14 +1,10 @@
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable
-} from "@dnd-kit/sortable";
-
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import "katex/dist/katex.min.css";
 
-// SORTABLE WRAPPER FOR CHILDREN
+/* -----------------------------
+   SORTABLE WRAPPER (FIGURES ONLY)
+----------------------------- */
 function SortableItem({ id, children }: any) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id });
@@ -21,7 +17,8 @@ function SortableItem({ id, children }: any) {
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        marginBottom: 12
+        marginBottom: 12,
+        cursor: "grab"
       }}
     >
       {children}
@@ -29,8 +26,17 @@ function SortableItem({ id, children }: any) {
   );
 }
 
-// PARAGRAPH
-function Paragraph({ node, editingId, setEditingId, updateTextById, lineHeight, fontSize}: any) {
+/* -----------------------------
+   PARAGRAPH
+----------------------------- */
+function Paragraph({
+  node,
+  editingId,
+  setEditingId,
+  updateTextById,
+  lineHeight,
+  fontSize
+}: any) {
   const isEditing = editingId === node.id;
 
   return (
@@ -44,13 +50,10 @@ function Paragraph({ node, editingId, setEditingId, updateTextById, lineHeight, 
           style={{
             width: "100%",
             minHeight: 120,
-            resize: "vertical",
             padding: 8,
             border: "1px solid #ddd",
-            outline: "none",
-            textAlign: "left",
-            lineHeight: lineHeight ?? 1.6,
-            fontSize: `${fontSize}px`
+            lineHeight,
+            fontSize
           }}
         />
       ) : (
@@ -59,10 +62,8 @@ function Paragraph({ node, editingId, setEditingId, updateTextById, lineHeight, 
           style={{
             margin: 0,
             cursor: "pointer",
-            textAlign: "left",
-            width: "100%",
-            lineHeight: lineHeight ?? 1.6,
-            fontSize: `${fontSize}px`
+            lineHeight,
+            fontSize
           }}
         >
           {node.text}
@@ -73,67 +74,77 @@ function Paragraph({ node, editingId, setEditingId, updateTextById, lineHeight, 
 }
 
 /* -----------------------------
-   TABLE
+   FIGURE (KEEP DND)
 ----------------------------- */
-function TableBlock({
-  node,
-  updateTableCell,
-  deleteTableColumn,
-  deleteNodeById,
-  addTableRow,
-  deleteTableRow,
-  addTableColumn
-}: any) {
+function FigureBlock({ node, deleteNodeById }: any) {
   return (
-    <div style={{ marginTop: 20 }}>
-      {/* CONTROL BAR */}
-      <div style={{ marginBottom: 8 }}>
-        <button onClick={() => addTableRow(node.id)}>+ Row</button>
-        <button onClick={() => deleteTableRow(node.id)} style={{ marginLeft: 6 }}>
-          – Row
-        </button>
-        <button onClick={() => addTableColumn(node.id)} style={{ marginLeft: 6 }}>
-          + Column
-        </button>
-        <button onClick={() => deleteTableColumn(node.id)} style={{ marginLeft: 6 }}>
-          – Column
-        </button>
-
+    <SortableItem id={node.id}>
+      <div
+        style={{
+          border: "1px solid #ccc",
+          background: "white",
+          padding: 8,
+          margin: "12px 0"
+        }}
+      >
         <button
           onClick={() => deleteNodeById(node.id)}
           style={{
+            float: "right",
             background: "red",
             color: "white",
             border: "none",
-            padding: "4px 8px",
-            cursor: "pointer"
+            padding: "2px 6px"
           }}
         >
-          Delete Table
+          ×
         </button>
+
+        <img
+          src={node.src}
+          alt="figure"
+          style={{ width: "100%", height: "auto" }}
+        />
+      </div>
+    </SortableItem>
+  );
+}
+
+/* -----------------------------
+   TABLE (unchanged)
+----------------------------- */
+function TableBlock(props: any) {
+  const {
+    node,
+    updateTableCell,
+    deleteTableColumn,
+    deleteNodeById,
+    addTableRow,
+    deleteTableRow,
+    addTableColumn
+  } = props;
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div style={{ marginBottom: 8 }}>
+        <button onClick={() => addTableRow(node.id)}>+ Row</button>
+        <button onClick={() => deleteTableRow(node.id)}>– Row</button>
+        <button onClick={() => addTableColumn(node.id)}>+ Column</button>
+        <button onClick={() => deleteTableColumn(node.id)}>– Column</button>
+        <button onClick={() => deleteNodeById(node.id)}>Delete</button>
       </div>
 
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse"
-        }}
-      >
+      <table style={{ width: "100%" }}>
         <tbody>
           {node.rows.map((row: string[], r: number) => (
             <tr key={r}>
               {row.map((cell: string, c: number) => (
-                <td key={c} style={{ border: "1px solid #ccc", padding: 8 }}>
+                <td key={c}>
                   <input
                     value={cell}
                     onChange={(e) =>
                       updateTableCell(node.id, r, c, e.target.value)
                     }
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      outline: "none"
-                    }}
                   />
                 </td>
               ))}
@@ -146,301 +157,240 @@ function TableBlock({
 }
 
 /* -----------------------------
-   FIGURE (BLOCK ELEMENT)
+   SUBSECTION (NO DND)
 ----------------------------- */
-function FigureBlock({ node, deleteNodeById }: any) {
-  return (
-    <div
-      style={{
-        border: "1px solid #ccc",
-        background: "white",
-        padding: 8,
-        margin: "12px 0"
-      }}
-    >
-      <button
-        onClick={() => deleteNodeById(node.id)}
-        style={{
-          float: "right",
-          background: "red",
-          color: "white",
-          border: "none",
-          padding: "2px 6px",
-          cursor: "pointer"
-        }}
-      >
-        ×
-      </button>
-
-      <img
-        src={node.src}
-        alt="figure"
-        style={{
-          width: "100%",
-          height: "auto",
-          objectFit: "contain",
-          display: "block",
-          marginTop: 8
-        }}
-      />
-    </div>
-  );
-}
-
-// SUBSECTION
-
 function Subsection({
   node,
   sectionIndex,
   subsectionIndex,
   editingId,
   setEditingId,
-  updateTextById,
   updateSectionTitle,
   deleteNodeById,
+  moveSubsection,
+  children,
   lineHeight,
   fontSize
 }: any) {
   return (
     <div style={{ marginTop: 20 }}>
       <div style={{ display: "flex", alignItems: "center" }}>
+
+        {/* MOVE BUTTONS */}
+        <div style={{ display: "flex", gap: 6, marginRight: 10 }}>
+          <button onClick={() => moveSubsection(node.id, -1)}>↑</button>
+          <button onClick={() => moveSubsection(node.id, 1)}>↓</button>
+        </div>
+
         {editingId === node.id ? (
           <input
             autoFocus
             value={node.title}
             onChange={(e) => updateSectionTitle(node.id, e.target.value)}
             onBlur={() => setEditingId(null)}
-            style={{
-              fontSize: 18,
-              fontWeight: 600,
-              width: "100%",
-              border: "none",
-              outline: "none"
-            }}
           />
         ) : (
-          <h3
-            onClick={() => setEditingId(node.id)}
-            style={{
-              cursor: "pointer",
-              marginRight: 10,
-              textAlign: "left",
-              width: "100%"
-            }}
-          >
+          <h3 onClick={() => setEditingId(node.id)}>
             {sectionIndex + 1}.{subsectionIndex + 1} {node.title}
           </h3>
         )}
 
         <button
           onClick={() => deleteNodeById(node.id)}
-          style={{
-            background: "red",
-            color: "white",
-            border: "none",
-            padding: "4px 8px",
-            cursor: "pointer"
-          }}
+          style={{ marginLeft: 10, background: "red", color: "white" }}
         >
           Delete Subsection
         </button>
       </div>
 
-      {node.children.map((child: any) => (
-        <Paragraph
-          key={child.id}
-          node={child}
-          editingId={editingId}
-          setEditingId={setEditingId}
-          updateTextById={updateTextById}
-          lineHeight={lineHeight}
-          fontSize={fontSize}
-        />
-      ))}
+      {children}
     </div>
   );
 }
 
-// SECTION
-function SortableSection({
+/* -----------------------------
+   SECTION (NO DND)
+----------------------------- */
+function Section({
   node,
   index,
   editingId,
   setEditingId,
-  updateTextById,
   updateSectionTitle,
   addSubsection,
   addTable,
   addFigure,
-  updateTableCell,
-  deleteTableColumn,
   deleteNodeById,
-  addTableRow,
-  deleteTableRow,
-  addTableColumn,
-  lineHeight,
-  fontSize
+  moveSection,
+  children
 }: any) {
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id: node.id });
-
-  let subsectionCounter = 0;
-
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        marginBottom: 20,
-        padding: 16
-      }}
-    >
-      {/* drag handle */}
-      <div
-        {...attributes}
-        {...listeners}
-        style={{
-          cursor: "grab",
-          fontSize: 12,
-          color: "#888",
-          marginBottom: 8
-        }}
-      >
-        ☰ Drag Section
+    <div style={{ marginBottom: 30 }}>
+      <div style={{ display: "flex", alignItems: "center" }}>
+
+        {/* MOVE BUTTONS */}
+        <div style={{ display: "flex", gap: 6, marginRight: 10 }}>
+          <button onClick={() => moveSection(node.id, -1)}>↑</button>
+          <button onClick={() => moveSection(node.id, 1)}>↓</button>
+        </div>
+
+        {editingId === node.id ? (
+          <input
+            value={node.title}
+            onChange={(e) => updateSectionTitle(node.id, e.target.value)}
+            onBlur={() => setEditingId(null)}
+          />
+        ) : (
+          <h2 onClick={() => setEditingId(node.id)}>
+            {index + 1} {node.title}
+          </h2>
+        )}
+
+        <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
+        <button onClick={() => addTable(node.id)}>+ Table</button>
+        <button onClick={() => addFigure(node.id)}>+ Figure</button>
+
+        <button
+          onClick={() => deleteNodeById(node.id)}
+          style={{ marginLeft: 10, background: "red", color: "white" }}
+        >
+          Delete Section
+        </button>
       </div>
 
-      {/* title */}
-      {editingId === node.id ? (
-        <input
-          autoFocus
-          value={node.title}
-          onChange={(e) => updateSectionTitle(node.id, e.target.value)}
-          onBlur={() => setEditingId(null)}
-          style={{
-            fontSize: 22,
-            fontWeight: 700,
-            width: "100%",
-            border: "none",
-            outline: "none"
-          }}
-        />
-      ) : (
-        <h2
-          onClick={() => setEditingId(node.id)}
-          style={{
-            cursor: "pointer",
-            textAlign: "left",
-            width: "100%"
-          }}
-        >
-          {index + 1} {node.title}
-        </h2>
-      )}
-
-      {/* buttons */}
-      <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
-      <button onClick={() => addTable(node.id)} style={{ marginLeft: 8 }}>
-        + Table
-      </button>
-      <button onClick={() => addFigure(node.id)} style={{ marginLeft: 8 }}>
-        + Figure
-      </button>
-      <button onClick={() => deleteNodeById(node.id)} style={{ marginLeft: 8 }}>
-        Delete Section
-      </button>
-
-      {/* SORTABLE CHILDREN */}
-      <SortableContext
-        items={node.children.map((c: any) => c.id)}
-        strategy={verticalListSortingStrategy}
-      >
-        {node.children.map((child: any) => (
-          <SortableItem key={child.id} id={child.id}>
-            {child.type === "paragraph" && (
-              <Paragraph
-                node={child}
-                editingId={editingId}
-                setEditingId={setEditingId}
-                updateTextById={updateTextById}
-                lineHeight={lineHeight}
-                fontSize={fontSize}
-              />
-            )}
-
-            {child.type === "subsection" && (
-              <Subsection
-                node={child}
-                sectionIndex={index}
-                subsectionIndex={subsectionCounter++}
-                editingId={editingId}
-                setEditingId={setEditingId}
-                updateTextById={updateTextById}
-                updateSectionTitle={updateSectionTitle}
-                deleteNodeById={deleteNodeById}
-                lineHeight={lineHeight}
-                fontSize={fontSize}
-              />
-            )}
-
-            {child.type === "table" && (
-              <TableBlock
-                node={child}
-                updateTableCell={updateTableCell}
-                deleteTableColumn={deleteTableColumn}
-                deleteNodeById={deleteNodeById}
-                addTableRow={addTableRow}
-                deleteTableRow={deleteTableRow}
-                addTableColumn={addTableColumn}
-              />
-            )}
-
-            {child.type === "figure" && (
-              <FigureBlock
-                node={child}
-                deleteNodeById={deleteNodeById}
-              />
-            )}
-          </SortableItem>
-        ))}
-      </SortableContext>
+      {children}
     </div>
   );
 }
 
-// DOCUMENT ROOT
+/* -----------------------------
+   DOCUMENT ROOT
+----------------------------- */
 export function DocumentRenderer(props: any) {
   const { setNodeRef } = useDroppable({ id: "document-root" });
 
+  // MOVE SECTION
+  function moveSection(id: string, dir: number) {
+    const arr = [...props.node.children];
+    const i = arr.findIndex((x) => x.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= arr.length) return;
+
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+
+    props.setDoc((prev: any) => ({
+      ...prev,
+      children: arr
+    }));
+  }
+
+  // MOVE SUBSECTION
+  function moveSubsection(id: string, dir: number) {
+    props.setDoc((prev: any) => {
+      const copy = structuredClone(prev);
+
+      function findAndMove(node: any) {
+        if (!node.children) return;
+
+        const i = node.children.findIndex((c: any) => c.id === id);
+        if (i !== -1) {
+          const j = i + dir;
+          if (j < 0 || j >= node.children.length) return;
+
+          [node.children[i], node.children[j]] = [
+            node.children[j],
+            node.children[i]
+          ];
+          return;
+        }
+
+        node.children.forEach(findAndMove);
+      }
+
+      findAndMove(copy);
+      return copy;
+    });
+  }
+
   return (
-    <div ref={setNodeRef} style={{ minHeight: 200 }}>
-      <SortableContext
-        items={props.node.children.map((c: any) => c.id)}
-        strategy={verticalListSortingStrategy}
-      >
-        {props.node.children.map((c: any, index: number) => (
-          <SortableSection
-            key={c.id}
-            node={c}
-            index={index}
-            editingId={props.editingId}
-            setEditingId={props.setEditingId}
-            updateTextById={props.updateTextById}
-            updateSectionTitle={props.updateSectionTitle}
-            addSubsection={props.addSubsection}
-            addTable={props.addTable}
-            addFigure={props.addFigure}
-            updateTableCell={props.updateTableCell}
-            deleteTableColumn={props.deleteTableColumn}
-            deleteNodeById={props.deleteNodeById}
-            addTableRow={props.addTableRow}
-            deleteTableRow={props.deleteTableRow}
-            addTableColumn={props.addTableColumn}
-            lineHeight={props.lineHeight}
-            fontSize={props.fontSize}
-          />
-        ))}
-      </SortableContext>
+    <div ref={setNodeRef}>
+      {props.node.children.map((c: any, index: number) => (
+        <Section
+          key={c.id}
+          node={c}
+          index={index}
+          editingId={props.editingId}
+          setEditingId={props.setEditingId}
+          updateSectionTitle={props.updateSectionTitle}
+          addSubsection={props.addSubsection}
+          addTable={props.addTable}
+          addFigure={props.addFigure}
+          deleteNodeById={props.deleteNodeById}
+          moveSection={moveSection}
+        >
+          {c.children.map((child: any, i: number) => {
+            if (child.type === "paragraph") {
+              return (
+                <Paragraph
+                  key={child.id}
+                  node={child}
+                  editingId={props.editingId}
+                  setEditingId={props.setEditingId}
+                  updateTextById={props.updateTextById}
+                  lineHeight={props.lineHeight}
+                  fontSize={props.fontSize}
+                />
+              );
+            }
+
+            if (child.type === "subsection") {
+              return (
+                <Subsection
+                  key={child.id}
+                  node={child}
+                  sectionIndex={index}
+                  subsectionIndex={i}
+                  editingId={props.editingId}
+                  setEditingId={props.setEditingId}
+                  updateSectionTitle={props.updateSectionTitle}
+                  deleteNodeById={props.deleteNodeById}
+                  moveSubsection={moveSubsection}
+                  lineHeight={props.lineHeight}
+                  fontSize={props.fontSize}
+                >
+                  {child.children.map((p: any) => (
+                    <Paragraph
+                      key={p.id}
+                      node={p}
+                      editingId={props.editingId}
+                      setEditingId={props.setEditingId}
+                      updateTextById={props.updateTextById}
+                      lineHeight={props.lineHeight}
+                      fontSize={props.fontSize}
+                    />
+                  ))}
+                </Subsection>
+              );
+            }
+
+            if (child.type === "table") {
+              return (
+                <TableBlock
+                  key={child.id}
+                  {...props}
+                  node={child}
+                />
+              );
+            }
+
+            if (child.type === "figure") {
+              return <FigureBlock key={child.id} node={child} deleteNodeById={props.deleteNodeById} />;
+            }
+
+            return null;
+          })}
+        </Section>
+      ))}
     </div>
   );
 }
