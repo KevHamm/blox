@@ -2,6 +2,8 @@ import { useState } from "react";
 import { sampleDocument } from "./data/sampleDocument";
 import { DocumentRenderer } from "./renderer/DocumentRenderer";
 import type { DocumentNode } from "./types/document";
+import { paginateDocument } from "./utils/paginateDocument";
+import { Page } from "./components/Page";
 import "katex/dist/katex.min.css";
 
 import {
@@ -23,6 +25,7 @@ export default function App() {
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
+  const pages = paginateDocument(doc);
 
   // -----------------------------
   // LAYOUT STATE
@@ -751,28 +754,49 @@ export default function App() {
                   + Add Section
                 </button>
 
-                <DocumentRenderer
-                  node={doc}
-                  editingId={editingId}
-                  setDoc={setDoc}
-                  setEditingId={setEditingId}
-                  updateTextById={updateTextById}
-                  updateSectionTitle={updateSectionTitle}
-                  addSubsection={addSubsection}
-                  addTable={addTable}
-                  addFigure={addFigure}
-                  updateTableCell={updateTableCell}
-                  deleteTableColumn={deleteTableColumn}
-                  deleteNodeById={deleteNodeById}
-                  addTableRow={addTableRow}
-                  deleteTableRow={deleteTableRow}
-                  addTableColumn={addTableColumn}
-                  lineHeight={layout.lineHeight}
-                  fontSize={layout.fontSize}
-                  moveSection={moveSection}
-                  moveSubsection={moveSubsection}
-                  updateFigureCaption={updateFigureCaption}
-                />
+                {pages.map((pageNodes: any[], pageIndex: number) => (
+                  <Page key={pageIndex}>
+
+                    {pageIndex === 0 && (
+                      <div style={{ textAlign: "center", marginBottom: 40}}>
+                        <input
+                          value={documentTitle}
+                          onChange={(e) => setDocumentTitle(e.target.value)}
+                          style={{
+                            fontSize: 42,
+                            fontWeight: 400,
+                            border: "none",
+                            outline: "none",
+                            textAlign: "center",
+                            width: "100%"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    <DocumentRenderer
+                      node={{ children: pageNodes }}
+                      editingId={editingId}
+                      setEditingId={setEditingId}
+                      updateTextById={updateTextById}
+                      updateSectionTitle={updateSectionTitle}
+                      addSubsection={addSubsection}
+                      addTable={addTable}
+                      addFigure={addFigure}
+                      updateTableCell={updateTableCell}
+                      deleteTableColumn={deleteTableColumn}
+                      deleteNodeById={deleteNodeById}
+                      addTableRow={addTableRow}
+                      deleteTableRow={deleteTableRow}
+                      addTableColumn={addTableColumn}
+                      lineHeight={layout.lineHeight}
+                      fontSize={layout.fontSize}
+                      moveSection={moveSection}
+                      moveSubsection={moveSubsection}
+                      updateFigureCaption={updateFigureCaption}
+                    />
+                  </Page>
+                ))}
               </div>
             </div>
           </div>

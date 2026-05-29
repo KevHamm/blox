@@ -1,9 +1,10 @@
-function Page({ children }: { children: any }) {
+export function Page({ children }: { children: any }) {
   return (
     <div
       style={{
         width: 816,
-        minHeight: 1056,
+        height: 1056,
+        overflow: "hidden",
         background: "white",
         marginBottom: 24,
         padding: "72px 72px 96px",
