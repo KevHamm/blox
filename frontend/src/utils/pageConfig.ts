@@ -1,0 +1,9 @@
+export const PAGE_WIDTH = 816;
+export const PAGE_HEIGHT = 1056;
+
+export const PAGE_PADDING_TOP = 72;
+export const PAGE_PADDING_BOTTOM = 96;
+
+export const CONTENT_HEIGHT =
+  PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
+
