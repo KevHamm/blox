@@ -90,6 +90,29 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
+  function updateFigureCaption(id: string, value: string) {
+    function update(node: any): any {
+      if (node.id === id && node.type === "figure") {
+        return {
+          ...node,
+          caption: value
+        };
+      }
+
+      if (node.children) {
+        return {
+          ...node,
+          children: node.children.map(update)
+        };
+      }
+
+      return node;
+    }
+
+    setDoc((prev) => update(prev));
+  }
+
+
   // -----------------------------
   // INSERT SECTION
   // -----------------------------
@@ -395,7 +418,8 @@ export default function App() {
                 {
                   id: crypto.randomUUID(),
                   type: "figure",
-                  src: url
+                  src: url,
+                  caption: "New figure caption"
                 }
               ]
             };
@@ -740,6 +764,7 @@ export default function App() {
                   fontSize={layout.fontSize}
                   moveSection={moveSection}
                   moveSubsection={moveSubsection}
+                  updateFigureCaption={updateFigureCaption}
                 />
               </div>
             </div>

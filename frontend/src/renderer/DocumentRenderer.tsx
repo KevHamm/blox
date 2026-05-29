@@ -1,4 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
+import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import "katex/dist/katex.min.css";
 
@@ -76,7 +77,12 @@ function Paragraph({
 /* -----------------------------
    FIGURE (KEEP DND)
 ----------------------------- */
-function FigureBlock({ node, deleteNodeById }: any) {
+function FigureBlock({
+  node,
+  deleteNodeById,
+  updateFigureCaption,
+  figureNumber
+}: any) {
   return (
     <SortableItem id={node.id}>
       <div
@@ -103,8 +109,40 @@ function FigureBlock({ node, deleteNodeById }: any) {
         <img
           src={node.src}
           alt="figure"
-          style={{ width: "100%", height: "auto" }}
+          style={{
+            width: "100%",
+            height: "auto",
+            display: "block"
+          }}
         />
+
+        <div
+          style={{
+            marginTop: 10,
+            textAlign: "center",
+            fontSize: 14,
+            fontStyle: "var(--sans)",
+            color: "var(--text)"
+          }}
+        >
+          <strong>Figure {figureNumber}:</strong>{" "}
+          <input
+            value={node.caption || ""}
+            onChange={(e) =>
+              updateFigureCaption(node.id, e.target.value)
+            }
+            style={{
+              border: "none",
+              borderBottom: "1px solid #ccc",
+              outline: "none",
+              width: "70%",
+              textAlign: "center",
+              fontStyle: "var(--sans)",
+              background: "transparent",
+              color: "var(--text)"
+            }}
+          />
+        </div>
       </div>
     </SortableItem>
   );
@@ -269,6 +307,8 @@ function Section({
 export function DocumentRenderer(props: any) {
   const { setNodeRef } = useDroppable({ id: "document-root" });
 
+  let figureCounter = 0;
+
   return (
     <div ref={setNodeRef}>
       {props.node.children.map((c: any, index: number) => (
@@ -345,9 +385,16 @@ export function DocumentRenderer(props: any) {
             }
 
             if (child.type === "figure") {
-              return <FigureBlock key={child.id} node={child} deleteNodeById={props.deleteNodeById} />;
+              return (
+                <FigureBlock
+                  key={child.id}
+                  node={child}
+                  deleteNodeById={props.deleteNodeById}
+                  updateFigureCaption={props.updateFigureCaption}
+                  figureNumber={++figureCounter}
+                />
+              );
             }
-
             return null;
           });
          })()}
