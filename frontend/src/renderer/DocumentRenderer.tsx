@@ -269,49 +269,6 @@ function Section({
 export function DocumentRenderer(props: any) {
   const { setNodeRef } = useDroppable({ id: "document-root" });
 
-  // MOVE SECTION
-  function moveSection(id: string, dir: number) {
-    const arr = [...props.node.children];
-    const i = arr.findIndex((x) => x.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= arr.length) return;
-
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-
-    props.setDoc((prev: any) => ({
-      ...prev,
-      children: arr
-    }));
-  }
-
-  // MOVE SUBSECTION
-  function moveSubsection(id: string, dir: number) {
-    props.setDoc((prev: any) => {
-      const copy = structuredClone(prev);
-
-      function findAndMove(node: any) {
-        if (!node.children) return;
-
-        const i = node.children.findIndex((c: any) => c.id === id);
-        if (i !== -1) {
-          const j = i + dir;
-          if (j < 0 || j >= node.children.length) return;
-
-          [node.children[i], node.children[j]] = [
-            node.children[j],
-            node.children[i]
-          ];
-          return;
-        }
-
-        node.children.forEach(findAndMove);
-      }
-
-      findAndMove(copy);
-      return copy;
-    });
-  }
-
   return (
     <div ref={setNodeRef}>
       {props.node.children.map((c: any, index: number) => (
@@ -326,22 +283,26 @@ export function DocumentRenderer(props: any) {
           addTable={props.addTable}
           addFigure={props.addFigure}
           deleteNodeById={props.deleteNodeById}
-          moveSection={moveSection}
+          moveSection={props.moveSection}
+          moveSubsection={props.moveSubsection}
         >
-          {c.children.map((child: any, i: number) => {
-            if (child.type === "paragraph") {
-              return (
-                <Paragraph
-                  key={child.id}
-                  node={child}
-                  editingId={props.editingId}
-                  setEditingId={props.setEditingId}
-                  updateTextById={props.updateTextById}
-                  lineHeight={props.lineHeight}
-                  fontSize={props.fontSize}
-                />
-              );
-            }
+          {(() => {
+            let subsectionCounter = 0;
+
+            return c.children.map((child: any) => {
+              if (child.type === "paragraph") {
+                return (
+                  <Paragraph
+                    key={child.id}
+                    node={child}
+                    editingId={props.editingId}
+                    setEditingId={props.setEditingId}
+                    updateTextById={props.updateTextById}
+                    lineHeight={props.lineHeight}
+                    fontSize={props.fontSize}
+                  />
+                );
+              }
 
             if (child.type === "subsection") {
               return (
@@ -349,12 +310,12 @@ export function DocumentRenderer(props: any) {
                   key={child.id}
                   node={child}
                   sectionIndex={index}
-                  subsectionIndex={i}
+                  subsectionIndex={subsectionCounter++}
                   editingId={props.editingId}
                   setEditingId={props.setEditingId}
                   updateSectionTitle={props.updateSectionTitle}
                   deleteNodeById={props.deleteNodeById}
-                  moveSubsection={moveSubsection}
+                  moveSubsection={props.moveSubsection}
                   lineHeight={props.lineHeight}
                   fontSize={props.fontSize}
                 >
@@ -388,7 +349,8 @@ export function DocumentRenderer(props: any) {
             }
 
             return null;
-          })}
+          });
+         })()}
         </Section>
       ))}
     </div>

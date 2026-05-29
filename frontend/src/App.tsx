@@ -452,33 +452,50 @@ export default function App() {
       function findSection(node: any) {
         if (!node.children) return;
 
-        const subsections = node.children.filter(
-          (c: any) => c.type === "subsection"
+        // find subsection indexes INSIDE ORIGINAL CHILD ARRAY
+        const subsectionIndexes = node.children
+          .map((child: any, index: number) => ({
+            child,
+            index
+          }))
+          .filter((x: any) => x.child.type === "subsection");
+
+        const currentSubIndex = subsectionIndexes.findIndex(
+          (x: any) => x.child.id === id
         );
 
-        const index = subsections.findIndex((s: any) => s.id === id);
-        if (index === -1) {
+        // subsection not found here
+        if (currentSubIndex === -1) {
           node.children.forEach(findSection);
           return;
         }
 
-        const newIndex = index + dir;
-        if (newIndex < 0 || newIndex >= subsections.length) return;
+        const targetSubIndex = currentSubIndex + dir;
 
-        // map subsection positions inside full children array
-        const subsectionPositions = node.children
-          .map((c: any, i: number) => ({ c, i }))
-          .filter(x => x.c.type === "subsection");
+        // prevent moving outside subsection bounds
+        if (
+          targetSubIndex < 0 ||
+          targetSubIndex >= subsectionIndexes.length
+        ) {
+          return;
+        }
 
-        const from = subsectionPositions[index].i;
-        const to = subsectionPositions[newIndex].i;
+        // actual indexes in children[]
+        const fromIndex = subsectionIndexes[currentSubIndex].index;
+        const toIndex = subsectionIndexes[targetSubIndex].index;
 
-        const temp = node.children[from];
-        node.children[from] = node.children[to];
-        node.children[to] = temp;
+        // swap ONLY subsection positions
+        const updatedChildren = [...node.children];
+
+        const temp = updatedChildren[fromIndex];
+        updatedChildren[fromIndex] = updatedChildren[toIndex];
+        updatedChildren[toIndex] = temp;
+
+        node.children = updatedChildren;
       }
 
       findSection(copy);
+
       return copy;
     });
   }
