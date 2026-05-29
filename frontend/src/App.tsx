@@ -12,6 +12,13 @@ import {
   useSensors
 } from "@dnd-kit/core";
 
+import {
+  PAGE_WIDTH,
+  PAGE_HEIGHT,
+  PAGE_PADDING_TOP,
+  PAGE_PADDING_BOTTOM
+} from "./utils/pageConfig";
+
 export default function App() {
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -671,9 +678,9 @@ export default function App() {
         >
           <div
             style={{
-              width: 816,
-              minHeight: 1056,
-              padding: "72px 72px 96px",
+              width: PAGE_WIDTH,
+              minHeight: PAGE_HEIGHT,
+              padding: `${PAGE_PADDING_TOP}px 72px ${PAGE_PADDING_BOTTOM}px`,
               background: "white",
               boxSizing: "border-box",
               color: "#000",
