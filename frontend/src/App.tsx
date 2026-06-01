@@ -4,7 +4,7 @@ import { DocumentRenderer } from "./renderer/DocumentRenderer";
 import type { DocumentNode } from "./types/document";
 import { paginateDocument } from "./utils/paginateDocument";
 import { Page } from "./components/Page";
-import { indexDocument } from "./utils/indexDocument";
+import {numberDocument} from "./utils/numberDocument";
 import "katex/dist/katex.min.css";
 
 import {
@@ -26,8 +26,8 @@ export default function App() {
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
-  const indexedDoc = indexDocument(doc);
-  const pages = paginateDocument(indexedDoc);
+  const numberedDoc = numberDocument(doc);
+  const pages = paginateDocument(numberedDoc);
 
   // -----------------------------
   // LAYOUT STATE

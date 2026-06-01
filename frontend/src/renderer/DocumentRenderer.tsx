@@ -229,7 +229,7 @@ function Subsection({
           />
         ) : (
           <h3 onClick={() => setEditingId(node.id)}>
-            {sectionIndex + 1}.{subsectionIndex + 1} {node.title}
+            {node.title}
           </h3>
         )}
 
