@@ -327,8 +327,6 @@ export function DocumentRenderer(props: any) {
           moveSubsection={props.moveSubsection}
         >
           {(() => {
-            let subsectionCounter = 0;
-
             return c.children.map((child: any) => {
               if (child.type === "paragraph") {
                 return (
@@ -345,12 +343,16 @@ export function DocumentRenderer(props: any) {
               }
 
             if (child.type === "subsection") {
+              const subsectionIndex = c.children
+                .filter((x: any) => x.type === "subsection")
+                .findIndex((x: any) => x.id === child.id);
+
               return (
                 <Subsection
                   key={child.id}
                   node={child}
                   sectionIndex={index}
-                  subsectionIndex={subsectionCounter++}
+                  subsectionIndex={subsectionIndex}
                   editingId={props.editingId}
                   setEditingId={props.setEditingId}
                   updateSectionTitle={props.updateSectionTitle}
@@ -368,11 +370,11 @@ export function DocumentRenderer(props: any) {
                       updateTextById={props.updateTextById}
                       lineHeight={props.lineHeight}
                       fontSize={props.fontSize}
-                    />
-                  ))}
-                </Subsection>
-              );
-            }
+                />
+              ))}
+            </Subsection>
+          );
+        }
 
             if (child.type === "table") {
               return (
