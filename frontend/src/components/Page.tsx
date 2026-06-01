@@ -4,6 +4,9 @@ export function Page({ children }: { children: any }) {
       style={{
         width: 816,
         height: 1056,
+        textAlign: "left",
+        color: "#000",
+        fontFamily: "var(--sans)",
         overflow: "hidden",
         background: "white",
         marginBottom: 24,
@@ -14,5 +17,7 @@ export function Page({ children }: { children: any }) {
     >
       {children}
     </div>
+
+
   );
 }

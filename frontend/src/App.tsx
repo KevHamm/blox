@@ -700,6 +700,19 @@ export default function App() {
                 {pages.map((pageNodes: any[], pageIndex: number) => (
                   <Page key={pageIndex}>
 
+                    <div
+                      style={{
+                        width: "100%",
+                        maxWidth:
+                          layout.columns === 2
+                            ? layout.textWidth * 2 + 40
+                            : layout.textWidth,
+                        margin: "0 auto",
+                        columnCount: layout.columns,
+                        columnGap: layout.columns === 2 ? 40 : 0
+                      }}
+                    >
+
                     {pageIndex === 0 && (
                       <div style={{ textAlign: "center", marginBottom: 40}}>
                         <input
@@ -738,6 +751,7 @@ export default function App() {
                       moveSubsection={moveSubsection}
                       updateFigureCaption={updateFigureCaption}
                     />
+                    </div>
                   </Page>
                 ))}
           </div>
