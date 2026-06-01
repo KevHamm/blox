@@ -2,9 +2,10 @@ import { useState } from "react";
 import { sampleDocument } from "./data/sampleDocument";
 import { DocumentRenderer } from "./renderer/DocumentRenderer";
 import type { DocumentNode } from "./types/document";
-import { paginateDocument } from "./utils/paginateDocument";
 import { Page } from "./components/Page";
 import {numberDocument} from "./utils/numberDocument";
+import { useLayoutEffect, useMemo, useRef } from "react";
+import { paginateByHeights } from "./utils/paginateDocument";
 import "katex/dist/katex.min.css";
 
 import {
@@ -23,21 +24,45 @@ import {
 } from "./utils/pageConfig";
 
 export default function App() {
+  // ── 1. All state first ──────────────────────────────────
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
-  const numberedDoc = numberDocument(doc);
-  const pages = paginateDocument(numberedDoc);
+  const [sectionHeights, setSectionHeights] = useState<Record<string, number>>({});
 
-  // -----------------------------
-  // LAYOUT STATE
-  // -----------------------------
+  // layout must be declared before useLayoutEffect references it
   const [layout, setLayout] = useState({
     textWidth: 650,
     lineHeight: 1.6,
     columns: 1,
     fontSize: 16
   });
+
+  // ── 2. Derived values ───────────────────────────────────
+  const numberedDoc = numberDocument(doc);
+  const TITLE_RESERVED = 100;   // constant, but must be above useMemo
+
+  // ── 3. useMemo (uses layout + sectionHeights) ───────────
+  const pages = useMemo(() => {
+    const hasMeasurements = Object.keys(sectionHeights).length > 0;
+    if (!hasMeasurements) return [numberedDoc.children];
+    return paginateByHeights(numberedDoc, sectionHeights, TITLE_RESERVED);
+  }, [numberedDoc, sectionHeights]);
+
+  // ── 4. useLayoutEffect (uses layout + doc) ──────────────
+  useLayoutEffect(() => {
+    const newHeights: Record<string, number> = {};
+    document.querySelectorAll<HTMLElement>("[data-section-id]").forEach((el) => {
+      const id = el.dataset.sectionId;
+      if (id) newHeights[id] = el.getBoundingClientRect().height;
+    });
+    setSectionHeights((prev) => {
+      const stable =
+        Object.keys(newHeights).length === Object.keys(prev).length &&
+        Object.entries(newHeights).every(([k, v]) => Math.abs((prev[k] ?? -1) - v) < 1);
+      return stable ? prev : newHeights;
+    });
+  }, [doc, layout.textWidth, layout.fontSize, layout.lineHeight, layout.columns]);
 
   // -----------------------------
   // DND SENSORS

@@ -1,32 +1,36 @@
-export function paginateDocument(doc: any) {
-  const pages: any[] = [];
-  let currentPage: any[] = [];
+import { PAGE_HEIGHT, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM } from './pageConfig';
 
-  const MAX_NODES_PER_PAGE = 5;
+const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
 
-  let sectionCounter = 0;
+/**
+ * Initial render: dump everything onto one page so we can measure it.
+ */
+export function paginateDocument(doc: any): any[][] {
+  return [doc.children];
+}
 
-  for (const node of doc.children) {
+/**
+ * Real pagination: called once we have measured DOM heights.
+ */
+export function paginateByHeights(
+  doc: any,
+  heights: Record<string, number>,
+  firstPageReserved = 0   // pixels already consumed by the title on page 1
+): any[][] {
+  const pages: any[][] = [[]];
+  let currentH = firstPageReserved;
 
-    if (node.type === "section") {
-      sectionCounter++;
+  for (const section of doc.children) {
+    const h = heights[section.id] ?? 200; // fallback estimate
 
-      currentPage.push({
-        ...node,
-        sectionNumber: sectionCounter
-      });
-    } else {
-      currentPage.push(node);
+    // Only break if the page already has content (avoid empty pages)
+    if (currentH + h > CONTENT_HEIGHT && pages[pages.length - 1].length > 0) {
+      pages.push([]);
+      currentH = 0;
     }
 
-    if (currentPage.length >= MAX_NODES_PER_PAGE) {
-      pages.push(currentPage);
-      currentPage = [];
-    }
-  }
-
-  if (currentPage.length) {
-    pages.push(currentPage);
+    pages[pages.length - 1].push(section);
+    currentH += h;
   }
 
   return pages;

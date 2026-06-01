@@ -263,7 +263,7 @@ function Section({
   children
 }: any) {
   return (
-    <div style={{ marginBottom: 30 }}>
+    <div data-section-id={node.id} style={{ marginBottom: 30 }}>
       <div style={{ display: "flex", alignItems: "center" }}>
 
         {/* MOVE BUTTONS */}
