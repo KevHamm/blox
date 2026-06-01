@@ -681,68 +681,11 @@ export default function App() {
         >
           <div
             style={{
-              width: PAGE_WIDTH,
-              minHeight: PAGE_HEIGHT,
-              padding: `${PAGE_PADDING_TOP}px 72px ${PAGE_PADDING_BOTTOM}px`,
-              background: "white",
-              boxSizing: "border-box",
-              color: "#000",
-              fontFamily: "var(--sans)",
-              textAlign: "left",
-              lineHeight: layout.lineHeight
+              flex: 1,
+              padding: 40,
+              overflowY: "auto"
             }}
           >
-            {/* TEXT AREA */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center"
-              }}
-            >
-              <div
-                style={{
-                  width: "100%",
-                  maxWidth:
-                    layout.columns === 2
-                      ? layout.textWidth * 2 + 40
-                      : layout.textWidth,
-                  columnCount: layout.columns,
-                  columnGap:
-                    layout.columns === 2 ? 40 : 0
-                }}
-              >
-
-              {/* TITLE */}
-                <div
-                  style={{
-                    marginTop: 20,
-                    marginBottom: 60,
-                    textAlign: "center",
-                    columnSpan: "all",
-
-                  }}
-                >
-                  <input
-                    value={documentTitle}
-                    onChange={(e) => setDocumentTitle(e.target.value)}
-                    placeholder="Document Title"
-                    style={{
-                      fontSize: 42,
-                      fontWeight: 400,
-                      columnSpan: "all",
-                      borderBottom: "1px solid transparent",
-                      border: "none",
-                      outline: "none",
-                      textAlign: "center",
-                      width: "100%",
-                      background: "transparent",
-                      color: "var(--text)",
-                      fontFamily: "var(--heading)",
-                      letterSpacing: "-0.8px",
-                      fontVariantLigatures: "normal"
-                    }}
-                  />
-                </div>
 
                 <button
                   onClick={() => insertNode("section")}
@@ -797,8 +740,6 @@ export default function App() {
                     />
                   </Page>
                 ))}
-              </div>
-            </div>
           </div>
         </div>
       </div>
