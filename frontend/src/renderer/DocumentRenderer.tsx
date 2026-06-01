@@ -280,7 +280,7 @@ function Section({
           />
         ) : (
           <h2 onClick={() => setEditingId(node.id)}>
-            {index + 1} {node.title}
+            {node.sectionNumber} {node.title}
           </h2>
         )}
 
