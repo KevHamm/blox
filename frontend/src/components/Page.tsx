@@ -1,23 +1,44 @@
-export function Page({ children }: { children: any }) {
+interface PageProps {
+  children: React.ReactNode;
+  pageNumber: number;
+  totalPages: number;
+}
+
+export function Page({ children, pageNumber, totalPages }: PageProps) {
   return (
     <div
       style={{
-        width: 816,
-        height: 1056,
-        textAlign: "left",
-        color: "#000",
-        fontFamily: "var(--sans)",
-        overflow: "hidden",
+        position: "relative",
+        width: 794,
+        minHeight: 1123,
         background: "white",
-        marginBottom: 24,
-        padding: "72px 72px 96px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+        marginBottom: 40,
+        padding: "60px 80px",
         boxSizing: "border-box",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.08)"
       }}
     >
-      {children}
+      {/* Page content */}
+      <div style={{ minHeight: 1003 }}>   {/* 1123 - 60top - 60bottom footer area */}
+        {children}
+      </div>
+
+      {/* Footer: LaTeX-style centered page number */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 32,
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontSize: 12,
+          color: "#555",
+          fontFamily: "serif",
+          letterSpacing: "0.03em",
+        }}
+      >
+        {pageNumber}
+      </div>
     </div>
-
-
   );
 }

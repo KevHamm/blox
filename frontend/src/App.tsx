@@ -725,7 +725,11 @@ export default function App() {
                 </button>
 
                 {pages.map((pageNodes: any[], pageIndex: number) => (
-                  <Page key={pageIndex}>
+                  <Page
+                    key={pageIndex}
+                    pageNumber={pageIndex + 1}
+                    totalPages={pages.length}
+                  >
 
                     <div
                       style={{
