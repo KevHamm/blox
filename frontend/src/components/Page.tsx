@@ -33,7 +33,7 @@ export function Page({ children, pageNumber, totalPages }: PageProps) {
           textAlign: "center",
           fontSize: 12,
           color: "#555",
-          fontFamily: "serif",
+          fontFamily: "var(--sans)",
           letterSpacing: "0.03em",
         }}
       >
