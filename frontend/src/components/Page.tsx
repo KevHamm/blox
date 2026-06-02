@@ -16,6 +16,7 @@ export function Page({ children, pageNumber, totalPages }: PageProps) {
         marginBottom: 40,
         padding: "60px 80px",
         boxSizing: "border-box",
+        textAlign: "left"
       }}
     >
       {/* Page content */}
