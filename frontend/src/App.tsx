@@ -729,16 +729,23 @@ export default function App() {
               overflowY: "auto"
             }}
           >
-
-                <button
-                  onClick={() => insertNode("section")}
+                <div
                   style={{
-                    marginBottom: 20,
-                    padding: "8px 12px"
+                    width: PAGE_WIDTH,
+                    margin: "20px auto",
+                    textAlign: "center"
                   }}
                 >
-                  + Add Section
-                </button>
+                  <button
+                    onClick={() => insertNode("section")}
+                    style={{
+                      marginBottom: 20,
+                      padding: "8px 12px"
+                    }}
+                  >
+                    + Add Section
+                  </button>
+                </div>
 
                 {pages.map((pageNodes: any[], pageIndex: number) => (
                   <Page
