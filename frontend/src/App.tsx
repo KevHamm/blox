@@ -6,6 +6,7 @@ import { Page } from "./components/Page";
 import {numberDocument} from "./utils/numberDocument";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { paginateByHeights } from "./utils/paginateDocument";
+import { exportLatex } from "./utils/exportLatex";
 import "katex/dist/katex.min.css";
 
 import {
@@ -613,7 +614,10 @@ export default function App() {
             width: 260,
             padding: 20,
             borderRight: "1px solid #ddd",
-            background: "white"
+            background: "white",
+            display: "flex",
+            flexDirection: "column",
+            height: "100hv"
           }}
         >
           <h3>Typography</h3>
@@ -694,8 +698,20 @@ export default function App() {
             >
               2 columns
             </button>
+
+
+
           </div>
+
+          <div style={{ marginTop: "auto"}}>
+            <hr />
+            <button onClick={() => exportLatex(numberedDoc)}>
+              Export LaTeX
+            </button>
+          </div>
+
         </div>
+
 
         {/* DOCUMENT */}
         <div
