@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
-from exporter import document_to_latex
+from backend.exporter import document_to_latex
 
 app = FastAPI()
 

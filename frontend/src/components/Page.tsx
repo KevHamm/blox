@@ -36,6 +36,7 @@ export function Page({ children, pageNumber, totalPages }: PageProps) {
           color: "#555",
           fontFamily: "var(--sans)",
           letterSpacing: "0.03em",
+          userSelect: "none"
         }}
       >
         {pageNumber}
