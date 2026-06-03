@@ -48,7 +48,8 @@ export default function App() {
     editingId, setEditingId, updateTextById, updateSectionTitle,
     addSubsection, addTable, addFigure, updateTableCell,
     deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
-    addTableColumn, lineHeight: layout.lineHeight, fontSize: layout.fontSize,
+    addTableColumn, updateTableColWidths,
+    lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption,
   };
 
@@ -439,6 +440,24 @@ export default function App() {
   }
 
   // -----------------------------
+  // RESIZE COLUMNS (drag)
+  // -----------------------------
+  // Widths are stored as fractions that always sum to 1, so the table keeps
+  // filling exactly the text-column width no matter how the user drags.
+  function updateTableColWidths(tableId: string, widths: number[]) {
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") {
+        return { ...node, colWidths: widths };
+      }
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
+      return node;
+    }
+    setDoc((prev) => update(prev));
+  }
+
+  // -----------------------------
   // DELETE COLUMN
   // -----------------------------
   function deleteTableColumn(tableId: string) {
@@ -635,28 +654,23 @@ export default function App() {
 
   const CONTENT_H = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
 
-  function splitColumns(sections: any[]): [any[], any[]] {
-    // Total height of everything pagination placed on this page.
-    const total = sections.reduce(
-      (sum, s) => sum + (sectionHeights[s.node.id] ?? 200),
-      0
-    );
-
-    // Aim for two equally tall columns instead of cramming the left one to a
-    // full page height and spilling the rest (unbounded) into the right.
-    const target = total / 2;
+  function splitColumns(sections: any[], pageIndex: number): [any[], any[]] {
+    // Both columns start below the full-width title on the first page, so the
+    // usable height of each column shrinks by the reserved title space there.
+    const colH = CONTENT_H - (pageIndex === 0 ? TITLE_RESERVED : 0);
 
     let used = 0;
     for (let i = 0; i < sections.length; i++) {
       const h = sectionHeights[sections[i].node.id] ?? 200;
-      // Keep at least one section on the left, then break as soon as adding the
-      // next section would push the left column past the halfway point.
-      if (i > 0 && used + h / 2 >= target) {
+      // Fill the LEFT column top-to-bottom first; only once the next section
+      // would overflow it do we spill the remainder into the right column.
+      // (i > 0 guarantees at least one section stays on the left.)
+      if (i > 0 && used + h > colH) {
         return [sections.slice(0, i), sections.slice(i)];
       }
       used += h;
     }
-    return [sections, []]; // everything fits in the left column
+    return [sections, []]; // everything fit in the left column
   }
 
 
@@ -850,7 +864,7 @@ export default function App() {
                         );
                       }
 
-                      const [left, right] = splitColumns(pageSections);
+                      const [left, right] = splitColumns(pageSections, pageIndex);
                       const leftFigCount = left
                         .flatMap((ps: any) => ps.children)
                         .filter((c: any) => c.type === "figure").length;

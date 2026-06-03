@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -159,8 +160,54 @@ function TableBlock(props: any) {
     deleteNodeById,
     addTableRow,
     deleteTableRow,
-    addTableColumn
+    addTableColumn,
+    updateTableColWidths
   } = props;
+
+  const tableRef = useRef<HTMLTableElement>(null);
+
+  const colCount = node.rows[0]?.length || 0;
+
+  // Column widths are kept as fractions that always sum to 1, so the table
+  // fills exactly the text-column width. Fall back to equal widths whenever
+  // none are stored yet or a column was just added/removed.
+  const widths: number[] =
+    Array.isArray(node.colWidths) && node.colWidths.length === colCount
+      ? node.colWidths
+      : Array(colCount).fill(1 / colCount);
+
+  const MIN = 0.05; // never let a column collapse completely
+
+  function startResize(index: number, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const tableWidth = tableRef.current?.offsetWidth || 1;
+    const startX = e.clientX;
+    const startLeft = widths[index];
+    const startRight = widths[index + 1];
+
+    function onMove(ev: MouseEvent) {
+      // Convert the pixel drag into a fraction, then trade width between this
+      // column and its right neighbour so the total stays at 1 (no overflow).
+      let delta = (ev.clientX - startX) / tableWidth;
+      delta = Math.max(delta, MIN - startLeft);
+      delta = Math.min(delta, startRight - MIN);
+
+      const next = [...widths];
+      next[index] = startLeft + delta;
+      next[index + 1] = startRight - delta;
+      updateTableColWidths(node.id, next);
+    }
+
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -172,18 +219,62 @@ function TableBlock(props: any) {
         <button onClick={() => deleteNodeById(node.id)}>Delete</button>
       </div>
 
-      <table style={{ width: "100%" }}>
+      <table
+        ref={tableRef}
+        style={{
+          width: "100%",
+          tableLayout: "fixed",     // honour our column widths, never auto-grow
+          borderCollapse: "collapse"
+        }}
+      >
+        <colgroup>
+          {widths.map((w, c) => (
+            <col key={c} style={{ width: `${w * 100}%` }} />
+          ))}
+        </colgroup>
         <tbody>
           {node.rows.map((row: string[], r: number) => (
             <tr key={r}>
               {row.map((cell: string, c: number) => (
-                <td key={c}>
+                <td
+                  key={c}
+                  style={{
+                    border: "1px solid #ccc",
+                    padding: 0,
+                    position: "relative"
+                  }}
+                >
                   <input
                     value={cell}
                     onChange={(e) =>
                       updateTableCell(node.id, r, c, e.target.value)
                     }
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      border: "none",
+                      outline: "none",
+                      padding: "4px 6px",
+                      background: "transparent"
+                    }}
                   />
+
+                  {/* drag handle straddling the right edge of each column */}
+                  {c < colCount - 1 && (
+                    <div
+                      onMouseDown={(e) => startResize(c, e)}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        right: -3,
+                        width: 6,
+                        height: "100%",
+                        cursor: "col-resize",
+                        userSelect: "none",
+                        zIndex: 1
+                      }}
+                    />
+                  )}
                 </td>
               ))}
             </tr>
