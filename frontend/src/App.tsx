@@ -19,6 +19,7 @@ import {
   useDraggable,
   MeasuringStrategy
 } from "@dnd-kit/core";
+import { getEventCoordinates } from "@dnd-kit/utilities";
 
 import {
   CONTENT_WIDTH,
@@ -96,6 +97,21 @@ const clamp = (v: number, min: number, max: number) =>
 
 // A freshly dropped image fills the whole column width.
 const DEFAULT_FIG_WIDTH = 1;
+
+// Keep the drag preview centered on the cursor, so the pointer (what the drop
+// zones actually test against) sits in the middle of the image being placed.
+const snapCenterToCursor = ({ activatorEvent, draggingNodeRect, transform }: any) => {
+  if (draggingNodeRect && activatorEvent) {
+    const coords = getEventCoordinates(activatorEvent);
+    if (!coords) return transform;
+    return {
+      ...transform,
+      x: transform.x + coords.x - draggingNodeRect.left - draggingNodeRect.width / 2,
+      y: transform.y + coords.y - draggingNodeRect.top - draggingNodeRect.height / 2
+    };
+  }
+  return transform;
+};
 
 // Prefer real drop slots over the enclosing column/document droppables, so a
 // zone always wins (and highlights/accepts) when the pointer is inside it.
@@ -223,6 +239,30 @@ function TableGlyph() {
       <line x1="3" y1="14.5" x2="21" y2="14.5" />
       <line x1="9" y1="4" x2="9" y2="20" />
       <line x1="15" y1="4" x2="15" y2="20" />
+    </svg>
+  );
+}
+
+/* A page glyph filled with solid text blocks, in one or two columns. */
+function LayoutIcon({ columns }: { columns: number }) {
+  const pageW = 40, pageH = 50, pad = 6, top = 7, lineH = 3, gap = 3, rows = 6;
+  const bars: any[] = [];
+  if (columns === 1) {
+    const w = pageW - pad * 2;
+    for (let i = 0; i < rows; i++)
+      bars.push(<rect key={i} x={pad} y={top + i * (lineH + gap)} width={w} height={lineH} rx={1} fill="currentColor" />);
+  } else {
+    const colW = (pageW - pad * 3) / 2;
+    for (const c of [0, 1]) {
+      const x = pad + c * (colW + pad);
+      for (let i = 0; i < rows; i++)
+        bars.push(<rect key={`${c}-${i}`} x={x} y={top + i * (lineH + gap)} width={colW} height={lineH} rx={1} fill="currentColor" />);
+    }
+  }
+  return (
+    <svg width={pageW} height={pageH} viewBox={`0 0 ${pageW} ${pageH}`}>
+      <rect x={0.5} y={0.5} width={pageW - 1} height={pageH - 1} rx={3} fill="white" stroke="currentColor" strokeWidth={1} />
+      {bars}
     </svg>
   );
 }
@@ -1116,25 +1156,29 @@ export default function App() {
 
           <label>Layout</label>
 
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <button
-              onClick={() =>
-                setLayout({ ...layout, columns: 1 })
-              }
-            >
-              1 column
-            </button>
-
-            <button
-              onClick={() =>
-                setLayout({ ...layout, columns: 2 })
-              }
-            >
-              2 columns
-            </button>
-
-
-
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            {[1, 2].map((c) => (
+              <button
+                key={c}
+                onClick={() => setLayout({ ...layout, columns: c })}
+                title={c === 1 ? "One column" : "Two columns"}
+                style={{
+                  padding: 6,
+                  lineHeight: 0,
+                  cursor: "pointer",
+                  borderRadius: 6,
+                  color: "#444",
+                  border:
+                    layout.columns === c
+                      ? "2px solid var(--accent)"
+                      : "1px solid #ccc",
+                  background:
+                    layout.columns === c ? "var(--accent-bg)" : "white"
+                }}
+              >
+                <LayoutIcon columns={c} />
+              </button>
+            ))}
           </div>
 
           <hr />
@@ -1244,8 +1288,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* Floating preview of whatever is being dragged. */}
-      <DragOverlay dropAnimation={null}>
+      {/* Floating preview of whatever is being dragged, centered on the cursor. */}
+      <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
         {activeDragSrc ? (
           <img
             src={activeDragSrc}
