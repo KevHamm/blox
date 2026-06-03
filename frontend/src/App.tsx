@@ -5,7 +5,7 @@ import type { DocumentNode } from "./types/document";
 import { Page } from "./components/Page";
 import { TrashIcon } from "./components/TrashIcon";
 import { numberDocument } from "./utils/numberDocument";
-import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
+import { paginateColumns, fullChunk, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
 import "katex/dist/katex.min.css";
 
@@ -177,6 +177,47 @@ function setFigureWidthTree(node: any, figureId: string, width: number): any {
   return { ...node, children: node.children.map((c: any) => setFigureWidthTree(c, figureId, width)) };
 }
 
+// Insert a fresh 3×3 table into a container at a given index.
+function insertTableAt(node: any, containerId: string, index: number): any {
+  if (node.id === containerId) {
+    const table = {
+      id: crypto.randomUUID(),
+      type: "table",
+      rows: Array.from({ length: 3 }, (_, r) =>
+        Array.from({ length: 3 }, (_, c) => (r === 0 ? `Column ${c + 1}` : ""))
+      )
+    };
+    const kids = [...(node.children ?? [])];
+    kids.splice(Math.min(Math.max(index, 0), kids.length), 0, table);
+    return { ...node, children: kids };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => insertTableAt(c, containerId, index)) };
+}
+
+/* A draggable block in the "Blox" sidebar (e.g. a table). */
+function DraggableBlock({ id, label }: any) {
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{
+        border: "1px solid #ccc",
+        borderRadius: 6,
+        padding: "10px 12px",
+        background: "#fafafa",
+        cursor: "grab",
+        textAlign: "center",
+        opacity: isDragging ? 0.5 : 1
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
 /* A labelled slider paired with a typed number input. Both edit the same
    value and are clamped to [min, max]. */
 function NumberControl({
@@ -243,13 +284,17 @@ export default function App() {
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
-  const [childHeights,   setChildHeights]   = useState<Record<string, number>>({});
-  const [headerHeights,  setHeaderHeights]  = useState<Record<string, number>>({});
+  // Measured heights: every flow leaf (paragraph/table/figure) and every
+  // container header (section/subsection/subsubsection).
+  const [leafHeights,   setLeafHeights]   = useState<Record<string, number>>({});
+  const [headerHeights, setHeaderHeights] = useState<Record<string, number>>({});
 
   // Images uploaded via the right sidebar (preview gallery).
   const [images, setImages] = useState<{ id: string; src: string; name: string }[]>([]);
   // Source of the image currently being dragged (for the drag overlay preview).
   const [activeDragSrc, setActiveDragSrc] = useState<string | null>(null);
+  // Label of the Blox block currently being dragged (for the drag overlay).
+  const [activeBlock, setActiveBlock] = useState<string | null>(null);
 
 
   // LaTeX-like defaults: text fills the margins, ~12pt body, tight leading.
@@ -262,7 +307,7 @@ export default function App() {
 
   const rendererProps = {
     editingId, setEditingId, updateTextById, updateSectionTitle,
-    addSubsection, addSubsubsection, addTable, updateTableCell,
+    addSubsection, addSubsubsection, updateTableCell,
     deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
     addTableColumn, updateTableColWidths, addSectionAfter,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
@@ -275,56 +320,50 @@ export default function App() {
   const TITLE_RESERVED = 100;   // constant, but must be above useMemo
 
   // ── 3. Paginate into columns/pages from measured heights ──
-  // `pages` is an array of pages; each page is an array of columns; each column
-  // is an array of section-chunks. Content flows left column → right column →
-  // next page.
+  // `pages[page][column]` is a list of chunks. Content flows left column →
+  // right column → next page, and may break in the middle of any container.
   const pages = useMemo(() => {
-    if (Object.keys(childHeights).length === 0) {
-      const everything = numberedDoc.children.map((node: any) => ({
-        node, children: node.children, isContinuation: false, isLast: true,
-      }));
-      const page = [everything];
+    if (Object.keys(leafHeights).length === 0) {
+      const page = [(numberedDoc.children ?? []).map(fullChunk)];
       while (page.length < layout.columns) page.push([]);
       return [page];
     }
     return paginateColumns(
       numberedDoc,
-      childHeights,
+      leafHeights,
       headerHeights,
       TITLE_RESERVED,
       layout.columns
     );
-  }, [numberedDoc, childHeights, headerHeights, layout.columns]);
+  }, [numberedDoc, leafHeights, headerHeights, layout.columns]);
 
-  // ── 4. Measure rendered block/header heights for pagination ──
+  // ── 4. Measure rendered leaf/header heights for pagination ──
   useLayoutEffect(() => {
-    const ch: Record<string, number> = {};
+    const lh: Record<string, number> = {};
     const hh: Record<string, number> = {};
 
-    document.querySelectorAll<HTMLElement>("[data-child-id]")
-      .forEach(el => { ch[el.dataset.childId!] = el.getBoundingClientRect().height; });
+    document.querySelectorAll<HTMLElement>("[data-leaf-id]")
+      .forEach(el => { lh[el.dataset.leafId!] = el.getBoundingClientRect().height; });
 
-    document.querySelectorAll<HTMLElement>("[data-section-header-id]")
-      .forEach(el => { hh[el.dataset.sectionHeaderId!] = el.getBoundingClientRect().height; });
+    document.querySelectorAll<HTMLElement>("[data-head-id]")
+      .forEach(el => { hh[el.dataset.headId!] = el.getBoundingClientRect().height; });
 
-    setChildHeights (prev => heightsUnchanged(prev, ch) ? prev : ch);
+    setLeafHeights  (prev => heightsUnchanged(prev, lh) ? prev : lh);
     setHeaderHeights(prev => heightsUnchanged(prev, hh) ? prev : hh);
 
   }, [doc, layout.textWidth, layout.fontSize, layout.lineHeight, layout.columns]);
 
-  // per-column figure start offset so figure numbers stay globally correct
-  const figureStarts = useMemo(() => {
-    let count = 0;
-    return pages.map((cols: any[]) =>
-      cols.map((col: any[]) => {
-        const start = count;
-        col.forEach((ps: any) =>
-          ps.children.forEach((c: any) => { if (c.type === "figure") count++; })
-        );
-        return start;
-      })
-    );
-  }, [pages]);
+  // Global figure numbers, assigned in document order.
+  const figureNumbers = useMemo(() => {
+    const map: Record<string, number> = {};
+    let n = 0;
+    const walk = (node: any) => {
+      if (node.type === "figure") map[node.id] = ++n;
+      (node.children ?? []).forEach(walk);
+    };
+    (numberedDoc.children ?? []).forEach(walk);
+    return map;
+  }, [numberedDoc]);
 
   // -----------------------------
   // DND SENSORS
@@ -526,37 +565,6 @@ export default function App() {
       if (node.children) {
         return { ...node, children: node.children.map(update) };
       }
-      return node;
-    }
-
-    setDoc((prev) => update(prev));
-  }
-
-  // -----------------------------
-  // TABLE
-  // -----------------------------
-  function addTable(sectionId: string) {
-    const newTable = {
-      id: crypto.randomUUID(),
-      type: "table",
-      rows: [["Column 1", "Column 2"], ["", ""]]
-    };
-
-    function update(node: any): any {
-      if (node.id === sectionId && node.type === "section") {
-        return {
-          ...node,
-          children: [...node.children, newTable]
-        };
-      }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
       return node;
     }
 
@@ -873,20 +881,33 @@ export default function App() {
   // -----------------------------
   function handleDragStart(event: any) {
     const id = String(event.active.id);
+    setActiveDragSrc(null);
+    setActiveBlock(null);
     if (id.startsWith("image::")) {
       const img = images.find((i) => i.id === id.slice("image::".length));
       setActiveDragSrc(img?.src ?? null);
     } else if (id.startsWith("docimg::")) {
       const [, figId, imgId] = id.split("::");
       setActiveDragSrc(findDocImageSrc(doc, figId, imgId));
-    } else {
-      setActiveDragSrc(null);
+    } else if (id === "block::table") {
+      setActiveBlock("Table");
     }
   }
 
   function handleDragEnd(event: any) {
     const { active, over } = event;
     setActiveDragSrc(null);
+    setActiveBlock(null);
+
+    // A Blox block (e.g. a table) dropped into a between-block zone.
+    if (String(active.id) === "block::table") {
+      const overId = over ? String(over.id) : null;
+      if (overId && overId.startsWith("dz::")) {
+        const [, containerId, idxStr] = overId.split("::");
+        setDoc((prev) => insertTableAt(prev, containerId, Number(idxStr)));
+      }
+      return;
+    }
 
     const activeId = String(active.id);
     const isSidebar = activeId.startsWith("image::");
@@ -999,7 +1020,7 @@ export default function App() {
       collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setActiveDragSrc(null)}
+      onDragCancel={() => { setActiveDragSrc(null); setActiveBlock(null); }}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
       <div
@@ -1079,6 +1100,11 @@ export default function App() {
 
           </div>
 
+          <hr />
+
+          <h3 style={{ marginBottom: 0 }}>Blox</h3>
+          <DraggableBlock id="block::table" label="Table" />
+
           <div style={{ marginTop: "auto"}}>
             <hr />
             <button onClick={() => exportLatex(numberedDoc)}>
@@ -1141,8 +1167,8 @@ export default function App() {
                             <div key={colIndex} style={{ flex: 1, minWidth: 0 }}>
                               <DocumentRenderer
                                 droppableId={`p${pageIndex}-c${colIndex}`}
-                                pageSections={col}
-                                figureStart={figureStarts[pageIndex][colIndex]}
+                                column={col}
+                                figureNumbers={figureNumbers}
                                 {...rendererProps}
                               />
                             </div>
@@ -1173,17 +1199,13 @@ export default function App() {
 
           <button onClick={uploadImage}>Upload image</button>
 
-          <div style={{ fontSize: 11, color: "#888", marginTop: -4 }}>
-            Drag an image into the document.
-          </div>
-
           {images.map((img) => (
             <DraggableImage key={img.id} img={img} onDelete={deleteImageUpload} />
           ))}
         </div>
       </div>
 
-      {/* Floating preview of the image being dragged. */}
+      {/* Floating preview of whatever is being dragged. */}
       <DragOverlay dropAnimation={null}>
         {activeDragSrc ? (
           <img
@@ -1198,6 +1220,19 @@ export default function App() {
               opacity: 0.9
             }}
           />
+        ) : activeBlock ? (
+          <div
+            style={{
+              padding: "10px 16px",
+              border: "1px solid #4a90e2",
+              borderRadius: 6,
+              background: "white",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              fontFamily: "var(--sans)"
+            }}
+          >
+            {activeBlock}
+          </div>
         ) : null}
       </DragOverlay>
     </DndContext>

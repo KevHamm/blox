@@ -1,5 +1,5 @@
 import { Fragment, useRef } from "react";
-import type { PageSection } from "../utils/paginateDocument";
+import type { Chunk } from "../utils/paginateDocument";
 import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
 import { TrashIcon } from "../components/TrashIcon";
 import "katex/dist/katex.min.css";
@@ -21,10 +21,11 @@ function DropZone({ id }: any) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const { active } = useDndContext();
 
-  // Only reveal drop targets while an image is being dragged.
-  const draggingImage = isImageDragId(active?.id);
+  // Reveal drop targets while dragging an image or a Blox block.
+  const activeId = String(active?.id ?? "");
+  const dragging = isImageDragId(activeId) || activeId.startsWith("block::");
 
-  if (!draggingImage) {
+  if (!dragging) {
     // Idle: zero-height so it never affects layout / pagination.
     return <div ref={setNodeRef} style={{ height: 0 }} />;
   }
@@ -454,6 +455,8 @@ function TableBlock(props: any) {
 ----------------------------- */
 function Subsection({
   node,
+  showHeader = true,
+  isLast = false,
   editingId,
   setEditingId,
   updateSectionTitle,
@@ -464,38 +467,41 @@ function Subsection({
 }: any) {
   return (
     <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {showHeader && (
+        <div data-head-id={node.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {editingId === node.id ? (
+            <input
+              autoFocus
+              value={node.title}
+              onChange={(e) => updateSectionTitle(node.id, e.target.value)}
+              onBlur={() => setEditingId(null)}
+            />
+          ) : (
+            <h3 onClick={() => setEditingId(node.id)}>
+              {node.title}
+            </h3>
+          )}
 
-        {editingId === node.id ? (
-          <input
-            autoFocus
-            value={node.title}
-            onChange={(e) => updateSectionTitle(node.id, e.target.value)}
-            onBlur={() => setEditingId(null)}
+          {/* MOVE BUTTONS — to the right of the title */}
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => moveSubsection(node.id, -1)}>↑</button>
+            <button onClick={() => moveSubsection(node.id, 1)}>↓</button>
+          </div>
+
+          <TrashButton
+            onClick={() => deleteNodeById(node.id)}
+            label="Delete subsection"
           />
-        ) : (
-          <h3 onClick={() => setEditingId(node.id)}>
-            {node.title}
-          </h3>
-        )}
-
-        {/* MOVE BUTTONS — to the right of the title */}
-        <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={() => moveSubsection(node.id, -1)}>↑</button>
-          <button onClick={() => moveSubsection(node.id, 1)}>↓</button>
         </div>
-
-        <TrashButton
-          onClick={() => deleteNodeById(node.id)}
-          label="Delete subsection"
-        />
-      </div>
+      )}
 
       {children}
 
-      <div style={{ marginTop: 10 }}>
-        <button onClick={() => addSubsubsection(node.id)}>+ Subsubsection</button>
-      </div>
+      {isLast && (
+        <div style={{ marginTop: 10 }}>
+          <button onClick={() => addSubsubsection(node.id)}>+ Subsubsection</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -505,6 +511,7 @@ function Subsection({
 ----------------------------- */
 function Subsubsection({
   node,
+  showHeader = true,
   editingId,
   setEditingId,
   updateSectionTitle,
@@ -513,25 +520,27 @@ function Subsubsection({
 }: any) {
   return (
     <div style={{ marginTop: 16, marginLeft: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {editingId === node.id ? (
-          <input
-            autoFocus
-            value={node.title}
-            onChange={(e) => updateSectionTitle(node.id, e.target.value)}
-            onBlur={() => setEditingId(null)}
-          />
-        ) : (
-          <h4 style={{ margin: 0 }} onClick={() => setEditingId(node.id)}>
-            {node.title}
-          </h4>
-        )}
+      {showHeader && (
+        <div data-head-id={node.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {editingId === node.id ? (
+            <input
+              autoFocus
+              value={node.title}
+              onChange={(e) => updateSectionTitle(node.id, e.target.value)}
+              onBlur={() => setEditingId(null)}
+            />
+          ) : (
+            <h4 style={{ margin: 0 }} onClick={() => setEditingId(node.id)}>
+              {node.title}
+            </h4>
+          )}
 
-        <TrashButton
-          onClick={() => deleteNodeById(node.id)}
-          label="Delete subsubsection"
-        />
-      </div>
+          <TrashButton
+            onClick={() => deleteNodeById(node.id)}
+            label="Delete subsubsection"
+          />
+        </div>
+      )}
 
       {children}
     </div>
@@ -541,10 +550,10 @@ function Subsubsection({
 /* -----------------------------
    SECTION (NO DND)
 ----------------------------- */
-function Section({ node, isContinuation = false, isLast = false, ...rest }: any) {
+function Section({ node, showHeader = true, isLast = false, ...rest }: any) {
   const {
     editingId, setEditingId, updateSectionTitle,
-    addSubsection, addTable, addSectionAfter,
+    addSubsection, addSectionAfter,
     deleteNodeById, moveSection, children
   } = rest;
 
@@ -555,10 +564,10 @@ function Section({ node, isContinuation = false, isLast = false, ...rest }: any)
   return (
     <div style={{ marginBottom: 30 }}>
 
-      {/* Tag just the header row; hide it on continuation columns/pages. */}
-      {!isContinuation && (
+      {/* Header row; hidden on continuation columns/pages. */}
+      {showHeader && (
         <div
-          data-section-header-id={node.id}
+          data-head-id={node.id}
           style={{ display: "flex", alignItems: "center", gap: 10 }}
         >
           {editingId === node.id ? (
@@ -578,8 +587,6 @@ function Section({ node, isContinuation = false, isLast = false, ...rest }: any)
             <button onClick={() => moveSection(node.id, -1)}>↑</button>
             <button onClick={() => moveSection(node.id,  1)}>↓</button>
           </div>
-
-          <button onClick={() => addTable(node.id)}>+ Table</button>
 
           <TrashButton
             onClick={() => deleteNodeById(node.id)}
@@ -622,77 +629,93 @@ function Section({ node, isContinuation = false, isLast = false, ...rest }: any)
 }
 
 /* -----------------------------
-   DOCUMENT ROOT
+   RECURSIVE CHUNK RENDERING
+----------------------------- */
+// The drop zones + child elements inside a container chunk.
+function containerInner(chunk: Chunk, props: any) {
+  const node = chunk.node;
+  const fullChildren = node.children ?? [];
+
+  return (
+    <>
+      {chunk.children.map((ch) => {
+        const absIndex = fullChildren.findIndex((c: any) => c.id === ch.node.id);
+        return (
+          <Fragment key={ch.node.id}>
+            <DropZone id={`dz::${node.id}::${absIndex}`} />
+            {renderChunk(ch, props)}
+          </Fragment>
+        );
+      })}
+      {chunk.isLast && (
+        <DropZone id={`dz::${node.id}::${fullChildren.length}`} />
+      )}
+    </>
+  );
+}
+
+function renderChunk(chunk: Chunk, props: any): any {
+  const node = chunk.node;
+
+  if (node.type === "paragraph") {
+    return (
+      <div data-leaf-id={node.id}>
+        <Paragraph node={node} {...props} />
+      </div>
+    );
+  }
+  if (node.type === "table") {
+    return (
+      <div data-leaf-id={node.id}>
+        <TableBlock node={node} {...props} />
+      </div>
+    );
+  }
+  if (node.type === "figure") {
+    return (
+      <div data-leaf-id={node.id}>
+        <FigureBlock
+          node={node}
+          updateFigureCaption={props.updateFigureCaption}
+          updateFigureWidth={props.updateFigureWidth}
+          deleteFigureImage={props.deleteFigureImage}
+          figureNumber={props.figureNumbers?.[node.id]}
+        />
+      </div>
+    );
+  }
+  if (node.type === "subsection") {
+    return (
+      <Subsection node={node} showHeader={chunk.header} isLast={chunk.isLast} {...props}>
+        {containerInner(chunk, props)}
+      </Subsection>
+    );
+  }
+  if (node.type === "subsubsection") {
+    return (
+      <Subsubsection node={node} showHeader={chunk.header} isLast={chunk.isLast} {...props}>
+        {containerInner(chunk, props)}
+      </Subsubsection>
+    );
+  }
+  // section
+  return (
+    <Section node={node} showHeader={chunk.header} isLast={chunk.isLast} {...props}>
+      {containerInner(chunk, props)}
+    </Section>
+  );
+}
+
+/* -----------------------------
+   DOCUMENT ROOT (renders one column)
 ----------------------------- */
 export function DocumentRenderer(props: any) {
   const { setNodeRef } = useDroppable({ id: props.droppableId ?? "document-root" });
 
-  // figure numbering continues across sections on the same page
-  let figureCounter = props.figureStart ?? 0;
-
   return (
     <div ref={setNodeRef}>
-      {(props.pageSections as PageSection[]).map((ps, psIndex) => (
-        <Section
-          key={`${ps.node.id}-${psIndex}`}
-          node={ps.node}
-          isContinuation={ps.isContinuation}
-          isLast={ps.isLast}
-          {...props}   // spread all callbacks through
-        >
-          {ps.children.map((child: any) => {
-            // Absolute index of this child within the *full* section, so a
-            // dropped image lands at the right spot even on a split section.
-            const absIndex = ps.node.children.findIndex(
-              (c: any) => c.id === child.id
-            );
-            return (
-              <Fragment key={child.id}>
-                {/* drop an image above this block */}
-                <DropZone id={`dz::${ps.node.id}::${absIndex}`} />
-
-                {/* ③ tag every child so we can measure it independently */}
-                <div data-child-id={child.id}>
-                  {child.type === "paragraph" && (
-                    <Paragraph node={child} {...props} />
-                  )}
-                  {child.type === "subsection" && (
-                    <Subsection node={child} {...props}>
-                      {(child.children ?? []).map((sub: any) =>
-                        sub.type === "subsubsection" ? (
-                          <Subsubsection key={sub.id} node={sub} {...props}>
-                            {(sub.children ?? []).map((p: any) => (
-                              <Paragraph key={p.id} node={p} {...props} />
-                            ))}
-                          </Subsubsection>
-                        ) : (
-                          <Paragraph key={sub.id} node={sub} {...props} />
-                        )
-                      )}
-                    </Subsection>
-                  )}
-                  {child.type === "table" && (
-                    <TableBlock node={child} {...props} />
-                  )}
-                  {child.type === "figure" && (
-                    <FigureBlock
-                      node={child}
-                      updateFigureCaption={props.updateFigureCaption}
-                      updateFigureWidth={props.updateFigureWidth}
-                      deleteFigureImage={props.deleteFigureImage}
-                      figureNumber={++figureCounter}
-                    />
-                  )}
-                </div>
-              </Fragment>
-            );
-          })}
-
-          {/* drop an image at the very end of the section */}
-          {ps.isLast && (
-            <DropZone id={`dz::${ps.node.id}::${ps.node.children.length}`} />
-          )}
-        </Section>
+      {(props.column as Chunk[]).map((chunk, i) => (
+        <Fragment key={`${chunk.node.id}-${i}`}>{renderChunk(chunk, props)}</Fragment>
       ))}
     </div>
   );

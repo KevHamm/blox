@@ -2,16 +2,23 @@ import { PAGE_HEIGHT, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM } from './pageConfig
 
 const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
 
-export type PageSection = {
-  node: any;               // the section node
-  children: any[];         // which children to render in this column
-  isContinuation: boolean; // true = mid-section continuation, skip the header
-  isLast: boolean;         // true = this chunk holds the section's final child
+/**
+ * A piece of a node that lands in one column. Containers (section / subsection
+ * / subsubsection) may be split across columns: each split produces a chunk
+ * with `header` = false for the continuation, and only the final chunk has
+ * `isLast` = true (so trailing "add" controls render once).
+ */
+export type Chunk = {
+  node: any;
+  header: boolean;
+  isLast: boolean;
+  children: Chunk[];
 };
-
-// A column is a list of section-chunks; a page is a list of columns.
-export type Column = PageSection[];
+export type Column = Chunk[];
 export type DocPage = Column[];
+
+const CONTAINERS = new Set(["section", "subsection", "subsubsection"]);
+export const isContainerType = (t: string) => CONTAINERS.has(t);
 
 function heightsUnchanged(
   prev: Record<string, number>,
@@ -23,107 +30,94 @@ function heightsUnchanged(
 }
 export { heightsUnchanged };
 
+/** A fully-placed chunk (used before any measurements exist). */
+export function fullChunk(node: any): Chunk {
+  return {
+    node,
+    header: true,
+    isLast: true,
+    children: isContainerType(node.type)
+      ? (node.children ?? []).map(fullChunk)
+      : []
+  };
+}
+
 /**
- * Flow the document into fixed-height COLUMNS, then group the columns into
- * pages (`columnsPerPage` columns each). Content fills a column top-to-bottom;
- * when it is full the next column starts; once a page's columns are all used a
- * new page begins. Sections taller than a column are split across the column
- * boundary at child granularity (just like a page break would).
+ * Flow the document into fixed-height columns, splitting wherever needed — even
+ * in the middle of a section, subsection or subsubsection. Columns are grouped
+ * into pages of `columnsPerPage`.
  */
 export function paginateColumns(
   doc: any,
-  childHeights:   Record<string, number>,
-  headerHeights:  Record<string, number>,
-  titleReserved   = 0,
-  columnsPerPage  = 1
+  leafHeights:   Record<string, number>,
+  headerHeights: Record<string, number>,
+  titleReserved  = 0,
+  columnsPerPage = 1
 ): DocPage[] {
 
-  const columns: Column[] = [[]];
+  const columns: Chunk[][] = [[]];
   let used = 0;
+  let stack: Chunk[] = [];   // open container chunks (root → deepest) in this column
 
-  // The full-width title sits above every column on the first page, so each of
-  // those leading columns loses the reserved title height.
-  const capacityOf = (colIdx: number) =>
-    CONTENT_HEIGHT - (colIdx < columnsPerPage ? titleReserved : 0);
+  const capacityOf = (idx: number) =>
+    CONTENT_HEIGHT - (idx < columnsPerPage ? titleReserved : 0);
+  const capacity = () => capacityOf(columns.length - 1);
 
-  const startNewColumn = () => {
-    columns.push([]);
-    used = 0;
+  const headerH = (node: any) => headerHeights[node.id] ?? 40;
+  const leafH   = (node: any) => leafHeights[node.id] ?? 120;
+
+  const appendChunk = (chunk: Chunk) => {
+    if (stack.length) stack[stack.length - 1].children.push(chunk);
+    else columns[columns.length - 1].push(chunk);
   };
 
-  for (const section of doc.children) {
-    const headerH = headerHeights[section.id] ?? 48;
-    // Derive the section's total height from its header + children rather than
-    // the section wrapper itself: a split section renders several wrappers that
-    // all share `data-section-id`, so the measured wrapper height is unreliable.
-    // Each child renders exactly once, so child heights are stable.
-    const childrenH = section.children.reduce(
-      (sum: number, c: any) => sum + (childHeights[c.id] ?? 100),
-      0
-    );
-    const totalH   = headerH + childrenH;
-    const capacity = capacityOf(columns.length - 1);
-
-    // Whole section fits in the current column.
-    if (used + totalH <= capacity) {
-      columns[columns.length - 1].push({
-        node: section, children: section.children,
-        isContinuation: false, isLast: true,
-      });
-      used += totalH;
-      continue;
+  // Move to a fresh column, re-opening the current container path as
+  // header-less continuations so nesting is preserved.
+  const startNewColumn = () => {
+    const openNodes = stack.map((c) => c.node);
+    columns.push([]);
+    used = 0;
+    stack = [];
+    for (const node of openNodes) {
+      const cont: Chunk = { node, header: false, isLast: false, children: [] };
+      appendChunk(cont);
+      stack.push(cont);
     }
+  };
 
-    // Otherwise split the section's children across columns.
-    let remaining      = [...section.children];
-    let isContinuation = false;
+  const openContainer = (node: any) => {
+    const chunk: Chunk = { node, header: true, isLast: false, children: [] };
+    appendChunk(chunk);
+    stack.push(chunk);
+    used += headerH(node);
+  };
 
-    while (remaining.length > 0) {
-      const cap        = capacityOf(columns.length - 1);
-      const headerCost = isContinuation ? 0 : headerH;
+  const closeContainer = () => {
+    const chunk = stack.pop();
+    if (chunk) chunk.isLast = true;   // the chunk in the final column is "last"
+  };
 
-      // Not even room for the header here — move to the next column first.
-      if (headerCost > cap - used && columns[columns.length - 1].length > 0) {
-        startNewColumn();
-        continue;
-      }
+  const placeLeaf = (node: any) => {
+    const h = leafH(node);
+    if (used > 0 && used + h > capacity()) startNewColumn();
+    appendChunk({ node, header: false, isLast: true, children: [] });
+    used += h;
+  };
 
-      const available = cap - used;
-      let chunkH      = headerCost;
-      const chunk: any[] = [];
+  const placeContainer = (node: any) => {
+    if (used > 0 && used + headerH(node) > capacity()) startNewColumn();
+    openContainer(node);
+    for (const c of node.children ?? []) place(c);
+    closeContainer();
+  };
 
-      for (const child of remaining) {
-        const childH = childHeights[child.id] ?? 100;
-        if (chunk.length === 0 || chunkH + childH <= available) {
-          chunk.push(child);
-          chunkH += childH;
-        } else {
-          break;
-        }
-      }
-
-      if (chunk.length === 0) {
-        chunk.push(remaining[0]);
-        chunkH += childHeights[remaining[0].id] ?? 100;
-      }
-
-      remaining = remaining.slice(chunk.length);
-
-      columns[columns.length - 1].push({
-        node: section, children: chunk,
-        isContinuation, isLast: remaining.length === 0,
-      });
-      used += chunkH;
-
-      if (remaining.length > 0) {
-        startNewColumn();
-        isContinuation = true;
-      }
-    }
+  function place(node: any) {
+    if (isContainerType(node.type)) placeContainer(node);
+    else placeLeaf(node);
   }
 
-  // Group columns into pages, padding the final page with empty columns so
-  // every rendered column keeps the same width (and thus stable measurements).
+  for (const section of doc.children ?? []) place(section);
+
   const pages: DocPage[] = [];
   for (let i = 0; i < columns.length; i += columnsPerPage) {
     const page = columns.slice(i, i + columnsPerPage);
