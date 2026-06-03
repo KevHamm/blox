@@ -24,8 +24,8 @@ import {
   COLUMN_GAP
 } from "./utils/pageConfig";
 
-/* A sidebar image the user can drag into the document. */
-function DraggableImage({ img }: any) {
+/* A sidebar image the user can drag into the document or delete. */
+function DraggableImage({ img, onDelete }: any) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `image::${img.id}`
   });
@@ -36,11 +36,32 @@ function DraggableImage({ img }: any) {
       {...listeners}
       {...attributes}
       style={{
+        position: "relative",
         textAlign: "center",
         cursor: "grab",
         opacity: isDragging ? 0.4 : 1
       }}
     >
+      <button
+        onClick={() => onDelete(img.id)}
+        onPointerDown={(e) => e.stopPropagation()}
+        title="Delete image"
+        style={{
+          position: "absolute",
+          top: 4,
+          right: 4,
+          background: "rgba(0,0,0,0.6)",
+          color: "white",
+          border: "none",
+          borderRadius: 4,
+          padding: "0 6px",
+          cursor: "pointer",
+          zIndex: 1
+        }}
+      >
+        ×
+      </button>
+
       <img
         src={img.src}
         alt={img.name}
@@ -70,6 +91,87 @@ function DraggableImage({ img }: any) {
 
 const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
+
+// Default per-image width (fraction of the text column) for a new figure.
+const DEFAULT_FIG_WIDTH = 0.6;
+
+/* -----------------------------------------------------------------
+   Pure document-tree helpers for figure (image container) editing.
+----------------------------------------------------------------- */
+function findFigureNode(node: any, figureId: string): any | null {
+  if (node?.type === "figure" && node.id === figureId) return node;
+  for (const c of node?.children ?? []) {
+    const f = findFigureNode(c, figureId);
+    if (f) return f;
+  }
+  return null;
+}
+
+function findDocImageSrc(root: any, figureId: string, imageId: string): string | null {
+  const fig = findFigureNode(root, figureId);
+  const im = (fig?.images ?? []).find((x: any) => x.id === imageId);
+  return im?.src ?? null;
+}
+
+// Where a figure sits: the id of its parent and its index among siblings.
+function locateFigure(node: any, figureId: string): { parentId: string; index: number } | null {
+  const kids = node?.children ?? [];
+  for (let i = 0; i < kids.length; i++) {
+    if (kids[i].id === figureId) return { parentId: node.id, index: i };
+    const r = locateFigure(kids[i], figureId);
+    if (r) return r;
+  }
+  return null;
+}
+
+// Remove one image from a figure; drop the figure entirely if it becomes empty.
+function removeFigureImage(node: any, figureId: string, imageId: string): any {
+  if (!node.children) return node;
+  const children: any[] = [];
+  for (const child of node.children) {
+    if (child.type === "figure" && child.id === figureId) {
+      const imgs = (child.images ?? []).filter((im: any) => im.id !== imageId);
+      if (imgs.length > 0) children.push({ ...child, images: imgs });
+    } else {
+      children.push(removeFigureImage(child, figureId, imageId));
+    }
+  }
+  return { ...node, children };
+}
+
+function addFigureImage(node: any, figureId: string, src: string): any {
+  if (node.type === "figure" && node.id === figureId) {
+    return {
+      ...node,
+      images: [...(node.images ?? []), { id: crypto.randomUUID(), src }]
+    };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => addFigureImage(c, figureId, src)) };
+}
+
+function insertFigure(node: any, containerId: string, index: number, src: string): any {
+  if (node.id === containerId) {
+    const fig = {
+      id: crypto.randomUUID(),
+      type: "figure",
+      caption: "",
+      width: DEFAULT_FIG_WIDTH,
+      images: [{ id: crypto.randomUUID(), src }]
+    };
+    const kids = [...(node.children ?? [])];
+    kids.splice(Math.min(Math.max(index, 0), kids.length), 0, fig);
+    return { ...node, children: kids };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => insertFigure(c, containerId, index, src)) };
+}
+
+function setFigureWidthTree(node: any, figureId: string, width: number): any {
+  if (node.type === "figure" && node.id === figureId) return { ...node, width };
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => setFigureWidthTree(c, figureId, width)) };
+}
 
 /* A labelled slider paired with a typed number input. Both edit the same
    value and are clamped to [min, max]. */
@@ -142,8 +244,8 @@ export default function App() {
 
   // Images uploaded via the right sidebar (preview gallery).
   const [images, setImages] = useState<{ id: string; src: string; name: string }[]>([]);
-  // The image currently being dragged into the document (for the drag overlay).
-  const [activeImageId, setActiveImageId] = useState<string | null>(null);
+  // Source of the image currently being dragged (for the drag overlay preview).
+  const [activeDragSrc, setActiveDragSrc] = useState<string | null>(null);
 
 
   // LaTeX-like defaults: text fills the margins, ~12pt body, tight leading.
@@ -160,7 +262,7 @@ export default function App() {
     deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
     addTableColumn, updateTableColWidths, addSectionAfter,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
-    moveSection, moveSubsection, updateFigureCaption,
+    moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
   };
 
   // ── 2. Derived values ───────────────────────────────────
@@ -348,28 +450,14 @@ export default function App() {
     }));
   }
 
-  // Drop an uploaded image into a section's children at a given index.
-  function dropImageAt(sectionId: string, index: number, image: { src: string; name: string }) {
-    const figure = {
-      id: crypto.randomUUID(),
-      type: "figure",
-      src: image.src,
-      caption: image.name
-    };
+  // Resize every image in a figure container (per-image fraction of column).
+  function updateFigureWidth(figureId: string, width: number) {
+    setDoc((prev) => setFigureWidthTree(prev, figureId, width));
+  }
 
-    function update(node: any): any {
-      if (node.id === sectionId) {
-        const children = [...(node.children ?? [])];
-        children.splice(index, 0, figure);
-        return { ...node, children };
-      }
-      if (node.children) {
-        return { ...node, children: node.children.map(update) };
-      }
-      return node;
-    }
-
-    setDoc((prev) => update(prev));
+  // Remove an uploaded image from the sidebar gallery.
+  function deleteImageUpload(imageId: string) {
+    setImages((prev) => prev.filter((i) => i.id !== imageId));
   }
 
   // -----------------------------
@@ -751,45 +839,115 @@ export default function App() {
   // -----------------------------
   function handleDragStart(event: any) {
     const id = String(event.active.id);
-    setActiveImageId(id.startsWith("image::") ? id.slice("image::".length) : null);
+    if (id.startsWith("image::")) {
+      const img = images.find((i) => i.id === id.slice("image::".length));
+      setActiveDragSrc(img?.src ?? null);
+    } else if (id.startsWith("docimg::")) {
+      const [, figId, imgId] = id.split("::");
+      setActiveDragSrc(findDocImageSrc(doc, figId, imgId));
+    } else {
+      setActiveDragSrc(null);
+    }
   }
 
   function handleDragEnd(event: any) {
     const { active, over } = event;
-    setActiveImageId(null);
-
-    if (!over) return;
+    setActiveDragSrc(null);
 
     const activeId = String(active.id);
-    const overId   = String(over.id);
+    const isSidebar = activeId.startsWith("image::");
+    const isDocImg  = activeId.startsWith("docimg::");
 
-    // An image from the sidebar dropped onto a document drop zone.
-    if (activeId.startsWith("image::") && overId.startsWith("dz::")) {
-      const imageId = activeId.slice("image::".length);
-      const image   = images.find((i) => i.id === imageId);
-      if (!image) return;
-
-      const [, sectionId, idxStr] = overId.split("::");
-      dropImageAt(sectionId, Number(idxStr), image);
+    // ── Non-image drag: keep the existing section reordering ──
+    if (!isSidebar && !isDocImg) {
+      if (!over || activeId === String(over.id)) return;
+      const overId = String(over.id);
+      setDoc((prev) => {
+        const siblings = prev.children ?? [];
+        const oldIndex = siblings.findIndex((c: any) => c.id === activeId);
+        const newIndex = siblings.findIndex((c: any) => c.id === overId);
+        if (oldIndex === -1 || newIndex === -1) return prev;
+        const updated = [...siblings];
+        const [moved] = updated.splice(oldIndex, 1);
+        updated.splice(newIndex, 0, moved);
+        return { ...prev, children: updated };
+      });
       return;
     }
 
-    // Existing top-level section reordering.
-    if (activeId === overId) return;
+    // ── Image drag: resolve the source and (for in-document images) origin ──
+    let originFig: string | null = null;
+    let originImg: string | null = null;
+    let src: string | null = null;
 
-    setDoc((prev) => {
-      const siblings = prev.children ?? [];
-      const oldIndex = siblings.findIndex((c: any) => c.id === active.id);
-      const newIndex = siblings.findIndex((c: any) => c.id === over.id);
+    if (isSidebar) {
+      src = images.find((i) => i.id === activeId.slice("image::".length))?.src ?? null;
+    } else {
+      const [, figId, imgId] = activeId.split("::");
+      originFig = figId;
+      originImg = imgId;
+      src = findDocImageSrc(doc, figId, imgId);
+    }
+    if (!src) return;
+    const dropSrc = src;
 
-      if (oldIndex === -1 || newIndex === -1) return prev;
+    const overId = over ? String(over.id) : null;
 
-      const updated = [...siblings];
-      const [moved] = updated.splice(oldIndex, 1);
-      updated.splice(newIndex, 0, moved);
+    // Dropped outside every droppable → remove it from the document only.
+    if (!overId) {
+      if (isDocImg && originFig && originImg) {
+        const fig = originFig, img = originImg;
+        setDoc((prev) => removeFigureImage(prev, fig, img));
+      }
+      return;
+    }
 
-      return { ...prev, children: updated };
-    });
+    // Merge into an existing figure container, if there is room for it.
+    if (overId.startsWith("fig::")) {
+      const figureId = overId.slice("fig::".length);
+      if (isDocImg && figureId === originFig) return;          // onto itself
+
+      const fig = findFigureNode(doc, figureId);
+      if (!fig) return;
+      const count = (fig.images ?? []).length;
+      const w = fig.width ?? DEFAULT_FIG_WIDTH;
+      if ((count + 1) * w > 1 + 1e-6) return;                  // no space → reject
+
+      const fromFig = originFig, fromImg = originImg;
+      setDoc((prev) => {
+        let tree = prev;
+        if (isDocImg && fromFig && fromImg) tree = removeFigureImage(tree, fromFig, fromImg);
+        return addFigureImage(tree, figureId, dropSrc);
+      });
+      return;
+    }
+
+    // Drop into a between-block zone → create a new (single-image) figure.
+    if (overId.startsWith("dz::")) {
+      const [, containerId, idxStr] = overId.split("::");
+      let index = Number(idxStr);
+
+      // If moving an image whose figure will disappear from this same
+      // container before the target index, shift the index back by one.
+      if (isDocImg && originFig) {
+        const loc = locateFigure(doc, originFig);
+        const fig = findFigureNode(doc, originFig);
+        const willEmpty = (fig?.images ?? []).length <= 1;
+        if (willEmpty && loc && loc.parentId === containerId && loc.index < index) {
+          index -= 1;
+        }
+      }
+
+      const fromFig = originFig, fromImg = originImg;
+      setDoc((prev) => {
+        let tree = prev;
+        if (isDocImg && fromFig && fromImg) tree = removeFigureImage(tree, fromFig, fromImg);
+        return insertFigure(tree, containerId, index, dropSrc);
+      });
+      return;
+    }
+
+    // Dropped over some other droppable (e.g. a column) → no-op.
   }
 
   // -----------------------------
@@ -801,7 +959,7 @@ export default function App() {
       collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setActiveImageId(null)}
+      onDragCancel={() => setActiveDragSrc(null)}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
       <div
@@ -980,16 +1138,16 @@ export default function App() {
           </div>
 
           {images.map((img) => (
-            <DraggableImage key={img.id} img={img} />
+            <DraggableImage key={img.id} img={img} onDelete={deleteImageUpload} />
           ))}
         </div>
       </div>
 
       {/* Floating preview of the image being dragged. */}
       <DragOverlay dropAnimation={null}>
-        {activeImageId ? (
+        {activeDragSrc ? (
           <img
-            src={images.find((i) => i.id === activeImageId)?.src}
+            src={activeDragSrc}
             alt=""
             style={{
               width: 160,

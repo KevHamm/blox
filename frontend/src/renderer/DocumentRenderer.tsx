@@ -1,7 +1,17 @@
 import { Fragment, useRef } from "react";
 import type { PageSection } from "../utils/paginateDocument";
-import { useDroppable, useDndContext } from "@dnd-kit/core";
+import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
 import "katex/dist/katex.min.css";
+
+// True while dragging an image — either a sidebar upload (`image::`) or one
+// already placed in the document (`docimg::`).
+export const isImageDragId = (id: unknown) => {
+  const s = String(id ?? "");
+  return s.startsWith("image::") || s.startsWith("docimg::");
+};
+
+const clampFrac = (v: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, v));
 
 /* -----------------------------
    DROP ZONE (image drop target)
@@ -11,8 +21,7 @@ function DropZone({ id }: any) {
   const { active } = useDndContext();
 
   // Only reveal drop targets while an image is being dragged.
-  const draggingImage =
-    active != null && String(active.id).startsWith("image::");
+  const draggingImage = isImageDragId(active?.id);
 
   if (!draggingImage) {
     // Idle: zero-height so it never affects layout / pagination.
@@ -125,70 +134,152 @@ function Paragraph({
 }
 
 /* -----------------------------
-   FIGURE
+   FIGURE — a container of one or more equally-sized images that share a
+   single caption. A single image is centered; resizing controls how wide each
+   image is (and therefore whether another image can fit beside it).
 ----------------------------- */
+function DocImage({ figureId, image }: any) {
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
+    id: `docimg::${figureId}::${image.id}`
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{ flex: 1, minWidth: 0, cursor: "grab", opacity: isDragging ? 0.4 : 1 }}
+    >
+      <img
+        src={image.src}
+        alt=""
+        draggable={false}
+        style={{ width: "100%", height: "auto", display: "block", pointerEvents: "none" }}
+      />
+    </div>
+  );
+}
+
 function FigureBlock({
   node,
   deleteNodeById,
   updateFigureCaption,
+  updateFigureWidth,
   figureNumber
 }: any) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const { active } = useDndContext();
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `fig::${node.id}` });
+
+  const images: any[] = node.images ?? [];
+  const width: number = node.width ?? 0.6;        // per-image fraction of column
+  const n = images.length || 1;
+  const containerFrac = Math.min(1, n * width);
+
+  // Room for one more image at the current size?
+  const hasRoom = (n + 1) * width <= 1 + 1e-6;
+  const dragging = isImageDragId(active?.id);
+
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const colW = wrapperRef.current?.offsetWidth || 1;
+    const startX = e.clientX;
+    const startW = width;
+
+    function onMove(ev: MouseEvent) {
+      const dw = (ev.clientX - startX) / (colW * n);
+      updateFigureWidth(node.id, clampFrac(startW + dw, 0.1, 1 / n));
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  const borderColor =
+    dragging && isOver ? (hasRoom ? "#4a90e2" : "#c0392b") : "#ccc";
+
   return (
-    <div
-      style={{
-        border: "1px solid #ccc",
-        background: "white",
-        padding: 8,
-        margin: "12px 0"
-      }}
-    >
-      <button
-        onClick={() => deleteNodeById(node.id)}
-        style={{
-          float: "right",
-          background: "red",
-          color: "white",
-          border: "none",
-          padding: "2px 6px"
-        }}
-      >
-        ×
-      </button>
-
-      <img
-        src={node.src}
-        alt="figure"
-        style={{
-          width: "100%",
-          height: "auto",
-          display: "block"
-        }}
-      />
-
+    <div ref={wrapperRef} style={{ margin: "12px 0" }}>
       <div
+        ref={setDropRef}
         style={{
-          marginTop: 10,
-          textAlign: "center",
-          fontSize: 14,
-          fontFamily: "var(--sans)",
-          color: "var(--text)"
+          width: `${containerFrac * 100}%`,
+          margin: "0 auto",
+          border: `${dragging && isOver ? 2 : 1}px solid ${borderColor}`,
+          background: "white",
+          padding: 8,
+          position: "relative",
+          boxSizing: "border-box"
         }}
       >
-        <strong>Figure {figureNumber}:</strong>{" "}
-        <input
-          value={node.caption || ""}
-          onChange={(e) => updateFigureCaption(node.id, e.target.value)}
+        <button
+          onClick={() => deleteNodeById(node.id)}
+          title="Remove figure"
           style={{
+            position: "absolute",
+            top: 4,
+            left: 4,
+            background: "red",
+            color: "white",
             border: "none",
-            borderBottom: "1px solid #ccc",
-            outline: "none",
-            width: "70%",
-            textAlign: "center",
-            fontFamily: "var(--sans)",
-            background: "transparent",
-            color: "var(--text)"
+            padding: "2px 6px",
+            zIndex: 2,
+            cursor: "pointer"
+          }}
+        >
+          ×
+        </button>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          {images.map((im) => (
+            <DocImage key={im.id} figureId={node.id} image={im} />
+          ))}
+        </div>
+
+        {/* drag the right edge to resize every image in the container */}
+        <div
+          onMouseDown={startResize}
+          title="Resize"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: -4,
+            width: 8,
+            height: "100%",
+            cursor: "col-resize",
+            zIndex: 2
           }}
         />
+
+        <div
+          style={{
+            marginTop: 10,
+            textAlign: "center",
+            fontSize: 14,
+            fontFamily: "var(--sans)",
+            color: "var(--text)"
+          }}
+        >
+          <strong>Figure {figureNumber}:</strong>{" "}
+          <input
+            value={node.caption || ""}
+            onChange={(e) => updateFigureCaption(node.id, e.target.value)}
+            style={{
+              border: "none",
+              borderBottom: "1px solid #ccc",
+              outline: "none",
+              width: "70%",
+              textAlign: "center",
+              fontFamily: "var(--sans)",
+              background: "transparent",
+              color: "var(--text)"
+            }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -513,6 +604,7 @@ export function DocumentRenderer(props: any) {
                       node={child}
                       deleteNodeById={props.deleteNodeById}
                       updateFigureCaption={props.updateFigureCaption}
+                      updateFigureWidth={props.updateFigureWidth}
                       figureNumber={++figureCounter}
                     />
                   )}
