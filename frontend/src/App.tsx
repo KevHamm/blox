@@ -33,6 +33,7 @@ export default function App() {
   const [childHeights,   setChildHeights]   = useState<Record<string, number>>({});
   const [headerHeights,  setHeaderHeights]  = useState<Record<string, number>>({});
 
+
   // layout must be declared before useLayoutEffect references it
   const [layout, setLayout] = useState({
     textWidth: 650,
@@ -40,6 +41,14 @@ export default function App() {
     columns: 1,
     fontSize: 16
   });
+
+  const rendererProps = {
+    editingId, setEditingId, updateTextById, updateSectionTitle,
+    addSubsection, addTable, addFigure, updateTableCell,
+    deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
+    addTableColumn, lineHeight: layout.lineHeight, fontSize: layout.fontSize,
+    moveSection, moveSubsection, updateFigureCaption,
+  };
 
   // ── 2. Derived values ───────────────────────────────────
   const numberedDoc = numberDocument(doc);
@@ -622,6 +631,34 @@ export default function App() {
     });
   }
 
+  const CONTENT_H = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
+
+  function splitColumns(sections: any[]): [any[], any[]] {
+    // Total height of everything pagination placed on this page.
+    const total = sections.reduce(
+      (sum, s) => sum + (sectionHeights[s.node.id] ?? 200),
+      0
+    );
+
+    // Aim for two equally tall columns instead of cramming the left one to a
+    // full page height and spilling the rest (unbounded) into the right.
+    const target = total / 2;
+
+    let used = 0;
+    for (let i = 0; i < sections.length; i++) {
+      const h = sectionHeights[sections[i].node.id] ?? 200;
+      // Keep at least one section on the left, then break as soon as adding the
+      // next section would push the left column past the halfway point.
+      if (i > 0 && used + h / 2 >= target) {
+        return [sections.slice(0, i), sections.slice(i)];
+      }
+      used += h;
+    }
+    return [sections, []]; // everything fits in the left column
+  }
+
+
+
   // -----------------------------
   // RENDER
   // -----------------------------
@@ -777,65 +814,59 @@ export default function App() {
                   </button>
                 </div>
 
-                {pages.map((pageSections, pageIndex: number) => (
-                  <Page
-                    key={pageIndex}
-                    pageNumber={pageIndex + 1}
-                    totalPages={pages.length}
-                  >
+                {pages.map((pageSections, pageIndex) => (
+                  <Page key={pageIndex} pageNumber={pageIndex + 1} totalPages={pages.length}>
 
-                    <div
-                      style={{
-                        width: "100%",
-                        maxWidth:
-                          layout.columns === 2
-                            ? layout.textWidth * 2 + 40
-                            : layout.textWidth,
-                        margin: "0 auto",
-                        columnCount: layout.columns,
-                        columnGap: layout.columns === 2 ? 40 : 0
-                      }}
-                    >
-
+                    {/* Title always spans full width above the columns */}
                     {pageIndex === 0 && (
-                      <div style={{ textAlign: "center", marginBottom: 40}}>
+                      <div style={{ textAlign: "center", marginBottom: 40 }}>
                         <input
                           value={documentTitle}
                           onChange={(e) => setDocumentTitle(e.target.value)}
-                          style={{
-                            fontSize: 42,
-                            fontWeight: 400,
-                            border: "none",
-                            outline: "none",
-                            textAlign: "center",
-                            width: "100%"
-                          }}
+                          style={{ fontSize: 42, fontWeight: 400, border: "none",
+                                   outline: "none", textAlign: "center", width: "100%" }}
                         />
                       </div>
                     )}
 
-                    <DocumentRenderer
-                      pageSections={pageSections}
-                      editingId={editingId}
-                      setEditingId={setEditingId}
-                      updateTextById={updateTextById}
-                      updateSectionTitle={updateSectionTitle}
-                      addSubsection={addSubsection}
-                      addTable={addTable}
-                      addFigure={addFigure}
-                      updateTableCell={updateTableCell}
-                      deleteTableColumn={deleteTableColumn}
-                      deleteNodeById={deleteNodeById}
-                      addTableRow={addTableRow}
-                      deleteTableRow={deleteTableRow}
-                      addTableColumn={addTableColumn}
-                      lineHeight={layout.lineHeight}
-                      fontSize={layout.fontSize}
-                      moveSection={moveSection}
-                      moveSubsection={moveSubsection}
-                      updateFigureCaption={updateFigureCaption}
-                    />
-                    </div>
+                    {layout.columns === 2 ? (() => {
+                      const [left, right] = splitColumns(pageSections);
+                      const leftFigCount = left
+                        .flatMap((ps: any) => ps.children)
+                        .filter((c: any) => c.type === "figure").length;
+
+                      return (
+                        <div style={{ display: "flex", gap: 40,
+                                      maxWidth: layout.textWidth * 2 + 40, margin: "0 auto" }}>
+                          <div style={{ width: layout.textWidth, flexShrink: 0 }}>
+                            <DocumentRenderer
+                              droppableId={`left-${pageIndex}`}
+                              pageSections={left}
+                              figureStart={figureStartPerPage[pageIndex]}
+                              {...rendererProps}
+                            />
+                          </div>
+                          <div style={{ width: layout.textWidth, flexShrink: 0 }}>
+                            <DocumentRenderer
+                              droppableId={`right-${pageIndex}`}
+                              pageSections={right}
+                              figureStart={figureStartPerPage[pageIndex] + leftFigCount}
+                              {...rendererProps}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })() : (
+                      <div style={{ width: layout.textWidth, margin: "0 auto" }}>
+                        <DocumentRenderer
+                          droppableId="document-root"
+                          pageSections={pageSections}
+                          figureStart={figureStartPerPage[pageIndex]}
+                          {...rendererProps}
+                        />
+                      </div>
+                    )}
+
                   </Page>
                 ))}
           </div>

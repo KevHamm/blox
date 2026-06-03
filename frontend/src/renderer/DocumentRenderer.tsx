@@ -304,7 +304,7 @@ function Section({ node, isContinuation = false, ...rest }: any) {
    DOCUMENT ROOT
 ----------------------------- */
 export function DocumentRenderer(props: any) {
-  const { setNodeRef } = useDroppable({ id: "document-root" });
+  const { setNodeRef } = useDroppable({ id: props.droppableId ?? "document-root" });
 
   // figure numbering continues across sections on the same page
   let figureCounter = props.figureStart ?? 0;

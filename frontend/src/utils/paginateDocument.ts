@@ -32,7 +32,9 @@ export function paginateByHeights(
   const EFFECTIVE_HEIGHT = CONTENT_HEIGHT * columns;
 
   const pages: PageSection[][] = [[]];
-  let currentH = firstPageReserved;
+  // The title banner spans full width above every column, so it costs its
+  // height in each of them — reserve it once per column on the first page.
+  let currentH = firstPageReserved * columns;
 
   for (const section of doc.children) {
     const totalH  = sectionHeights[section.id] ?? 300;
