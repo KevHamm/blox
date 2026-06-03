@@ -1,3 +1,5 @@
+import { PAGE_WIDTH, PAGE_PADDING_X } from "../utils/pageConfig";
+
 interface PageProps {
   children: React.ReactNode;
   pageNumber: number;
@@ -9,12 +11,12 @@ export function Page({ children, pageNumber, totalPages }: PageProps) {
     <div
       style={{
         position: "relative",
-        width: 794,
+        width: PAGE_WIDTH,
         minHeight: 1123,
         background: "white",
         boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
         marginBottom: 40,
-        padding: "60px 80px",
+        padding: `60px ${PAGE_PADDING_X}px`,
         boxSizing: "border-box",
         textAlign: "left"
       }}

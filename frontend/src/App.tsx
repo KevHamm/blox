@@ -21,7 +21,9 @@ import {
   PAGE_WIDTH,
   PAGE_HEIGHT,
   PAGE_PADDING_TOP,
-  PAGE_PADDING_BOTTOM
+  PAGE_PADDING_BOTTOM,
+  CONTENT_WIDTH,
+  COLUMN_GAP
 } from "./utils/pageConfig";
 
 export default function App() {
@@ -829,16 +831,36 @@ export default function App() {
                       </div>
                     )}
 
-                    {layout.columns === 2 ? (() => {
+                    {(() => {
+                      // The text block fills the area between the page margins,
+                      // never wider than the page itself. The slider can narrow
+                      // it further (widening the margins, LaTeX-style).
+                      const blockWidth = Math.min(layout.textWidth, CONTENT_WIDTH);
+
+                      if (layout.columns !== 2) {
+                        return (
+                          <div style={{ width: blockWidth, margin: "0 auto" }}>
+                            <DocumentRenderer
+                              droppableId="document-root"
+                              pageSections={pageSections}
+                              figureStart={figureStartPerPage[pageIndex]}
+                              {...rendererProps}
+                            />
+                          </div>
+                        );
+                      }
+
                       const [left, right] = splitColumns(pageSections);
                       const leftFigCount = left
                         .flatMap((ps: any) => ps.children)
                         .filter((c: any) => c.type === "figure").length;
 
+                      // Two equal columns inside the text block, separated by a
+                      // gutter; each is (blockWidth - COLUMN_GAP) / 2.
                       return (
-                        <div style={{ display: "flex", gap: 40,
-                                      maxWidth: layout.textWidth * 2 + 40, margin: "0 auto" }}>
-                          <div style={{ width: layout.textWidth, flexShrink: 0 }}>
+                        <div style={{ display: "flex", gap: COLUMN_GAP,
+                                      width: blockWidth, margin: "0 auto" }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
                             <DocumentRenderer
                               droppableId={`left-${pageIndex}`}
                               pageSections={left}
@@ -846,7 +868,7 @@ export default function App() {
                               {...rendererProps}
                             />
                           </div>
-                          <div style={{ width: layout.textWidth, flexShrink: 0 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
                             <DocumentRenderer
                               droppableId={`right-${pageIndex}`}
                               pageSections={right}
@@ -856,16 +878,7 @@ export default function App() {
                           </div>
                         </div>
                       );
-                    })() : (
-                      <div style={{ width: layout.textWidth, margin: "0 auto" }}>
-                        <DocumentRenderer
-                          droppableId="document-root"
-                          pageSections={pageSections}
-                          figureStart={figureStartPerPage[pageIndex]}
-                          {...rendererProps}
-                        />
-                      </div>
-                    )}
+                    })()}
 
                   </Page>
                 ))}
