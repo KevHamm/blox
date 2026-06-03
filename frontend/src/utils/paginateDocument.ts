@@ -23,8 +23,14 @@ export function paginateByHeights(
   sectionHeights: Record<string, number>,
   childHeights:   Record<string, number>,
   headerHeights:  Record<string, number>,
-  firstPageReserved = 0
+  firstPageReserved = 0,
+  columns = 1                              // ← new
 ): PageSection[][] {
+
+  // In 2-column mode the page holds two columns side-by-side,
+  // so the effective packing capacity doubles.
+  const EFFECTIVE_HEIGHT = CONTENT_HEIGHT * columns;
+
   const pages: PageSection[][] = [[]];
   let currentH = firstPageReserved;
 
@@ -32,40 +38,34 @@ export function paginateByHeights(
     const totalH  = sectionHeights[section.id] ?? 300;
     const headerH = headerHeights[section.id]  ?? 48;
 
-    // ── whole section fits on the current page ──────────────────────
-    if (currentH + totalH <= CONTENT_HEIGHT) {
+    if (currentH + totalH <= EFFECTIVE_HEIGHT) {      // ← was CONTENT_HEIGHT
       pages[pages.length - 1].push({
-        node: section,
-        children: section.children,
-        isContinuation: false,
+        node: section, children: section.children, isContinuation: false,
       });
       currentH += totalH;
       continue;
     }
 
-    // ── section needs splitting across pages ─────────────────────────
-    let remaining     = [...section.children];
+    // splitting logic — replace every CONTENT_HEIGHT reference here too
+    let remaining      = [...section.children];
     let isContinuation = false;
 
     while (remaining.length > 0) {
       const headerCost = isContinuation ? 0 : headerH;
-      const spaceLeft  = CONTENT_HEIGHT - currentH;
+      const spaceLeft  = EFFECTIVE_HEIGHT - currentH;  // ← was CONTENT_HEIGHT
 
-      // Header alone doesn't fit on a non-empty page → start a new page
       if (headerCost > spaceLeft && pages[pages.length - 1].length > 0) {
         pages.push([]);
         currentH = 0;
         continue;
       }
 
-      // Greedily pack children into available space
-      const available = CONTENT_HEIGHT - currentH;
+      const available = EFFECTIVE_HEIGHT - currentH;   // ← was CONTENT_HEIGHT
       let used        = headerCost;
       const chunk: any[] = [];
 
       for (const child of remaining) {
         const childH = childHeights[child.id] ?? 100;
-        // Always take at least one child so we never loop forever
         if (chunk.length === 0 || used + childH <= available) {
           chunk.push(child);
           used += childH;
@@ -74,18 +74,19 @@ export function paginateByHeights(
         }
       }
 
-      pages[pages.length - 1].push({
-        node: section,
-        children: chunk,
-        isContinuation,
-      });
+      if (chunk.length === 0) {
+        chunk.push(remaining[0]);
+        used += childHeights[remaining[0].id] ?? 100;
+      }
+
+      pages[pages.length - 1].push({ node: section, children: chunk, isContinuation });
       currentH  += used;
       remaining  = remaining.slice(chunk.length);
 
       if (remaining.length > 0) {
         pages.push([]);
         currentH       = 0;
-        isContinuation = true;   // next chunk of this section has no header
+        isContinuation = true;
       }
     }
   }

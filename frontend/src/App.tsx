@@ -48,17 +48,19 @@ export default function App() {
   // ── 3. useMemo (uses layout + sectionHeights) ───────────
   const pages = useMemo(() => {
     if (Object.keys(sectionHeights).length === 0) {
-      // before first measurement: all sections on page 1
       return [numberedDoc.children.map((node: any) => ({
-        node,
-        children: node.children,
-        isContinuation: false,
+        node, children: node.children, isContinuation: false,
       }))];
     }
     return paginateByHeights(
-      numberedDoc, sectionHeights, childHeights, headerHeights, TITLE_RESERVED
+      numberedDoc,
+      sectionHeights,
+      childHeights,
+      headerHeights,
+      TITLE_RESERVED,
+      layout.columns    // ← add this
     );
-  }, [numberedDoc, sectionHeights, childHeights, headerHeights]);
+  }, [numberedDoc, sectionHeights, childHeights, headerHeights, layout.columns]);
 
   // ── 4. useLayoutEffect (uses layout + doc) ──────────────
   useLayoutEffect(() => {
