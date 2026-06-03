@@ -1,6 +1,7 @@
 import { Fragment, useRef } from "react";
 import type { PageSection } from "../utils/paginateDocument";
 import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
+import { TrashIcon } from "../components/TrashIcon";
 import "katex/dist/katex.min.css";
 
 // True while dragging an image — either a sidebar upload (`image::`) or one
@@ -43,6 +44,34 @@ function DropZone({ id }: any) {
   );
 }
 
+/* Vertical drop slot that appears to the left/right of images inside a figure
+   container while an image is being dragged. */
+function FigureDropZone({ id }: any) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const { active } = useDndContext();
+  const dragging = isImageDragId(active?.id);
+
+  if (!dragging) {
+    return <div ref={setNodeRef} style={{ width: 0 }} />;
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        width: isOver ? 30 : 16,
+        alignSelf: "stretch",
+        minHeight: 48,
+        flexShrink: 0,
+        borderRadius: 4,
+        background: isOver ? "rgba(74,144,226,0.25)" : "rgba(74,144,226,0.08)",
+        border: `1px dashed ${isOver ? "#4a90e2" : "rgba(74,144,226,0.4)"}`,
+        transition: "width 0.08s ease"
+      }}
+    />
+  );
+}
+
 /* -----------------------------
    TRASH BUTTON (right-aligned)
 ----------------------------- */
@@ -64,21 +93,7 @@ function TrashButton({ onClick, label }: any) {
         cursor: "pointer"
       }}
     >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="3 6 5 6 21 6" />
-        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-        <path d="M10 11v6M14 11v6" />
-        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-      </svg>
+      <TrashIcon />
     </button>
   );
 }
@@ -138,7 +153,7 @@ function Paragraph({
    single caption. A single image is centered; resizing controls how wide each
    image is (and therefore whether another image can fit beside it).
 ----------------------------- */
-function DocImage({ figureId, image }: any) {
+function DocImage({ figureId, image, deleteFigureImage }: any) {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: `docimg::${figureId}::${image.id}`
   });
@@ -148,8 +163,36 @@ function DocImage({ figureId, image }: any) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      style={{ flex: 1, minWidth: 0, cursor: "grab", opacity: isDragging ? 0.4 : 1 }}
+      style={{
+        flex: 1,
+        minWidth: 0,
+        position: "relative",
+        cursor: "grab",
+        opacity: isDragging ? 0.4 : 1
+      }}
     >
+      {/* per-image trash; stops the pointer from starting a drag */}
+      <button
+        onClick={() => deleteFigureImage(figureId, image.id)}
+        onPointerDown={(e) => e.stopPropagation()}
+        title="Delete image"
+        style={{
+          position: "absolute",
+          top: 4,
+          right: 4,
+          display: "inline-flex",
+          padding: 3,
+          background: "rgba(0,0,0,0.6)",
+          color: "white",
+          border: "none",
+          borderRadius: 4,
+          cursor: "pointer",
+          zIndex: 2
+        }}
+      >
+        <TrashIcon size={14} />
+      </button>
+
       <img
         src={image.src}
         alt=""
@@ -162,23 +205,17 @@ function DocImage({ figureId, image }: any) {
 
 function FigureBlock({
   node,
-  deleteNodeById,
   updateFigureCaption,
   updateFigureWidth,
+  deleteFigureImage,
   figureNumber
 }: any) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const { active } = useDndContext();
-  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `fig::${node.id}` });
 
   const images: any[] = node.images ?? [];
   const width: number = node.width ?? 0.6;        // per-image fraction of column
   const n = images.length || 1;
   const containerFrac = Math.min(1, n * width);
-
-  // Room for one more image at the current size?
-  const hasRoom = (n + 1) * width <= 1 + 1e-6;
-  const dragging = isImageDragId(active?.id);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -199,44 +236,31 @@ function FigureBlock({
     window.addEventListener("mouseup", onUp);
   }
 
-  const borderColor =
-    dragging && isOver ? (hasRoom ? "#4a90e2" : "#c0392b") : "#ccc";
-
   return (
     <div ref={wrapperRef} style={{ margin: "12px 0" }}>
       <div
-        ref={setDropRef}
         style={{
           width: `${containerFrac * 100}%`,
           margin: "0 auto",
-          border: `${dragging && isOver ? 2 : 1}px solid ${borderColor}`,
+          border: "1px solid #ccc",
           background: "white",
           padding: 8,
           position: "relative",
           boxSizing: "border-box"
         }}
       >
-        <button
-          onClick={() => deleteNodeById(node.id)}
-          title="Remove figure"
-          style={{
-            position: "absolute",
-            top: 4,
-            left: 4,
-            background: "red",
-            color: "white",
-            border: "none",
-            padding: "2px 6px",
-            zIndex: 2,
-            cursor: "pointer"
-          }}
-        >
-          ×
-        </button>
-
-        <div style={{ display: "flex", gap: 8 }}>
-          {images.map((im) => (
-            <DocImage key={im.id} figureId={node.id} image={im} />
+        {/* images, with a drop slot to the left/right of each one */}
+        <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+          <FigureDropZone id={`figdz::${node.id}::0`} />
+          {images.map((im, i) => (
+            <Fragment key={im.id}>
+              <DocImage
+                figureId={node.id}
+                image={im}
+                deleteFigureImage={deleteFigureImage}
+              />
+              <FigureDropZone id={`figdz::${node.id}::${i + 1}`} />
+            </Fragment>
           ))}
         </div>
 
@@ -347,12 +371,12 @@ function TableBlock(props: any) {
 
   return (
     <div style={{ marginTop: 20 }}>
-      <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
         <button onClick={() => addTableRow(node.id)}>+ Row</button>
         <button onClick={() => deleteTableRow(node.id)}>– Row</button>
         <button onClick={() => addTableColumn(node.id)}>+ Column</button>
         <button onClick={() => deleteTableColumn(node.id)}>– Column</button>
-        <button onClick={() => deleteNodeById(node.id)}>Delete</button>
+        <TrashButton onClick={() => deleteNodeById(node.id)} label="Delete table" />
       </div>
 
       <table
@@ -435,6 +459,7 @@ function Subsection({
   updateSectionTitle,
   deleteNodeById,
   moveSubsection,
+  addSubsubsection,
   children
 }: any) {
   return (
@@ -463,6 +488,48 @@ function Subsection({
         <TrashButton
           onClick={() => deleteNodeById(node.id)}
           label="Delete subsection"
+        />
+      </div>
+
+      {children}
+
+      <div style={{ marginTop: 10 }}>
+        <button onClick={() => addSubsubsection(node.id)}>+ Subsubsection</button>
+      </div>
+    </div>
+  );
+}
+
+/* -----------------------------
+   SUBSUBSECTION (NO DND)
+----------------------------- */
+function Subsubsection({
+  node,
+  editingId,
+  setEditingId,
+  updateSectionTitle,
+  deleteNodeById,
+  children
+}: any) {
+  return (
+    <div style={{ marginTop: 16, marginLeft: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {editingId === node.id ? (
+          <input
+            autoFocus
+            value={node.title}
+            onChange={(e) => updateSectionTitle(node.id, e.target.value)}
+            onBlur={() => setEditingId(null)}
+          />
+        ) : (
+          <h4 style={{ margin: 0 }} onClick={() => setEditingId(node.id)}>
+            {node.title}
+          </h4>
+        )}
+
+        <TrashButton
+          onClick={() => deleteNodeById(node.id)}
+          label="Delete subsubsection"
         />
       </div>
 
@@ -591,9 +658,17 @@ export function DocumentRenderer(props: any) {
                   )}
                   {child.type === "subsection" && (
                     <Subsection node={child} {...props}>
-                      {child.children.map((p: any) => (
-                        <Paragraph key={p.id} node={p} {...props} />
-                      ))}
+                      {(child.children ?? []).map((sub: any) =>
+                        sub.type === "subsubsection" ? (
+                          <Subsubsection key={sub.id} node={sub} {...props}>
+                            {(sub.children ?? []).map((p: any) => (
+                              <Paragraph key={p.id} node={p} {...props} />
+                            ))}
+                          </Subsubsection>
+                        ) : (
+                          <Paragraph key={sub.id} node={sub} {...props} />
+                        )
+                      )}
                     </Subsection>
                   )}
                   {child.type === "table" && (
@@ -602,9 +677,9 @@ export function DocumentRenderer(props: any) {
                   {child.type === "figure" && (
                     <FigureBlock
                       node={child}
-                      deleteNodeById={props.deleteNodeById}
                       updateFigureCaption={props.updateFigureCaption}
                       updateFigureWidth={props.updateFigureWidth}
+                      deleteFigureImage={props.deleteFigureImage}
                       figureNumber={++figureCounter}
                     />
                   )}

@@ -18,9 +18,22 @@ export function numberDocument(doc: any) {
         if (child.type === "subsection") {
           subsectionNumber++;
 
+          let subsubsectionNumber = 0;
+          const subChildren = (child.children ?? []).map((gc: any) => {
+            if (gc.type === "subsubsection") {
+              subsubsectionNumber++;
+              return {
+                ...gc,
+                title: `${sectionNumber}.${subsectionNumber}.${subsubsectionNumber} ${stripPrefix(gc.title)}`
+              };
+            }
+            return gc;
+          });
+
           return {
             ...child,
-            title: `${sectionNumber}.${subsectionNumber} ${stripPrefix(child.title)}`
+            title: `${sectionNumber}.${subsectionNumber} ${stripPrefix(child.title)}`,
+            children: subChildren
           };
         }
 

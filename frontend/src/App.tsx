@@ -3,6 +3,7 @@ import { sampleDocument } from "./data/sampleDocument";
 import { DocumentRenderer } from "./renderer/DocumentRenderer";
 import type { DocumentNode } from "./types/document";
 import { Page } from "./components/Page";
+import { TrashIcon } from "./components/TrashIcon";
 import { numberDocument } from "./utils/numberDocument";
 import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
@@ -50,16 +51,17 @@ function DraggableImage({ img, onDelete }: any) {
           position: "absolute",
           top: 4,
           right: 4,
+          display: "inline-flex",
           background: "rgba(0,0,0,0.6)",
           color: "white",
           border: "none",
           borderRadius: 4,
-          padding: "0 6px",
+          padding: 3,
           cursor: "pointer",
           zIndex: 1
         }}
       >
-        ×
+        <TrashIcon size={14} />
       </button>
 
       <img
@@ -139,15 +141,17 @@ function removeFigureImage(node: any, figureId: string, imageId: string): any {
   return { ...node, children };
 }
 
-function addFigureImage(node: any, figureId: string, src: string): any {
+// Insert an image into a figure at a given slot, shrinking every image just
+// enough that they all still fit across the column width.
+function insertFigureImageAt(node: any, figureId: string, index: number, src: string): any {
   if (node.type === "figure" && node.id === figureId) {
-    return {
-      ...node,
-      images: [...(node.images ?? []), { id: crypto.randomUUID(), src }]
-    };
+    const imgs = [...(node.images ?? [])];
+    imgs.splice(Math.min(Math.max(index, 0), imgs.length), 0, { id: crypto.randomUUID(), src });
+    const width = Math.min(node.width ?? DEFAULT_FIG_WIDTH, 1 / imgs.length);
+    return { ...node, images: imgs, width };
   }
   if (!node.children) return node;
-  return { ...node, children: node.children.map((c: any) => addFigureImage(c, figureId, src)) };
+  return { ...node, children: node.children.map((c: any) => insertFigureImageAt(c, figureId, index, src)) };
 }
 
 function insertFigure(node: any, containerId: string, index: number, src: string): any {
@@ -258,11 +262,12 @@ export default function App() {
 
   const rendererProps = {
     editingId, setEditingId, updateTextById, updateSectionTitle,
-    addSubsection, addTable, updateTableCell,
+    addSubsection, addSubsubsection, addTable, updateTableCell,
     deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
     addTableColumn, updateTableColWidths, addSectionAfter,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
+    deleteFigureImage,
   };
 
   // ── 2. Derived values ───────────────────────────────────
@@ -460,6 +465,11 @@ export default function App() {
     setImages((prev) => prev.filter((i) => i.id !== imageId));
   }
 
+  // Delete a single image from a figure (drops the figure if it was the last).
+  function deleteFigureImage(figureId: string, imageId: string) {
+    setDoc((prev) => removeFigureImage(prev, figureId, imageId));
+  }
+
   // -----------------------------
   // SUBSECTION
   // -----------------------------
@@ -492,6 +502,30 @@ export default function App() {
         };
       }
 
+      return node;
+    }
+
+    setDoc((prev) => update(prev));
+  }
+
+  // Append a subsubsection to the given subsection.
+  function addSubsubsection(subsectionId: string) {
+    const newNode = {
+      id: crypto.randomUUID(),
+      type: "subsubsection",
+      title: "New Subsubsection",
+      children: [
+        { id: crypto.randomUUID(), type: "paragraph", text: lorem_full }
+      ]
+    };
+
+    function update(node: any): any {
+      if (node.id === subsectionId && node.type === "subsection") {
+        return { ...node, children: [...(node.children ?? []), newNode] };
+      }
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
       return node;
     }
 
@@ -902,22 +936,28 @@ export default function App() {
       return;
     }
 
-    // Merge into an existing figure container, if there is room for it.
-    if (overId.startsWith("fig::")) {
-      const figureId = overId.slice("fig::".length);
-      if (isDocImg && figureId === originFig) return;          // onto itself
+    // Drop into a left/right slot of a figure → add the image there, shrinking
+    // the others so everything fits across the column.
+    if (overId.startsWith("figdz::")) {
+      const [, figureId, idxStr] = overId.split("::");
+      let index = Number(idxStr);
 
-      const fig = findFigureNode(doc, figureId);
-      if (!fig) return;
-      const count = (fig.images ?? []).length;
-      const w = fig.width ?? DEFAULT_FIG_WIDTH;
-      if ((count + 1) * w > 1 + 1e-6) return;                  // no space → reject
+      // Reordering within the same figure: account for the removed image.
+      if (isDocImg && originFig === figureId) {
+        const fig = findFigureNode(doc, figureId);
+        const imgs = fig?.images ?? [];
+        if (imgs.length <= 1) return;                           // nothing to do
+        const fromPos = imgs.findIndex((im: any) => im.id === originImg);
+        if (fromPos === -1) return;
+        if (index === fromPos || index === fromPos + 1) return; // dropped on itself
+        if (index > fromPos) index -= 1;
+      }
 
       const fromFig = originFig, fromImg = originImg;
       setDoc((prev) => {
         let tree = prev;
         if (isDocImg && fromFig && fromImg) tree = removeFigureImage(tree, fromFig, fromImg);
-        return addFigureImage(tree, figureId, dropSrc);
+        return insertFigureImageAt(tree, figureId, index, dropSrc);
       });
       return;
     }
