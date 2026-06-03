@@ -1,5 +1,6 @@
 import { Fragment, useRef } from "react";
 import type { Chunk } from "../utils/paginateDocument";
+import { isContainerType } from "../utils/paginateDocument";
 import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
 import { TrashIcon } from "../components/TrashIcon";
 import "katex/dist/katex.min.css";
@@ -639,6 +640,15 @@ function containerInner(chunk: Chunk, props: any) {
   const node = chunk.node;
   const fullChildren = node.children ?? [];
 
+  // Only show the trailing "append to this container" zone when the block
+  // actually rendered last in this chunk is a leaf. If it's another container,
+  // that container already renders its own end zone at this spot, so an outer
+  // one would just stack up dead/redundant slots beneath the trailing
+  // "+ …" buttons (e.g. a section-level zone under "+ Subsubsection").
+  const lastRendered = chunk.children[chunk.children.length - 1];
+  const showEndZone =
+    chunk.isLast && (!lastRendered || !isContainerType(lastRendered.node.type));
+
   return (
     <>
       {chunk.children.map((ch) => {
@@ -650,7 +660,7 @@ function containerInner(chunk: Chunk, props: any) {
           </Fragment>
         );
       })}
-      {chunk.isLast && (
+      {showEndZone && (
         <DropZone id={`dz::${node.id}::${fullChildren.length}`} />
       )}
     </>
