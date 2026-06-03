@@ -5,7 +5,7 @@ import type { DocumentNode } from "./types/document";
 import { Page } from "./components/Page";
 import {numberDocument} from "./utils/numberDocument";
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { paginateByHeights } from "./utils/paginateDocument";
+import { paginateByHeights, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
 import "katex/dist/katex.min.css";
 
@@ -30,6 +30,8 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
   const [sectionHeights, setSectionHeights] = useState<Record<string, number>>({});
+  const [childHeights,   setChildHeights]   = useState<Record<string, number>>({});
+  const [headerHeights,  setHeaderHeights]  = useState<Record<string, number>>({});
 
   // layout must be declared before useLayoutEffect references it
   const [layout, setLayout] = useState({
@@ -45,25 +47,51 @@ export default function App() {
 
   // ── 3. useMemo (uses layout + sectionHeights) ───────────
   const pages = useMemo(() => {
-    const hasMeasurements = Object.keys(sectionHeights).length > 0;
-    if (!hasMeasurements) return [numberedDoc.children];
-    return paginateByHeights(numberedDoc, sectionHeights, TITLE_RESERVED);
-  }, [numberedDoc, sectionHeights]);
+    if (Object.keys(sectionHeights).length === 0) {
+      // before first measurement: all sections on page 1
+      return [numberedDoc.children.map((node: any) => ({
+        node,
+        children: node.children,
+        isContinuation: false,
+      }))];
+    }
+    return paginateByHeights(
+      numberedDoc, sectionHeights, childHeights, headerHeights, TITLE_RESERVED
+    );
+  }, [numberedDoc, sectionHeights, childHeights, headerHeights]);
 
   // ── 4. useLayoutEffect (uses layout + doc) ──────────────
   useLayoutEffect(() => {
-    const newHeights: Record<string, number> = {};
-    document.querySelectorAll<HTMLElement>("[data-section-id]").forEach((el) => {
-      const id = el.dataset.sectionId;
-      if (id) newHeights[id] = el.getBoundingClientRect().height;
-    });
-    setSectionHeights((prev) => {
-      const stable =
-        Object.keys(newHeights).length === Object.keys(prev).length &&
-        Object.entries(newHeights).every(([k, v]) => Math.abs((prev[k] ?? -1) - v) < 1);
-      return stable ? prev : newHeights;
-    });
+    const sh: Record<string, number> = {};
+    const ch: Record<string, number> = {};
+    const hh: Record<string, number> = {};
+
+    document.querySelectorAll<HTMLElement>("[data-section-id]")
+      .forEach(el => { sh[el.dataset.sectionId!] = el.getBoundingClientRect().height; });
+
+    document.querySelectorAll<HTMLElement>("[data-child-id]")
+      .forEach(el => { ch[el.dataset.childId!] = el.getBoundingClientRect().height; });
+
+    document.querySelectorAll<HTMLElement>("[data-section-header-id]")
+      .forEach(el => { hh[el.dataset.sectionHeaderId!] = el.getBoundingClientRect().height; });
+
+    setSectionHeights(prev => heightsUnchanged(prev, sh) ? prev : sh);
+    setChildHeights  (prev => heightsUnchanged(prev, ch) ? prev : ch);
+    setHeaderHeights (prev => heightsUnchanged(prev, hh) ? prev : hh);
+
   }, [doc, layout.textWidth, layout.fontSize, layout.lineHeight, layout.columns]);
+
+  // per-page figure start offset so numbers are globally correct
+  const figureStartPerPage = useMemo(() => {
+    let count = 0;
+    return pages.map(pageSections => {
+      const start = count;
+      pageSections.forEach(ps =>
+        ps.children.forEach((c: any) => { if (c.type === "figure") count++; })
+      );
+      return start;
+    });
+  }, [pages]);
 
   // -----------------------------
   // DND SENSORS
@@ -747,7 +775,7 @@ export default function App() {
                   </button>
                 </div>
 
-                {pages.map((pageNodes: any[], pageIndex: number) => (
+                {pages.map((pageSections, pageIndex: number) => (
                   <Page
                     key={pageIndex}
                     pageNumber={pageIndex + 1}
@@ -785,7 +813,7 @@ export default function App() {
                     )}
 
                     <DocumentRenderer
-                      node={{ children: pageNodes }}
+                      pageSections={pageSections}
                       editingId={editingId}
                       setEditingId={setEditingId}
                       updateTextById={updateTextById}

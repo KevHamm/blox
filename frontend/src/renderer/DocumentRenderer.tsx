@@ -249,52 +249,51 @@ function Subsection({
 /* -----------------------------
    SECTION (NO DND)
 ----------------------------- */
-function Section({
-  node,
-  index,
-  editingId,
-  setEditingId,
-  updateSectionTitle,
-  addSubsection,
-  addTable,
-  addFigure,
-  deleteNodeById,
-  moveSection,
-  children
-}: any) {
+function Section({ node, isContinuation = false, ...rest }: any) {
+  const {
+    editingId, setEditingId, updateSectionTitle,
+    addSubsection, addTable, addFigure,
+    deleteNodeById, moveSection, children
+  } = rest;
+
   return (
+    // ① tag the whole section
     <div data-section-id={node.id} style={{ marginBottom: 30 }}>
-      <div style={{ display: "flex", alignItems: "center" }}>
 
-        {/* MOVE BUTTONS */}
-        <div style={{ display: "flex", gap: 6, marginRight: 10 }}>
-          <button onClick={() => moveSection(node.id, -1)}>↑</button>
-          <button onClick={() => moveSection(node.id, 1)}>↓</button>
-        </div>
-
-        {editingId === node.id ? (
-          <input
-            value={node.title}
-            onChange={(e) => updateSectionTitle(node.id, e.target.value)}
-            onBlur={() => setEditingId(null)}
-          />
-        ) : (
-          <h2 onClick={() => setEditingId(node.id)}>
-            {node.sectionNumber} {node.title}
-          </h2>
-        )}
-
-        <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
-        <button onClick={() => addTable(node.id)}>+ Table</button>
-        <button onClick={() => addFigure(node.id)}>+ Figure</button>
-
-        <button
-          onClick={() => deleteNodeById(node.id)}
-          style={{ marginLeft: 10, background: "red", color: "white" }}
+      {/* ② tag just the header row; hide it on continuation pages */}
+      {!isContinuation && (
+        <div
+          data-section-header-id={node.id}
+          style={{ display: "flex", alignItems: "center" }}
         >
-          Delete Section
-        </button>
-      </div>
+          <div style={{ display: "flex", gap: 6, marginRight: 10 }}>
+            <button onClick={() => moveSection(node.id, -1)}>↑</button>
+            <button onClick={() => moveSection(node.id,  1)}>↓</button>
+          </div>
+
+          {editingId === node.id ? (
+            <input
+              value={node.title}
+              onChange={e => updateSectionTitle(node.id, e.target.value)}
+              onBlur={() => setEditingId(null)}
+            />
+          ) : (
+            <h2 onClick={() => setEditingId(node.id)}>
+              {node.sectionNumber} {node.title}
+            </h2>
+          )}
+
+          <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
+          <button onClick={() => addTable(node.id)}>+ Table</button>
+          <button onClick={() => addFigure(node.id)}>+ Figure</button>
+          <button
+            onClick={() => deleteNodeById(node.id)}
+            style={{ marginLeft: 10, background: "red", color: "white" }}
+          >
+            Delete Section
+          </button>
+        </div>
+      )}
 
       {children}
     </div>
@@ -307,99 +306,44 @@ function Section({
 export function DocumentRenderer(props: any) {
   const { setNodeRef } = useDroppable({ id: "document-root" });
 
-  let figureCounter = 0;
+  // figure numbering continues across sections on the same page
+  let figureCounter = props.figureStart ?? 0;
 
   return (
     <div ref={setNodeRef}>
-      {props.node.children.map((c: any, index: number) => (
+      {(props.pageSections as PageSection[]).map((ps, psIndex) => (
         <Section
-          key={c.id}
-          node={c}
-          index={index}
-          editingId={props.editingId}
-          setEditingId={props.setEditingId}
-          updateSectionTitle={props.updateSectionTitle}
-          addSubsection={props.addSubsection}
-          addTable={props.addTable}
-          addFigure={props.addFigure}
-          deleteNodeById={props.deleteNodeById}
-          moveSection={props.moveSection}
-          moveSubsection={props.moveSubsection}
+          key={`${ps.node.id}-${psIndex}`}
+          node={ps.node}
+          isContinuation={ps.isContinuation}
+          {...props}   // spread all callbacks through
         >
-          {(() => {
-            return c.children.map((child: any) => {
-              if (child.type === "paragraph") {
-                return (
-                  <Paragraph
-                    key={child.id}
-                    node={child}
-                    editingId={props.editingId}
-                    setEditingId={props.setEditingId}
-                    updateTextById={props.updateTextById}
-                    lineHeight={props.lineHeight}
-                    fontSize={props.fontSize}
-                  />
-                );
-              }
-
-            if (child.type === "subsection") {
-              const subsectionIndex = c.children
-                .filter((x: any) => x.type === "subsection")
-                .findIndex((x: any) => x.id === child.id);
-
-              return (
-                <Subsection
-                  key={child.id}
-                  node={child}
-                  sectionIndex={index}
-                  subsectionIndex={subsectionIndex}
-                  editingId={props.editingId}
-                  setEditingId={props.setEditingId}
-                  updateSectionTitle={props.updateSectionTitle}
-                  deleteNodeById={props.deleteNodeById}
-                  moveSubsection={props.moveSubsection}
-                  lineHeight={props.lineHeight}
-                  fontSize={props.fontSize}
-                >
+          {ps.children.map((child: any) => (
+            // ③ tag every child so we can measure it independently
+            <div key={child.id} data-child-id={child.id}>
+              {child.type === "paragraph" && (
+                <Paragraph node={child} {...props} />
+              )}
+              {child.type === "subsection" && (
+                <Subsection node={child} {...props}>
                   {child.children.map((p: any) => (
-                    <Paragraph
-                      key={p.id}
-                      node={p}
-                      editingId={props.editingId}
-                      setEditingId={props.setEditingId}
-                      updateTextById={props.updateTextById}
-                      lineHeight={props.lineHeight}
-                      fontSize={props.fontSize}
-                />
-              ))}
-            </Subsection>
-          );
-        }
-
-            if (child.type === "table") {
-              return (
-                <TableBlock
-                  key={child.id}
-                  {...props}
-                  node={child}
-                />
-              );
-            }
-
-            if (child.type === "figure") {
-              return (
+                    <Paragraph key={p.id} node={p} {...props} />
+                  ))}
+                </Subsection>
+              )}
+              {child.type === "table" && (
+                <TableBlock node={child} {...props} />
+              )}
+              {child.type === "figure" && (
                 <FigureBlock
-                  key={child.id}
                   node={child}
                   deleteNodeById={props.deleteNodeById}
                   updateFigureCaption={props.updateFigureCaption}
                   figureNumber={++figureCounter}
                 />
-              );
-            }
-            return null;
-          });
-         })()}
+              )}
+            </div>
+          ))}
         </Section>
       ))}
     </div>
