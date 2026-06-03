@@ -214,20 +214,23 @@ function FigureBlock({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const images: any[] = node.images ?? [];
-  const width: number = node.width ?? 0.6;        // per-image fraction of column
+  const width: number = node.width ?? 1;          // remembered per-image width
   const n = images.length || 1;
-  const containerFrac = Math.min(1, n * width);
+  // Cap the visible size so n images always fit; the stored width is preserved
+  // so removing images restores the previous (wider) size.
+  const perImage = Math.min(width, 1 / n);
+  const containerFrac = n * perImage;
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     const colW = wrapperRef.current?.offsetWidth || 1;
     const startX = e.clientX;
-    const startW = width;
+    const startW = perImage;   // start from the currently visible size
 
     function onMove(ev: MouseEvent) {
       const dw = (ev.clientX - startX) / (colW * n);
-      updateFigureWidth(node.id, clampFrac(startW + dw, 0.1, 1 / n));
+      updateFigureWidth(node.id, clampFrac(startW + dw, 0.1, 1));
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove);

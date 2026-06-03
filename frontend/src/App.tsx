@@ -94,8 +94,19 @@ function DraggableImage({ img, onDelete }: any) {
 const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
 
-// Default per-image width (fraction of the text column) for a new figure.
-const DEFAULT_FIG_WIDTH = 0.6;
+// A freshly dropped image fills the whole column width.
+const DEFAULT_FIG_WIDTH = 1;
+
+// Prefer real drop slots over the enclosing column/document droppables, so a
+// zone always wins (and highlights/accepts) when the pointer is inside it.
+function dropCollision(args: any) {
+  const hits = pointerWithin(args);
+  const zones = hits.filter((h: any) => {
+    const id = String(h.id);
+    return id.startsWith("dz::") || id.startsWith("figdz::");
+  });
+  return zones.length ? zones : hits;
+}
 
 /* -----------------------------------------------------------------
    Pure document-tree helpers for figure (image container) editing.
@@ -141,14 +152,15 @@ function removeFigureImage(node: any, figureId: string, imageId: string): any {
   return { ...node, children };
 }
 
-// Insert an image into a figure at a given slot, shrinking every image just
-// enough that they all still fit across the column width.
+// Insert an image into a figure at a given slot. The stored `width` (the
+// intended per-image width) is left untouched — the renderer caps the visible
+// size at 1/n so the row always fits, and the remembered width is restored
+// when images are removed again.
 function insertFigureImageAt(node: any, figureId: string, index: number, src: string): any {
   if (node.type === "figure" && node.id === figureId) {
     const imgs = [...(node.images ?? [])];
     imgs.splice(Math.min(Math.max(index, 0), imgs.length), 0, { id: crypto.randomUUID(), src });
-    const width = Math.min(node.width ?? DEFAULT_FIG_WIDTH, 1 / imgs.length);
-    return { ...node, images: imgs, width };
+    return { ...node, images: imgs };
   }
   if (!node.children) return node;
   return { ...node, children: node.children.map((c: any) => insertFigureImageAt(c, figureId, index, src)) };
@@ -195,8 +207,28 @@ function insertTableAt(node: any, containerId: string, index: number): any {
   return { ...node, children: node.children.map((c: any) => insertTableAt(c, containerId, index)) };
 }
 
-/* A draggable block in the "Blox" sidebar (e.g. a table). */
-function DraggableBlock({ id, label }: any) {
+/* Small line-art table icon for the Blox palette. */
+function TableGlyph() {
+  return (
+    <svg
+      width="30"
+      height="30"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="1" />
+      <line x1="3" y1="9.5" x2="21" y2="9.5" />
+      <line x1="3" y1="14.5" x2="21" y2="14.5" />
+      <line x1="9" y1="4" x2="9" y2="20" />
+      <line x1="15" y1="4" x2="15" y2="20" />
+    </svg>
+  );
+}
+
+/* A draggable block in the "Blox" palette: an icon with a label below it. */
+function DraggableBlock({ id, label, icon }: any) {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id });
   return (
     <div
@@ -206,14 +238,19 @@ function DraggableBlock({ id, label }: any) {
       style={{
         border: "1px solid #ccc",
         borderRadius: 6,
-        padding: "10px 12px",
+        padding: "10px 6px",
         background: "#fafafa",
         cursor: "grab",
-        textAlign: "center",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 4,
+        color: "#333",
         opacity: isDragging ? 0.5 : 1
       }}
     >
-      {label}
+      {icon}
+      <span style={{ fontSize: 12 }}>{label}</span>
     </div>
   );
 }
@@ -1017,7 +1054,7 @@ export default function App() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={pointerWithin}
+      collisionDetection={dropCollision}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={() => { setActiveDragSrc(null); setActiveBlock(null); }}
@@ -1103,7 +1140,9 @@ export default function App() {
           <hr />
 
           <h3 style={{ marginBottom: 0 }}>Blox</h3>
-          <DraggableBlock id="block::table" label="Table" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <DraggableBlock id="block::table" label="Table" icon={<TableGlyph />} />
+          </div>
 
           <div style={{ marginTop: "auto"}}>
             <hr />
