@@ -11,17 +11,63 @@ import "katex/dist/katex.min.css";
 
 import {
   DndContext,
+  DragOverlay,
   pointerWithin,
   PointerSensor,
   useSensor,
-  useSensors
+  useSensors,
+  useDraggable,
+  MeasuringStrategy
 } from "@dnd-kit/core";
 
 import {
-  PAGE_WIDTH,
   CONTENT_WIDTH,
   COLUMN_GAP
 } from "./utils/pageConfig";
+
+/* A sidebar image the user can drag into the document. */
+function DraggableImage({ img }: any) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `image::${img.id}`
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{
+        textAlign: "center",
+        cursor: "grab",
+        opacity: isDragging ? 0.4 : 1
+      }}
+    >
+      <img
+        src={img.src}
+        alt={img.name}
+        draggable={false}
+        style={{
+          width: "100%",
+          height: "auto",
+          borderRadius: 4,
+          border: "1px solid #ddd",
+          display: "block",
+          pointerEvents: "none"
+        }}
+      />
+      <div
+        style={{
+          marginTop: 4,
+          fontSize: 12,
+          color: "#444",
+          wordBreak: "break-word"
+        }}
+      >
+        {img.name}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   // ── 1. All state first ──────────────────────────────────
@@ -34,6 +80,8 @@ export default function App() {
 
   // Images uploaded via the right sidebar (preview gallery).
   const [images, setImages] = useState<{ id: string; src: string; name: string }[]>([]);
+  // The image currently being dragged into the document (for the drag overlay).
+  const [activeImageId, setActiveImageId] = useState<string | null>(null);
 
 
   // layout must be declared before useLayoutEffect references it
@@ -203,35 +251,6 @@ export default function App() {
   // -----------------------------
   // INSERT SECTION
   // -----------------------------
-  function insertNode(type: string) {
-
-    setDoc((prev) => {
-      const newNode =
-        type === "section"
-          ? {
-              id: crypto.randomUUID(),
-              type: "section",
-              title: "Section",
-              children: [
-                {
-                  id: crypto.randomUUID(),
-                  type: "paragraph",
-                  text: lorem
-                }
-              ]
-            }
-          : {
-              id: crypto.randomUUID(),
-              type: "paragraph",
-              text: lorem_full
-            };
-
-      return {
-        ...prev,
-        children: [...prev.children, newNode]
-      };
-    });
-  }
 
   // Insert a fresh section immediately after the given one.
   function addSectionAfter(sectionId: string) {
@@ -252,6 +271,48 @@ export default function App() {
       children.splice(index + 1, 0, newSection);
       return { ...prev, children };
     });
+  }
+
+  // Insert a fresh section at the very top of the document (under the title).
+  function addSectionAtStart() {
+    setDoc((prev) => ({
+      ...prev,
+      children: [
+        {
+          id: crypto.randomUUID(),
+          type: "section",
+          title: "Section",
+          children: [
+            { id: crypto.randomUUID(), type: "paragraph", text: lorem }
+          ]
+        },
+        ...prev.children
+      ]
+    }));
+  }
+
+  // Drop an uploaded image into a section's children at a given index.
+  function dropImageAt(sectionId: string, index: number, image: { src: string; name: string }) {
+    const figure = {
+      id: crypto.randomUUID(),
+      type: "figure",
+      src: image.src,
+      caption: image.name
+    };
+
+    function update(node: any): any {
+      if (node.id === sectionId) {
+        const children = [...(node.children ?? [])];
+        children.splice(index, 0, figure);
+        return { ...node, children };
+      }
+      if (node.children) {
+        return { ...node, children: node.children.map(update) };
+      }
+      return node;
+    }
+
+    setDoc((prev) => update(prev));
   }
 
   // -----------------------------
@@ -630,19 +691,37 @@ export default function App() {
   // -----------------------------
   // DRAG END
   // -----------------------------
+  function handleDragStart(event: any) {
+    const id = String(event.active.id);
+    setActiveImageId(id.startsWith("image::") ? id.slice("image::".length) : null);
+  }
+
   function handleDragEnd(event: any) {
     const { active, over } = event;
+    setActiveImageId(null);
 
-    if (!over || active.id === over.id ) return;
+    if (!over) return;
+
+    const activeId = String(active.id);
+    const overId   = String(over.id);
+
+    // An image from the sidebar dropped onto a document drop zone.
+    if (activeId.startsWith("image::") && overId.startsWith("dz::")) {
+      const imageId = activeId.slice("image::".length);
+      const image   = images.find((i) => i.id === imageId);
+      if (!image) return;
+
+      const [, sectionId, idxStr] = overId.split("::");
+      dropImageAt(sectionId, Number(idxStr), image);
+      return;
+    }
+
+    // Existing top-level section reordering.
+    if (activeId === overId) return;
 
     setDoc((prev) => {
-      const oldIndex = prev.children.findIndex(
-       (c: any) => c.id === active.id
-      );
-
-      const newIndex = prev.children.findIndex(
-        (c: any) => c.id === over.id
-      );
+      const oldIndex = prev.children.findIndex((c: any) => c.id === active.id);
+      const newIndex = prev.children.findIndex((c: any) => c.id === over.id);
 
       if (oldIndex === -1 || newIndex === -1) return prev;
 
@@ -650,10 +729,7 @@ export default function App() {
       const [moved] = updated.splice(oldIndex, 1);
       updated.splice(newIndex, 0, moved);
 
-      return {
-        ...prev,
-        children: updated
-      };
+      return { ...prev, children: updated };
     });
   }
 
@@ -664,7 +740,10 @@ export default function App() {
     <DndContext
       sensors={sensors}
       collisionDetection={pointerWithin}
+      onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveImageId(null)}
+      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
       <div
         style={{
@@ -783,40 +862,29 @@ export default function App() {
           style={{
             flex: 1,
             display: "flex",
-            justifyContent: "center",
-            padding: 40
+            flexDirection: "column",
+            alignItems: "center",
+            padding: 40,
+            overflowY: "auto"
           }}
         >
-          <div
-            style={{
-              flex: 1,
-              padding: 40,
-              overflowY: "auto"
-            }}
-          >
-                {numberedDoc.children.length === 0 && (
-                  <div style={{ width: PAGE_WIDTH, margin: "20px auto", textAlign: "center" }}>
-                    <button
-                      onClick={() => insertNode("section")}
-                      style={{ marginBottom: 20, padding: "8px 12px" }}
-                    >
-                      + Add Section
-                    </button>
-                  </div>
-                )}
-
                 {pages.map((cols: any[], pageIndex: number) => (
                   <Page key={pageIndex} pageNumber={pageIndex + 1} totalPages={pages.length}>
 
                     {/* Title always spans full width above the columns */}
                     {pageIndex === 0 && (
-                      <div style={{ textAlign: "center", marginBottom: 40 }}>
+                      <div style={{ textAlign: "center", marginBottom: 24 }}>
                         <input
                           value={documentTitle}
                           onChange={(e) => setDocumentTitle(e.target.value)}
                           style={{ fontSize: 42, fontWeight: 400, border: "none",
                                    outline: "none", textAlign: "center", width: "100%" }}
                         />
+
+                        {/* Add a section at the very top, right under the title. */}
+                        <div style={{ marginTop: 8, marginBottom: 16 }}>
+                          <button onClick={addSectionAtStart}>+ Add Section</button>
+                        </div>
                       </div>
                     )}
 
@@ -847,7 +915,6 @@ export default function App() {
 
                   </Page>
                 ))}
-          </div>
         </div>
 
         {/* RIGHT SIDEBAR — IMAGES */}
@@ -868,33 +935,33 @@ export default function App() {
 
           <button onClick={uploadImage}>Upload image</button>
 
+          <div style={{ fontSize: 11, color: "#888", marginTop: -4 }}>
+            Drag an image into the document.
+          </div>
+
           {images.map((img) => (
-            <div key={img.id} style={{ textAlign: "center" }}>
-              <img
-                src={img.src}
-                alt={img.name}
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: 4,
-                  border: "1px solid #ddd",
-                  display: "block"
-                }}
-              />
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 12,
-                  color: "#444",
-                  wordBreak: "break-word"
-                }}
-              >
-                {img.name}
-              </div>
-            </div>
+            <DraggableImage key={img.id} img={img} />
           ))}
         </div>
       </div>
+
+      {/* Floating preview of the image being dragged. */}
+      <DragOverlay dropAnimation={null}>
+        {activeImageId ? (
+          <img
+            src={images.find((i) => i.id === activeImageId)?.src}
+            alt=""
+            style={{
+              width: 160,
+              height: "auto",
+              borderRadius: 4,
+              border: "1px solid #4a90e2",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              opacity: 0.9
+            }}
+          />
+        ) : null}
+      </DragOverlay>
     </DndContext>
   );
 }

@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { Fragment, useRef } from "react";
 import type { PageSection } from "../utils/paginateDocument";
-import { useDroppable } from "@dnd-kit/core";
+import { useDroppable, useDndContext } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import "katex/dist/katex.min.css";
@@ -26,6 +26,37 @@ function SortableItem({ id, children }: any) {
     >
       {children}
     </div>
+  );
+}
+
+/* -----------------------------
+   DROP ZONE (image drop target)
+----------------------------- */
+function DropZone({ id }: any) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const { active } = useDndContext();
+
+  // Only reveal drop targets while an image is being dragged.
+  const draggingImage =
+    active != null && String(active.id).startsWith("image::");
+
+  if (!draggingImage) {
+    // Idle: zero-height so it never affects layout / pagination.
+    return <div ref={setNodeRef} style={{ height: 0 }} />;
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        height: isOver ? 28 : 12,
+        margin: "2px 0",
+        borderRadius: 4,
+        background: isOver ? "rgba(74,144,226,0.25)" : "rgba(74,144,226,0.08)",
+        border: `1px dashed ${isOver ? "#4a90e2" : "rgba(74,144,226,0.4)"}`,
+        transition: "height 0.08s ease"
+      }}
+    />
   );
 }
 
@@ -383,9 +414,35 @@ function Section({ node, isContinuation = false, isLast = false, ...rest }: any)
           <button onClick={() => addTable(node.id)}>+ Table</button>
           <button
             onClick={() => deleteNodeById(node.id)}
-            style={{ marginLeft: 10, background: "red", color: "white" }}
+            title="Delete section"
+            aria-label="Delete section"
+            style={{
+              marginLeft: 10,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 4,
+              background: "transparent",
+              border: "none",
+              color: "#c0392b",
+              cursor: "pointer"
+            }}
           >
-            Delete Section
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
           </button>
         </div>
       )}
@@ -422,32 +479,49 @@ export function DocumentRenderer(props: any) {
           isLast={ps.isLast}
           {...props}   // spread all callbacks through
         >
-          {ps.children.map((child: any) => (
-            // ③ tag every child so we can measure it independently
-            <div key={child.id} data-child-id={child.id}>
-              {child.type === "paragraph" && (
-                <Paragraph node={child} {...props} />
-              )}
-              {child.type === "subsection" && (
-                <Subsection node={child} {...props}>
-                  {child.children.map((p: any) => (
-                    <Paragraph key={p.id} node={p} {...props} />
-                  ))}
-                </Subsection>
-              )}
-              {child.type === "table" && (
-                <TableBlock node={child} {...props} />
-              )}
-              {child.type === "figure" && (
-                <FigureBlock
-                  node={child}
-                  deleteNodeById={props.deleteNodeById}
-                  updateFigureCaption={props.updateFigureCaption}
-                  figureNumber={++figureCounter}
-                />
-              )}
-            </div>
-          ))}
+          {ps.children.map((child: any) => {
+            // Absolute index of this child within the *full* section, so a
+            // dropped image lands at the right spot even on a split section.
+            const absIndex = ps.node.children.findIndex(
+              (c: any) => c.id === child.id
+            );
+            return (
+              <Fragment key={child.id}>
+                {/* drop an image above this block */}
+                <DropZone id={`dz::${ps.node.id}::${absIndex}`} />
+
+                {/* ③ tag every child so we can measure it independently */}
+                <div data-child-id={child.id}>
+                  {child.type === "paragraph" && (
+                    <Paragraph node={child} {...props} />
+                  )}
+                  {child.type === "subsection" && (
+                    <Subsection node={child} {...props}>
+                      {child.children.map((p: any) => (
+                        <Paragraph key={p.id} node={p} {...props} />
+                      ))}
+                    </Subsection>
+                  )}
+                  {child.type === "table" && (
+                    <TableBlock node={child} {...props} />
+                  )}
+                  {child.type === "figure" && (
+                    <FigureBlock
+                      node={child}
+                      deleteNodeById={props.deleteNodeById}
+                      updateFigureCaption={props.updateFigureCaption}
+                      figureNumber={++figureCounter}
+                    />
+                  )}
+                </div>
+              </Fragment>
+            );
+          })}
+
+          {/* drop an image at the very end of the section */}
+          {ps.isLast && (
+            <DropZone id={`dz::${ps.node.id}::${ps.node.children.length}`} />
+          )}
         </Section>
       ))}
     </div>
