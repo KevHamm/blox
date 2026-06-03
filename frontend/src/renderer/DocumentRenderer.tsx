@@ -1,33 +1,7 @@
 import { Fragment, useRef } from "react";
 import type { PageSection } from "../utils/paginateDocument";
 import { useDroppable, useDndContext } from "@dnd-kit/core";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import "katex/dist/katex.min.css";
-
-/* -----------------------------
-   SORTABLE WRAPPER (FIGURES ONLY)
------------------------------ */
-function SortableItem({ id, children }: any) {
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id });
-
-  return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        marginBottom: 12,
-        cursor: "grab"
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 /* -----------------------------
    DROP ZONE (image drop target)
@@ -61,6 +35,46 @@ function DropZone({ id }: any) {
 }
 
 /* -----------------------------
+   TRASH BUTTON (right-aligned)
+----------------------------- */
+function TrashButton({ onClick, label }: any) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      style={{
+        marginLeft: "auto",          // push to the far right of the line
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 4,
+        background: "transparent",
+        border: "none",
+        color: "#c0392b",
+        cursor: "pointer"
+      }}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6M14 11v6" />
+        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      </svg>
+    </button>
+  );
+}
+
+/* -----------------------------
    PARAGRAPH
 ----------------------------- */
 function Paragraph({
@@ -87,7 +101,9 @@ function Paragraph({
             padding: 8,
             border: "1px solid #ddd",
             lineHeight,
-            fontSize
+            fontSize,
+            fontFamily: "var(--sans)",
+            color: "var(--text)"
           }}
         />
       ) : (
@@ -96,6 +112,7 @@ function Paragraph({
           style={{
             margin: 0,
             cursor: "pointer",
+            textAlign: "justify",
             lineHeight,
             fontSize
           }}
@@ -108,7 +125,7 @@ function Paragraph({
 }
 
 /* -----------------------------
-   FIGURE (KEEP DND)
+   FIGURE
 ----------------------------- */
 function FigureBlock({
   node,
@@ -117,67 +134,63 @@ function FigureBlock({
   figureNumber
 }: any) {
   return (
-    <SortableItem id={node.id}>
-      <div
+    <div
+      style={{
+        border: "1px solid #ccc",
+        background: "white",
+        padding: 8,
+        margin: "12px 0"
+      }}
+    >
+      <button
+        onClick={() => deleteNodeById(node.id)}
         style={{
-          border: "1px solid #ccc",
-          background: "white",
-          padding: 8,
-          margin: "12px 0"
+          float: "right",
+          background: "red",
+          color: "white",
+          border: "none",
+          padding: "2px 6px"
         }}
       >
-        <button
-          onClick={() => deleteNodeById(node.id)}
+        ×
+      </button>
+
+      <img
+        src={node.src}
+        alt="figure"
+        style={{
+          width: "100%",
+          height: "auto",
+          display: "block"
+        }}
+      />
+
+      <div
+        style={{
+          marginTop: 10,
+          textAlign: "center",
+          fontSize: 14,
+          fontFamily: "var(--sans)",
+          color: "var(--text)"
+        }}
+      >
+        <strong>Figure {figureNumber}:</strong>{" "}
+        <input
+          value={node.caption || ""}
+          onChange={(e) => updateFigureCaption(node.id, e.target.value)}
           style={{
-            float: "right",
-            background: "red",
-            color: "white",
             border: "none",
-            padding: "2px 6px"
-          }}
-        >
-          ×
-        </button>
-
-        <img
-          src={node.src}
-          alt="figure"
-          style={{
-            width: "100%",
-            height: "auto",
-            display: "block"
-          }}
-        />
-
-        <div
-          style={{
-            marginTop: 10,
+            borderBottom: "1px solid #ccc",
+            outline: "none",
+            width: "70%",
             textAlign: "center",
-            fontSize: 14,
-            fontStyle: "var(--sans)",
+            fontFamily: "var(--sans)",
+            background: "transparent",
             color: "var(--text)"
           }}
-        >
-          <strong>Figure {figureNumber}:</strong>{" "}
-          <input
-            value={node.caption || ""}
-            onChange={(e) =>
-              updateFigureCaption(node.id, e.target.value)
-            }
-            style={{
-              border: "none",
-              borderBottom: "1px solid #ccc",
-              outline: "none",
-              width: "70%",
-              textAlign: "center",
-              fontStyle: "var(--sans)",
-              background: "transparent",
-              color: "var(--text)"
-            }}
-          />
-        </div>
+        />
       </div>
-    </SortableItem>
+    </div>
   );
 }
 
@@ -326,26 +339,16 @@ function TableBlock(props: any) {
 ----------------------------- */
 function Subsection({
   node,
-  sectionIndex,
-  subsectionIndex,
   editingId,
   setEditingId,
   updateSectionTitle,
   deleteNodeById,
   moveSubsection,
-  children,
-  lineHeight,
-  fontSize
+  children
 }: any) {
   return (
     <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", alignItems: "center" }}>
-
-        {/* MOVE BUTTONS */}
-        <div style={{ display: "flex", gap: 6, marginRight: 10 }}>
-          <button onClick={() => moveSubsection(node.id, -1)}>↑</button>
-          <button onClick={() => moveSubsection(node.id, 1)}>↓</button>
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
 
         {editingId === node.id ? (
           <input
@@ -360,12 +363,16 @@ function Subsection({
           </h3>
         )}
 
-        <button
+        {/* MOVE BUTTONS — to the right of the title */}
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => moveSubsection(node.id, -1)}>↑</button>
+          <button onClick={() => moveSubsection(node.id, 1)}>↓</button>
+        </div>
+
+        <TrashButton
           onClick={() => deleteNodeById(node.id)}
-          style={{ marginLeft: 10, background: "red", color: "white" }}
-        >
-          Delete Subsection
-        </button>
+          label="Delete subsection"
+        />
       </div>
 
       {children}
@@ -383,21 +390,19 @@ function Section({ node, isContinuation = false, isLast = false, ...rest }: any)
     deleteNodeById, moveSection, children
   } = rest;
 
-  return (
-    // ① tag the whole section
-    <div data-section-id={node.id} style={{ marginBottom: 30 }}>
+  const hasSubsections = (node.children ?? []).some(
+    (c: any) => c.type === "subsection"
+  );
 
-      {/* ② tag just the header row; hide it on continuation pages */}
+  return (
+    <div style={{ marginBottom: 30 }}>
+
+      {/* Tag just the header row; hide it on continuation columns/pages. */}
       {!isContinuation && (
         <div
           data-section-header-id={node.id}
-          style={{ display: "flex", alignItems: "center" }}
+          style={{ display: "flex", alignItems: "center", gap: 10 }}
         >
-          <div style={{ display: "flex", gap: 6, marginRight: 10 }}>
-            <button onClick={() => moveSection(node.id, -1)}>↑</button>
-            <button onClick={() => moveSection(node.id,  1)}>↓</button>
-          </div>
-
           {editingId === node.id ? (
             <input
               value={node.title}
@@ -410,51 +415,49 @@ function Section({ node, isContinuation = false, isLast = false, ...rest }: any)
             </h2>
           )}
 
-          <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
+          {/* MOVE BUTTONS — to the right of the title */}
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => moveSection(node.id, -1)}>↑</button>
+            <button onClick={() => moveSection(node.id,  1)}>↓</button>
+          </div>
+
           <button onClick={() => addTable(node.id)}>+ Table</button>
-          <button
+
+          <TrashButton
             onClick={() => deleteNodeById(node.id)}
-            title="Delete section"
-            aria-label="Delete section"
-            style={{
-              marginLeft: 10,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 4,
-              background: "transparent",
-              border: "none",
-              color: "#c0392b",
-              cursor: "pointer"
-            }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6M14 11v6" />
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-            </svg>
-          </button>
+            label="Delete section"
+          />
         </div>
       )}
 
       {children}
 
-      {/* "Add Section" lives at the very end of the section, so a new section
-          gets inserted exactly here. Only on the section's last chunk. */}
+      {/* End-of-section controls, only on the section's last chunk. */}
       {isLast && (
-        <div style={{ textAlign: "center", marginTop: 16 }}>
-          <button onClick={() => addSectionAfter(node.id)}>+ Add Section</button>
-        </div>
+        <>
+          {/* No subsections yet → offer "+ Subsection" right below the text. */}
+          {!hasSubsections && (
+            <div style={{ marginTop: 12 }}>
+              <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
+            </div>
+          )}
+
+          {/* "+ Add Section" (and, once subsections exist, "+ Subsection"
+              alongside it) live at the very bottom of the section. */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 8,
+              marginTop: 16
+            }}
+          >
+            {hasSubsections && (
+              <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
+            )}
+            <button onClick={() => addSectionAfter(node.id)}>+ Add Section</button>
+          </div>
+        </>
       )}
     </div>
   );

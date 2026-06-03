@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo } from "react";
 import { sampleDocument } from "./data/sampleDocument";
 import { DocumentRenderer } from "./renderer/DocumentRenderer";
 import type { DocumentNode } from "./types/document";
 import { Page } from "./components/Page";
-import {numberDocument} from "./utils/numberDocument";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { numberDocument } from "./utils/numberDocument";
 import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
 import "katex/dist/katex.min.css";
@@ -69,12 +68,75 @@ function DraggableImage({ img }: any) {
   );
 }
 
+const clamp = (v: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, v));
+
+/* A labelled slider paired with a typed number input. Both edit the same
+   value and are clamped to [min, max]. */
+function NumberControl({
+  label,
+  value,
+  min,
+  max,
+  step,
+  unit,
+  onChange
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit?: string;
+  onChange: (v: number) => void;
+}) {
+  // Local text so the user can type freely; committed (and clamped) on blur.
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+
+  const commit = (raw: string) => {
+    const n = Number(raw);
+    if (Number.isFinite(n)) onChange(clamp(n, min, max));
+    else setText(String(value));
+  };
+
+  return (
+    <div>
+      <label>{label}</label>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          style={{ flex: 1, minWidth: 0 }}
+        />
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit((e.target as HTMLInputElement).value);
+          }}
+          style={{ width: 64 }}
+        />
+        {unit && <span style={{ fontSize: 12, color: "#666" }}>{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // ── 1. All state first ──────────────────────────────────
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
-  const [sectionHeights, setSectionHeights] = useState<Record<string, number>>({});
   const [childHeights,   setChildHeights]   = useState<Record<string, number>>({});
   const [headerHeights,  setHeaderHeights]  = useState<Record<string, number>>({});
 
@@ -84,10 +146,10 @@ export default function App() {
   const [activeImageId, setActiveImageId] = useState<string | null>(null);
 
 
-  // layout must be declared before useLayoutEffect references it
+  // LaTeX-like defaults: text fills the margins, ~12pt body, tight leading.
   const [layout, setLayout] = useState({
-    textWidth: 650,
-    lineHeight: 1.6,
+    textWidth: CONTENT_WIDTH,
+    lineHeight: 1.3,
     columns: 1,
     fontSize: 16
   });
@@ -105,12 +167,12 @@ export default function App() {
   const numberedDoc = numberDocument(doc);
   const TITLE_RESERVED = 100;   // constant, but must be above useMemo
 
-  // ── 3. useMemo (uses layout + sectionHeights) ───────────
+  // ── 3. Paginate into columns/pages from measured heights ──
   // `pages` is an array of pages; each page is an array of columns; each column
   // is an array of section-chunks. Content flows left column → right column →
   // next page.
   const pages = useMemo(() => {
-    if (Object.keys(sectionHeights).length === 0) {
+    if (Object.keys(childHeights).length === 0) {
       const everything = numberedDoc.children.map((node: any) => ({
         node, children: node.children, isContinuation: false, isLast: true,
       }));
@@ -125,16 +187,12 @@ export default function App() {
       TITLE_RESERVED,
       layout.columns
     );
-  }, [numberedDoc, sectionHeights, childHeights, headerHeights, layout.columns]);
+  }, [numberedDoc, childHeights, headerHeights, layout.columns]);
 
-  // ── 4. useLayoutEffect (uses layout + doc) ──────────────
+  // ── 4. Measure rendered block/header heights for pagination ──
   useLayoutEffect(() => {
-    const sh: Record<string, number> = {};
     const ch: Record<string, number> = {};
     const hh: Record<string, number> = {};
-
-    document.querySelectorAll<HTMLElement>("[data-section-id]")
-      .forEach(el => { sh[el.dataset.sectionId!] = el.getBoundingClientRect().height; });
 
     document.querySelectorAll<HTMLElement>("[data-child-id]")
       .forEach(el => { ch[el.dataset.childId!] = el.getBoundingClientRect().height; });
@@ -142,9 +200,8 @@ export default function App() {
     document.querySelectorAll<HTMLElement>("[data-section-header-id]")
       .forEach(el => { hh[el.dataset.sectionHeaderId!] = el.getBoundingClientRect().height; });
 
-    setSectionHeights(prev => heightsUnchanged(prev, sh) ? prev : sh);
-    setChildHeights  (prev => heightsUnchanged(prev, ch) ? prev : ch);
-    setHeaderHeights (prev => heightsUnchanged(prev, hh) ? prev : hh);
+    setChildHeights (prev => heightsUnchanged(prev, ch) ? prev : ch);
+    setHeaderHeights(prev => heightsUnchanged(prev, hh) ? prev : hh);
 
   }, [doc, layout.textWidth, layout.fontSize, layout.lineHeight, layout.columns]);
 
@@ -255,10 +312,11 @@ export default function App() {
   // Insert a fresh section immediately after the given one.
   function addSectionAfter(sectionId: string) {
     setDoc((prev) => {
-      const index = prev.children.findIndex((c: any) => c.id === sectionId);
+      const siblings = prev.children ?? [];
+      const index = siblings.findIndex((c: any) => c.id === sectionId);
       if (index === -1) return prev;
 
-      const newSection = {
+      const newSection: DocumentNode = {
         id: crypto.randomUUID(),
         type: "section",
         title: "Section",
@@ -267,7 +325,7 @@ export default function App() {
         ]
       };
 
-      const children = [...prev.children];
+      const children = [...siblings];
       children.splice(index + 1, 0, newSection);
       return { ...prev, children };
     });
@@ -275,19 +333,18 @@ export default function App() {
 
   // Insert a fresh section at the very top of the document (under the title).
   function addSectionAtStart() {
+    const newSection: DocumentNode = {
+      id: crypto.randomUUID(),
+      type: "section",
+      title: "Section",
+      children: [
+        { id: crypto.randomUUID(), type: "paragraph", text: lorem }
+      ]
+    };
+
     setDoc((prev) => ({
       ...prev,
-      children: [
-        {
-          id: crypto.randomUUID(),
-          type: "section",
-          title: "Section",
-          children: [
-            { id: crypto.randomUUID(), type: "paragraph", text: lorem }
-          ]
-        },
-        ...prev.children
-      ]
+      children: [newSection, ...(prev.children ?? [])]
     }));
   }
 
@@ -613,13 +670,14 @@ export default function App() {
   // -----------------------------
   function moveSection(sectionId: string, direction: -1 | 1) {
     setDoc((prev) => {
-      const index = prev.children.findIndex((c: any) => c.id === sectionId);
+      const siblings = prev.children ?? [];
+      const index = siblings.findIndex((c: any) => c.id === sectionId);
       if (index === -1) return prev;
 
       const newIndex = index + direction;
-      if (newIndex < 0 || newIndex >= prev.children.length) return prev;
+      if (newIndex < 0 || newIndex >= siblings.length) return prev;
 
-      const updated = [...prev.children];
+      const updated = [...siblings];
       const [moved] = updated.splice(index, 1);
       updated.splice(newIndex, 0, moved);
 
@@ -720,12 +778,13 @@ export default function App() {
     if (activeId === overId) return;
 
     setDoc((prev) => {
-      const oldIndex = prev.children.findIndex((c: any) => c.id === active.id);
-      const newIndex = prev.children.findIndex((c: any) => c.id === over.id);
+      const siblings = prev.children ?? [];
+      const oldIndex = siblings.findIndex((c: any) => c.id === active.id);
+      const newIndex = siblings.findIndex((c: any) => c.id === over.id);
 
       if (oldIndex === -1 || newIndex === -1) return prev;
 
-      const updated = [...prev.children];
+      const updated = [...siblings];
       const [moved] = updated.splice(oldIndex, 1);
       updated.splice(newIndex, 0, moved);
 
@@ -755,72 +814,47 @@ export default function App() {
         {/* SIDEBAR */}
         <div
           style={{
-            width: 260,
+            width: 280,
             padding: 20,
             borderRight: "1px solid #ddd",
             background: "white",
             display: "flex",
             flexDirection: "column",
-            height: "100hv"
+            gap: 12,
+            height: "100vh",
+            overflowY: "auto"
           }}
         >
           <h3>Typography</h3>
 
-          <label>Text Width</label>
-
-          <input
-            type="range"
-            min={400}
-            max={900}
+          <NumberControl
+            label="Text Width"
             value={layout.textWidth}
-            onChange={(e) =>
-              setLayout({
-                ...layout,
-                textWidth: Number(e.target.value)
-              })
-            }
+            min={300}
+            max={CONTENT_WIDTH}
+            step={1}
+            unit="px"
+            onChange={(v) => setLayout({ ...layout, textWidth: v })}
           />
 
-          <div>{layout.textWidth}px</div>
-
-          <hr />
-
-          <label>Line Spacing</label>
-
-          <input
-            type="range"
+          <NumberControl
+            label="Line Spacing"
+            value={layout.lineHeight}
             min={1}
             max={2.5}
             step={0.1}
-            value={layout.lineHeight}
-            onChange={(e) =>
-              setLayout({
-                ...layout,
-                lineHeight: Number(e.target.value)
-              })
-            }
+            onChange={(v) => setLayout({ ...layout, lineHeight: v })}
           />
 
-          <div>{layout.lineHeight}</div>
-
-          <hr />
-
-          <label>Font Size</label>
-
-          <input
-            type="range"
-            min={10}
+          <NumberControl
+            label="Font Size"
+            value={layout.fontSize}
+            min={8}
             max={28}
             step={1}
-            value={layout.fontSize}
-            onChange={(e) =>
-              setLayout({
-                ...layout,
-                fontSize: Number(e.target.value)
-              })
-            }
+            unit="px"
+            onChange={(v) => setLayout({ ...layout, fontSize: v })}
           />
-          <div>{layout.fontSize}px</div>
 
           <hr />
 
@@ -869,7 +903,7 @@ export default function App() {
           }}
         >
                 {pages.map((cols: any[], pageIndex: number) => (
-                  <Page key={pageIndex} pageNumber={pageIndex + 1} totalPages={pages.length}>
+                  <Page key={pageIndex} pageNumber={pageIndex + 1}>
 
                     {/* Title always spans full width above the columns */}
                     {pageIndex === 0 && (
@@ -878,13 +912,19 @@ export default function App() {
                           value={documentTitle}
                           onChange={(e) => setDocumentTitle(e.target.value)}
                           style={{ fontSize: 42, fontWeight: 400, border: "none",
-                                   outline: "none", textAlign: "center", width: "100%" }}
+                                   outline: "none", textAlign: "center", width: "100%",
+                                   fontFamily: "var(--sans)", color: "var(--text)",
+                                   background: "transparent" }}
                         />
 
-                        {/* Add a section at the very top, right under the title. */}
-                        <div style={{ marginTop: 8, marginBottom: 16 }}>
-                          <button onClick={addSectionAtStart}>+ Add Section</button>
-                        </div>
+                        {/* Only offered while the document is empty; once a
+                            section exists, sections are added via the buttons
+                            at the end of each section. */}
+                        {numberedDoc.children.length === 0 && (
+                          <div style={{ marginTop: 8, marginBottom: 16 }}>
+                            <button onClick={addSectionAtStart}>+ Add Section</button>
+                          </div>
+                        )}
                       </div>
                     )}
 

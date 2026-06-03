@@ -1,4 +1,4 @@
-export function numberDocument(doc) {
+export function numberDocument(doc: any) {
 
   function stripPrefix(title: string) {
     return title.replace(/(\d+(\.\d+)+\s*)+/g, "").trim();
@@ -8,12 +8,12 @@ export function numberDocument(doc) {
 
   return {
     ...doc,
-    children: doc.children.map(section => {
+    children: doc.children.map((section: any) => {
 
       sectionNumber++;
       let subsectionNumber = 0;
 
-      const newChildren = section.children.map(child => {
+      const newChildren = section.children.map((child: any) => {
 
         if (child.type === "subsection") {
           subsectionNumber++;
