@@ -35,6 +35,9 @@ export default function App() {
   const [childHeights,   setChildHeights]   = useState<Record<string, number>>({});
   const [headerHeights,  setHeaderHeights]  = useState<Record<string, number>>({});
 
+  // Images uploaded via the right sidebar (preview gallery).
+  const [images, setImages] = useState<{ id: string; src: string; name: string }[]>([]);
+
 
   // layout must be declared before useLayoutEffect references it
   const [layout, setLayout] = useState({
@@ -46,7 +49,7 @@ export default function App() {
 
   const rendererProps = {
     editingId, setEditingId, updateTextById, updateSectionTitle,
-    addSubsection, addTable, addFigure, updateTableCell,
+    addSubsection, addTable, updateTableCell,
     deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
     addTableColumn, updateTableColWidths,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
@@ -489,9 +492,9 @@ export default function App() {
   }
 
   // -----------------------------
-  // FIGURE
+  // IMAGE UPLOAD (right sidebar gallery)
   // -----------------------------
-  function addFigure(sectionId: string) {
+  function uploadImage() {
     const input = document.createElement("input");
 
     input.type = "file";
@@ -507,33 +510,10 @@ export default function App() {
       reader.onload = () => {
         const url = reader.result as string;
 
-        function update(node: any): any {
-          if (node.id === sectionId && node.type === "section") {
-            return {
-              ...node,
-              children: [
-                ...node.children,
-                {
-                  id: crypto.randomUUID(),
-                  type: "figure",
-                  src: url,
-                  caption: "New figure caption"
-                }
-              ]
-            };
-          }
-
-          if (node.children) {
-            return {
-              ...node,
-              children: node.children.map(update)
-            };
-          }
-
-          return node;
-        }
-
-        setDoc((prev) => update(prev));
+        setImages((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), src: url, name: file.name }
+        ]);
       };
 
       reader.readAsDataURL(file);
@@ -897,6 +877,51 @@ export default function App() {
                   </Page>
                 ))}
           </div>
+        </div>
+
+        {/* RIGHT SIDEBAR — IMAGES */}
+        <div
+          style={{
+            width: 260,
+            padding: 20,
+            borderLeft: "1px solid #ddd",
+            background: "white",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            height: "100vh",
+            overflowY: "auto"
+          }}
+        >
+          <h3>Images</h3>
+
+          <button onClick={uploadImage}>Upload image</button>
+
+          {images.map((img) => (
+            <div key={img.id} style={{ textAlign: "center" }}>
+              <img
+                src={img.src}
+                alt={img.name}
+                style={{
+                  width: "100%",
+                  height: "auto",
+                  borderRadius: 4,
+                  border: "1px solid #ddd",
+                  display: "block"
+                }}
+              />
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 12,
+                  color: "#444",
+                  wordBreak: "break-word"
+                }}
+              >
+                {img.name}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </DndContext>

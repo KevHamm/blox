@@ -224,7 +224,9 @@ function TableBlock(props: any) {
         style={{
           width: "100%",
           tableLayout: "fixed",     // honour our column widths, never auto-grow
-          borderCollapse: "collapse"
+          borderCollapse: "collapse",
+          color: "#000",
+          fontFamily: "var(--sans)"
         }}
       >
         <colgroup>
@@ -255,7 +257,9 @@ function TableBlock(props: any) {
                       border: "none",
                       outline: "none",
                       padding: "4px 6px",
-                      background: "transparent"
+                      background: "transparent",
+                      color: "#000",
+                      fontFamily: "var(--sans)"
                     }}
                   />
 
@@ -343,7 +347,7 @@ function Subsection({
 function Section({ node, isContinuation = false, ...rest }: any) {
   const {
     editingId, setEditingId, updateSectionTitle,
-    addSubsection, addTable, addFigure,
+    addSubsection, addTable,
     deleteNodeById, moveSection, children
   } = rest;
 
@@ -376,7 +380,6 @@ function Section({ node, isContinuation = false, ...rest }: any) {
 
           <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
           <button onClick={() => addTable(node.id)}>+ Table</button>
-          <button onClick={() => addFigure(node.id)}>+ Figure</button>
           <button
             onClick={() => deleteNodeById(node.id)}
             style={{ marginLeft: 10, background: "red", color: "white" }}
