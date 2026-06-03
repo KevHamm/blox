@@ -4,9 +4,14 @@ const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
 
 export type PageSection = {
   node: any;               // the section node
-  children: any[];         // which children to render on this page
-  isContinuation: boolean; // true = this is a mid-section continuation, skip the header
+  children: any[];         // which children to render in this column
+  isContinuation: boolean; // true = mid-section continuation, skip the header
+  isLast: boolean;         // true = this chunk holds the section's final child
 };
+
+// A column is a list of section-chunks; a page is a list of columns.
+export type Column = PageSection[];
+export type DocPage = Column[];
 
 function heightsUnchanged(
   prev: Record<string, number>,
@@ -18,59 +23,80 @@ function heightsUnchanged(
 }
 export { heightsUnchanged };
 
-export function paginateByHeights(
+/**
+ * Flow the document into fixed-height COLUMNS, then group the columns into
+ * pages (`columnsPerPage` columns each). Content fills a column top-to-bottom;
+ * when it is full the next column starts; once a page's columns are all used a
+ * new page begins. Sections taller than a column are split across the column
+ * boundary at child granularity (just like a page break would).
+ */
+export function paginateColumns(
   doc: any,
-  sectionHeights: Record<string, number>,
   childHeights:   Record<string, number>,
   headerHeights:  Record<string, number>,
-  firstPageReserved = 0,
-  columns = 1                              // ← new
-): PageSection[][] {
+  titleReserved   = 0,
+  columnsPerPage  = 1
+): DocPage[] {
 
-  // In 2-column mode the page holds two columns side-by-side,
-  // so the effective packing capacity doubles.
-  const EFFECTIVE_HEIGHT = CONTENT_HEIGHT * columns;
+  const columns: Column[] = [[]];
+  let used = 0;
 
-  const pages: PageSection[][] = [[]];
-  // The title banner spans full width above every column, so it costs its
-  // height in each of them — reserve it once per column on the first page.
-  let currentH = firstPageReserved * columns;
+  // The full-width title sits above every column on the first page, so each of
+  // those leading columns loses the reserved title height.
+  const capacityOf = (colIdx: number) =>
+    CONTENT_HEIGHT - (colIdx < columnsPerPage ? titleReserved : 0);
+
+  const startNewColumn = () => {
+    columns.push([]);
+    used = 0;
+  };
 
   for (const section of doc.children) {
-    const totalH  = sectionHeights[section.id] ?? 300;
-    const headerH = headerHeights[section.id]  ?? 48;
+    const headerH = headerHeights[section.id] ?? 48;
+    // Derive the section's total height from its header + children rather than
+    // the section wrapper itself: a split section renders several wrappers that
+    // all share `data-section-id`, so the measured wrapper height is unreliable.
+    // Each child renders exactly once, so child heights are stable.
+    const childrenH = section.children.reduce(
+      (sum: number, c: any) => sum + (childHeights[c.id] ?? 100),
+      0
+    );
+    const totalH   = headerH + childrenH;
+    const capacity = capacityOf(columns.length - 1);
 
-    if (currentH + totalH <= EFFECTIVE_HEIGHT) {      // ← was CONTENT_HEIGHT
-      pages[pages.length - 1].push({
-        node: section, children: section.children, isContinuation: false,
+    // Whole section fits in the current column.
+    if (used + totalH <= capacity) {
+      columns[columns.length - 1].push({
+        node: section, children: section.children,
+        isContinuation: false, isLast: true,
       });
-      currentH += totalH;
+      used += totalH;
       continue;
     }
 
-    // splitting logic — replace every CONTENT_HEIGHT reference here too
+    // Otherwise split the section's children across columns.
     let remaining      = [...section.children];
     let isContinuation = false;
 
     while (remaining.length > 0) {
+      const cap        = capacityOf(columns.length - 1);
       const headerCost = isContinuation ? 0 : headerH;
-      const spaceLeft  = EFFECTIVE_HEIGHT - currentH;  // ← was CONTENT_HEIGHT
 
-      if (headerCost > spaceLeft && pages[pages.length - 1].length > 0) {
-        pages.push([]);
-        currentH = 0;
+      // Not even room for the header here — move to the next column first.
+      if (headerCost > cap - used && columns[columns.length - 1].length > 0) {
+        startNewColumn();
         continue;
       }
 
-      const available = EFFECTIVE_HEIGHT - currentH;   // ← was CONTENT_HEIGHT
-      let used        = headerCost;
+      const available = cap - used;
+      let chunkH      = headerCost;
       const chunk: any[] = [];
 
       for (const child of remaining) {
         const childH = childHeights[child.id] ?? 100;
-        if (chunk.length === 0 || used + childH <= available) {
+        if (chunk.length === 0 || chunkH + childH <= available) {
           chunk.push(child);
-          used += childH;
+          chunkH += childH;
         } else {
           break;
         }
@@ -78,20 +104,31 @@ export function paginateByHeights(
 
       if (chunk.length === 0) {
         chunk.push(remaining[0]);
-        used += childHeights[remaining[0].id] ?? 100;
+        chunkH += childHeights[remaining[0].id] ?? 100;
       }
 
-      pages[pages.length - 1].push({ node: section, children: chunk, isContinuation });
-      currentH  += used;
-      remaining  = remaining.slice(chunk.length);
+      remaining = remaining.slice(chunk.length);
+
+      columns[columns.length - 1].push({
+        node: section, children: chunk,
+        isContinuation, isLast: remaining.length === 0,
+      });
+      used += chunkH;
 
       if (remaining.length > 0) {
-        pages.push([]);
-        currentH       = 0;
+        startNewColumn();
         isContinuation = true;
       }
     }
   }
 
+  // Group columns into pages, padding the final page with empty columns so
+  // every rendered column keeps the same width (and thus stable measurements).
+  const pages: DocPage[] = [];
+  for (let i = 0; i < columns.length; i += columnsPerPage) {
+    const page = columns.slice(i, i + columnsPerPage);
+    while (page.length < columnsPerPage) page.push([]);
+    pages.push(page);
+  }
   return pages;
 }

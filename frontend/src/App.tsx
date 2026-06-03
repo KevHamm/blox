@@ -5,7 +5,7 @@ import type { DocumentNode } from "./types/document";
 import { Page } from "./components/Page";
 import {numberDocument} from "./utils/numberDocument";
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { paginateByHeights, heightsUnchanged } from "./utils/paginateDocument";
+import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
 import "katex/dist/katex.min.css";
 
@@ -19,9 +19,6 @@ import {
 
 import {
   PAGE_WIDTH,
-  PAGE_HEIGHT,
-  PAGE_PADDING_TOP,
-  PAGE_PADDING_BOTTOM,
   CONTENT_WIDTH,
   COLUMN_GAP
 } from "./utils/pageConfig";
@@ -51,7 +48,7 @@ export default function App() {
     editingId, setEditingId, updateTextById, updateSectionTitle,
     addSubsection, addTable, updateTableCell,
     deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
-    addTableColumn, updateTableColWidths,
+    addTableColumn, updateTableColWidths, addSectionAfter,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption,
   };
@@ -61,19 +58,24 @@ export default function App() {
   const TITLE_RESERVED = 100;   // constant, but must be above useMemo
 
   // ── 3. useMemo (uses layout + sectionHeights) ───────────
+  // `pages` is an array of pages; each page is an array of columns; each column
+  // is an array of section-chunks. Content flows left column → right column →
+  // next page.
   const pages = useMemo(() => {
     if (Object.keys(sectionHeights).length === 0) {
-      return [numberedDoc.children.map((node: any) => ({
-        node, children: node.children, isContinuation: false,
-      }))];
+      const everything = numberedDoc.children.map((node: any) => ({
+        node, children: node.children, isContinuation: false, isLast: true,
+      }));
+      const page = [everything];
+      while (page.length < layout.columns) page.push([]);
+      return [page];
     }
-    return paginateByHeights(
+    return paginateColumns(
       numberedDoc,
-      sectionHeights,
       childHeights,
       headerHeights,
       TITLE_RESERVED,
-      layout.columns    // ← add this
+      layout.columns
     );
   }, [numberedDoc, sectionHeights, childHeights, headerHeights, layout.columns]);
 
@@ -98,16 +100,18 @@ export default function App() {
 
   }, [doc, layout.textWidth, layout.fontSize, layout.lineHeight, layout.columns]);
 
-  // per-page figure start offset so numbers are globally correct
-  const figureStartPerPage = useMemo(() => {
+  // per-column figure start offset so figure numbers stay globally correct
+  const figureStarts = useMemo(() => {
     let count = 0;
-    return pages.map(pageSections => {
-      const start = count;
-      pageSections.forEach(ps =>
-        ps.children.forEach((c: any) => { if (c.type === "figure") count++; })
-      );
-      return start;
-    });
+    return pages.map((cols: any[]) =>
+      cols.map((col: any[]) => {
+        const start = count;
+        col.forEach((ps: any) =>
+          ps.children.forEach((c: any) => { if (c.type === "figure") count++; })
+        );
+        return start;
+      })
+    );
   }, [pages]);
 
   // -----------------------------
@@ -226,6 +230,27 @@ export default function App() {
         ...prev,
         children: [...prev.children, newNode]
       };
+    });
+  }
+
+  // Insert a fresh section immediately after the given one.
+  function addSectionAfter(sectionId: string) {
+    setDoc((prev) => {
+      const index = prev.children.findIndex((c: any) => c.id === sectionId);
+      if (index === -1) return prev;
+
+      const newSection = {
+        id: crypto.randomUUID(),
+        type: "section",
+        title: "Section",
+        children: [
+          { id: crypto.randomUUID(), type: "paragraph", text: lorem }
+        ]
+      };
+
+      const children = [...prev.children];
+      children.splice(index + 1, 0, newSection);
+      return { ...prev, children };
     });
   }
 
@@ -632,29 +657,6 @@ export default function App() {
     });
   }
 
-  const CONTENT_H = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
-
-  function splitColumns(sections: any[], pageIndex: number): [any[], any[]] {
-    // Both columns start below the full-width title on the first page, so the
-    // usable height of each column shrinks by the reserved title space there.
-    const colH = CONTENT_H - (pageIndex === 0 ? TITLE_RESERVED : 0);
-
-    let used = 0;
-    for (let i = 0; i < sections.length; i++) {
-      const h = sectionHeights[sections[i].node.id] ?? 200;
-      // Fill the LEFT column top-to-bottom first; only once the next section
-      // would overflow it do we spill the remainder into the right column.
-      // (i > 0 guarantees at least one section stays on the left.)
-      if (i > 0 && used + h > colH) {
-        return [sections.slice(0, i), sections.slice(i)];
-      }
-      used += h;
-    }
-    return [sections, []]; // everything fit in the left column
-  }
-
-
-
   // -----------------------------
   // RENDER
   // -----------------------------
@@ -792,25 +794,18 @@ export default function App() {
               overflowY: "auto"
             }}
           >
-                <div
-                  style={{
-                    width: PAGE_WIDTH,
-                    margin: "20px auto",
-                    textAlign: "center"
-                  }}
-                >
-                  <button
-                    onClick={() => insertNode("section")}
-                    style={{
-                      marginBottom: 20,
-                      padding: "8px 12px"
-                    }}
-                  >
-                    + Add Section
-                  </button>
-                </div>
+                {numberedDoc.children.length === 0 && (
+                  <div style={{ width: PAGE_WIDTH, margin: "20px auto", textAlign: "center" }}>
+                    <button
+                      onClick={() => insertNode("section")}
+                      style={{ marginBottom: 20, padding: "8px 12px" }}
+                    >
+                      + Add Section
+                    </button>
+                  </div>
+                )}
 
-                {pages.map((pageSections, pageIndex) => (
+                {pages.map((cols: any[], pageIndex: number) => (
                   <Page key={pageIndex} pageNumber={pageIndex + 1} totalPages={pages.length}>
 
                     {/* Title always spans full width above the columns */}
@@ -828,48 +823,24 @@ export default function App() {
                     {(() => {
                       // The text block fills the area between the page margins,
                       // never wider than the page itself. The slider can narrow
-                      // it further (widening the margins, LaTeX-style).
+                      // it further (widening the margins, LaTeX-style). Every page
+                      // holds `layout.columns` equal-width columns; content has
+                      // already been flowed left → right → next page.
                       const blockWidth = Math.min(layout.textWidth, CONTENT_WIDTH);
 
-                      if (layout.columns !== 2) {
-                        return (
-                          <div style={{ width: blockWidth, margin: "0 auto" }}>
-                            <DocumentRenderer
-                              droppableId="document-root"
-                              pageSections={pageSections}
-                              figureStart={figureStartPerPage[pageIndex]}
-                              {...rendererProps}
-                            />
-                          </div>
-                        );
-                      }
-
-                      const [left, right] = splitColumns(pageSections, pageIndex);
-                      const leftFigCount = left
-                        .flatMap((ps: any) => ps.children)
-                        .filter((c: any) => c.type === "figure").length;
-
-                      // Two equal columns inside the text block, separated by a
-                      // gutter; each is (blockWidth - COLUMN_GAP) / 2.
                       return (
                         <div style={{ display: "flex", gap: COLUMN_GAP,
                                       width: blockWidth, margin: "0 auto" }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <DocumentRenderer
-                              droppableId={`left-${pageIndex}`}
-                              pageSections={left}
-                              figureStart={figureStartPerPage[pageIndex]}
-                              {...rendererProps}
-                            />
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <DocumentRenderer
-                              droppableId={`right-${pageIndex}`}
-                              pageSections={right}
-                              figureStart={figureStartPerPage[pageIndex] + leftFigCount}
-                              {...rendererProps}
-                            />
-                          </div>
+                          {cols.map((col: any[], colIndex: number) => (
+                            <div key={colIndex} style={{ flex: 1, minWidth: 0 }}>
+                              <DocumentRenderer
+                                droppableId={`p${pageIndex}-c${colIndex}`}
+                                pageSections={col}
+                                figureStart={figureStarts[pageIndex][colIndex]}
+                                {...rendererProps}
+                              />
+                            </div>
+                          ))}
                         </div>
                       );
                     })()}

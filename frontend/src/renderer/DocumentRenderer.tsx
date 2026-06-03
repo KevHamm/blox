@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import type { PageSection } from "../utils/paginateDocument";
 import { useDroppable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -344,10 +345,10 @@ function Subsection({
 /* -----------------------------
    SECTION (NO DND)
 ----------------------------- */
-function Section({ node, isContinuation = false, ...rest }: any) {
+function Section({ node, isContinuation = false, isLast = false, ...rest }: any) {
   const {
     editingId, setEditingId, updateSectionTitle,
-    addSubsection, addTable,
+    addSubsection, addTable, addSectionAfter,
     deleteNodeById, moveSection, children
   } = rest;
 
@@ -390,6 +391,14 @@ function Section({ node, isContinuation = false, ...rest }: any) {
       )}
 
       {children}
+
+      {/* "Add Section" lives at the very end of the section, so a new section
+          gets inserted exactly here. Only on the section's last chunk. */}
+      {isLast && (
+        <div style={{ textAlign: "center", marginTop: 16 }}>
+          <button onClick={() => addSectionAfter(node.id)}>+ Add Section</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -410,6 +419,7 @@ export function DocumentRenderer(props: any) {
           key={`${ps.node.id}-${psIndex}`}
           node={ps.node}
           isContinuation={ps.isContinuation}
+          isLast={ps.isLast}
           {...props}   // spread all callbacks through
         >
           {ps.children.map((child: any) => (
