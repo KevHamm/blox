@@ -217,6 +217,22 @@ function insertNodeAt(node: any, containerId: string, index: number, newNode: an
   return { ...node, children: node.children.map((c: any) => insertNodeAt(c, containerId, index, newNode)) };
 }
 
+/* ---- structural node factories ---- */
+const newParagraph = () => ({
+  id: crypto.randomUUID(),
+  type: "paragraph",
+  text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+});
+const newSection = () => ({
+  id: crypto.randomUUID(), type: "section", title: "Section", children: [newParagraph()]
+});
+const newSubsection = () => ({
+  id: crypto.randomUUID(), type: "subsection", title: "New Subsection", children: [newParagraph()]
+});
+const newSubsubsection = () => ({
+  id: crypto.randomUUID(), type: "subsubsection", title: "New Subsubsection", children: [newParagraph()]
+});
+
 // A math block is a container of equation parts rendered flush together (so it
 // reads as one equation). Dropping a math block onto a slot inserts a part at
 // that position — including between two existing parts.
@@ -241,8 +257,25 @@ const mathBlock = (id: string, label: string, iconTex: string, iconSize = 22) =>
   make: () => mathNode(MATH_TEMPLATES[id])
 });
 
+// A heading glyph for the structural Blox items; the bar shrinks with depth.
+function HeadingGlyph({ level }: { level: number }) {
+  const headW = level === 1 ? 26 : level === 2 ? 20 : 15;
+  const headH = level === 1 ? 6 : level === 2 ? 5 : 4;
+  const y2 = 4 + headH + 5;
+  return (
+    <svg width="34" height="30" viewBox="0 0 34 30">
+      <rect x="4" y="4" width={headW} height={headH} rx="1" fill="currentColor" />
+      <rect x="4" y={y2} width="26" height="2.5" rx="1" fill="currentColor" opacity="0.45" />
+      <rect x="4" y={y2 + 5} width="26" height="2.5" rx="1" fill="currentColor" opacity="0.45" />
+    </svg>
+  );
+}
+
 // Blox palette: block id → label, palette icon and a fresh-node factory.
 const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: () => any }> = {
+  "block::section":       { label: "Section",       icon: () => <HeadingGlyph level={1} />, make: () => newSection() },
+  "block::subsection":    { label: "Subsection",    icon: () => <HeadingGlyph level={2} />, make: () => newSubsection() },
+  "block::subsubsection": { label: "Subsubsection", icon: () => <HeadingGlyph level={3} />, make: () => newSubsubsection() },
   "block::table": {
     label: "Table",
     icon: () => <TableGlyph />,
@@ -261,7 +294,18 @@ const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: () => a
   "block::math::matrix":   mathBlock("block::math::matrix", "Matrix", "\\left[\\begin{smallmatrix}a&b\\\\c&d\\end{smallmatrix}\\right]", 15)
 };
 
+// Structural blocks land at the correct hierarchy level, not literally at the
+// drop index.
+const STRUCTURAL: Record<string, "section" | "subsection" | "subsubsection"> = {
+  "block::section": "section",
+  "block::subsection": "subsection",
+  "block::subsubsection": "subsubsection"
+};
+
 const BLOX_ORDER = [
+  "block::section",
+  "block::subsection",
+  "block::subsubsection",
   "block::table",
   "block::math::integral",
   "block::math::sum",
@@ -269,6 +313,51 @@ const BLOX_ORDER = [
   "block::math::fraction",
   "block::math::matrix"
 ];
+
+// Path of nodes from the document root down to (and including) the node with id.
+function pathTo(node: any, id: string, acc: any[] = []): any[] | null {
+  const next = [...acc, node];
+  if (node.id === id) return next;
+  for (const c of node.children ?? []) {
+    const r = pathTo(c, id, next);
+    if (r) return r;
+  }
+  return null;
+}
+
+// Insert a section / subsection / subsubsection at the correct level relative
+// to the drop zone's container.
+function insertStructuralAt(doc: any, containerId: string, index: number, kind: string): any {
+  const path = pathTo(doc, containerId);
+  if (!path) return doc;
+  const container = path[path.length - 1];
+
+  if (kind === "section") {
+    const top = path.find((n: any) => n.type === "section");
+    if (!top) return insertNodeAt(doc, doc.id, index, newSection());
+    const di = (doc.children ?? []).findIndex((c: any) => c.id === top.id);
+    return insertNodeAt(doc, doc.id, di + 1, newSection());
+  }
+
+  if (kind === "subsection") {
+    const section = [...path].reverse().find((n: any) => n.type === "section");
+    if (!section) return doc;
+    if (container.id === section.id) return insertNodeAt(doc, section.id, index, newSubsection());
+    const childOfSection = path[path.indexOf(section) + 1];
+    const ci = (section.children ?? []).findIndex((c: any) => c.id === childOfSection.id);
+    return insertNodeAt(doc, section.id, ci + 1, newSubsection());
+  }
+
+  if (kind === "subsubsection") {
+    const subsection = [...path].reverse().find((n: any) => n.type === "subsection");
+    if (!subsection) return doc;          // needs a subsection to live in
+    if (container.id === subsection.id) return insertNodeAt(doc, subsection.id, index, newSubsubsection());
+    const childOfSub = path[path.indexOf(subsection) + 1];
+    const ci = (subsection.children ?? []).findIndex((c: any) => c.id === childOfSub.id);
+    return insertNodeAt(doc, subsection.id, ci + 1, newSubsubsection());
+  }
+  return doc;
+}
 
 /* ---- math tree edits ---- */
 // Insert an equation part at a given slot index (0..items.length).
@@ -1112,6 +1201,16 @@ export default function App() {
       const overId = over ? String(over.id) : null;
       if (!overId) return;
 
+      // Section / Subsection / Subsubsection → insert at the right hierarchy level.
+      const kind = STRUCTURAL[activeBlockId];
+      if (kind) {
+        if (overId.startsWith("dz::")) {
+          const [, containerId, idxStr] = overId.split("::");
+          setDoc((prev) => insertStructuralAt(prev, containerId, Number(idxStr), kind));
+        }
+        return;
+      }
+
       // Math block dropped onto a slot → insert it as a part at that position.
       if (overId.startsWith("mathdz::") && activeBlockId.startsWith("block::math::")) {
         const [, mathId, idxStr] = overId.split("::");
@@ -1343,6 +1442,7 @@ export default function App() {
 
         {/* DOCUMENT */}
         <div
+          className="doc-area"
           style={{
             flex: 1,
             display: "flex",

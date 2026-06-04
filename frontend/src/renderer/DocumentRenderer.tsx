@@ -102,6 +102,35 @@ function TrashButton({ onClick, label, className }: any) {
   );
 }
 
+/* Up/down move control (dir = -1 up, 1 down). */
+function ChevronButton({ dir, onClick, title }: any) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      style={{
+        width: 22,
+        height: 22,
+        padding: 0,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f0f0f0",
+        border: "1px solid #ddd",
+        borderRadius: 4,
+        color: "#555",
+        cursor: "pointer"
+      }}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        {dir < 0 ? <polyline points="6 15 12 9 18 15" /> : <polyline points="6 9 12 15 18 9" />}
+      </svg>
+    </button>
+  );
+}
+
 /* -----------------------------
    PARAGRAPH
 ----------------------------- */
@@ -613,8 +642,8 @@ function TableBlock(props: any) {
         </div>
       </div>
 
-      {/* add / remove ROW — below the last row */}
-      <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 6 }}>
+      {/* add / remove ROW — below the table, aligned to the left margin */}
+      <div style={{ display: "flex", justifyContent: "flex-start", gap: 6, marginTop: 6 }}>
         <SquareButton color="green" title="Add row" onClick={() => addTableRow(node.id)}>+</SquareButton>
         <SquareButton color="red" title="Remove row" onClick={() => deleteTableRow(node.id)}>−</SquareButton>
       </div>
@@ -628,13 +657,11 @@ function TableBlock(props: any) {
 function Subsection({
   node,
   showHeader = true,
-  isLast = false,
   editingId,
   setEditingId,
   updateSectionTitle,
   deleteNodeById,
   moveSubsection,
-  addSubsubsection,
   children
 }: any) {
   return (
@@ -655,9 +682,9 @@ function Subsection({
           )}
 
           {/* MOVE BUTTONS — to the right of the title */}
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => moveSubsection(node.id, -1)}>↑</button>
-            <button onClick={() => moveSubsection(node.id, 1)}>↓</button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <ChevronButton dir={-1} title="Move up" onClick={() => moveSubsection(node.id, -1)} />
+            <ChevronButton dir={1} title="Move down" onClick={() => moveSubsection(node.id, 1)} />
           </div>
 
           <TrashButton
@@ -668,12 +695,6 @@ function Subsection({
       )}
 
       {children}
-
-      {isLast && (
-        <div style={{ marginTop: 10 }}>
-          <button onClick={() => addSubsubsection(node.id)}>+ Subsubsection</button>
-        </div>
-      )}
     </div>
   );
 }
@@ -722,16 +743,11 @@ function Subsubsection({
 /* -----------------------------
    SECTION (NO DND)
 ----------------------------- */
-function Section({ node, showHeader = true, isLast = false, ...rest }: any) {
+function Section({ node, showHeader = true, ...rest }: any) {
   const {
     editingId, setEditingId, updateSectionTitle,
-    addSubsection, addSectionAfter,
     deleteNodeById, moveSection, children
   } = rest;
-
-  const hasSubsections = (node.children ?? []).some(
-    (c: any) => c.type === "subsection"
-  );
 
   return (
     <div style={{ marginBottom: 30 }}>
@@ -755,9 +771,9 @@ function Section({ node, showHeader = true, isLast = false, ...rest }: any) {
           )}
 
           {/* MOVE BUTTONS — to the right of the title */}
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => moveSection(node.id, -1)}>↑</button>
-            <button onClick={() => moveSection(node.id,  1)}>↓</button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <ChevronButton dir={-1} title="Move up" onClick={() => moveSection(node.id, -1)} />
+            <ChevronButton dir={1} title="Move down" onClick={() => moveSection(node.id, 1)} />
           </div>
 
           <TrashButton
@@ -768,34 +784,6 @@ function Section({ node, showHeader = true, isLast = false, ...rest }: any) {
       )}
 
       {children}
-
-      {/* End-of-section controls, only on the section's last chunk. */}
-      {isLast && (
-        <>
-          {/* No subsections yet → offer "+ Subsection" right below the text. */}
-          {!hasSubsections && (
-            <div style={{ marginTop: 12 }}>
-              <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
-            </div>
-          )}
-
-          {/* "+ Add Section" (and, once subsections exist, "+ Subsection"
-              alongside it) live at the very bottom of the section. */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 8,
-              marginTop: 16
-            }}
-          >
-            {hasSubsections && (
-              <button onClick={() => addSubsection(node.id)}>+ Subsection</button>
-            )}
-            <button onClick={() => addSectionAfter(node.id)}>+ Add Section</button>
-          </div>
-        </>
-      )}
     </div>
   );
 }

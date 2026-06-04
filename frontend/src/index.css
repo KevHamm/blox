@@ -122,11 +122,11 @@ math-field::part(menu-toggle) {
   display: none;
 }
 
-/* Table controls: faded until hovered. */
-.tbl-btn {
-  opacity: 0.4;
+/* Every button inside the document page is faded until hovered. */
+.doc-area button {
+  opacity: 0.35;
   transition: opacity 0.12s ease;
 }
-.tbl-btn:hover {
+.doc-area button:hover {
   opacity: 1;
 }
