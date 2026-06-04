@@ -20,6 +20,7 @@ export interface DocumentNode {
   caption?: string;
   rows?: string[][];
   colWidths?: number[];
+  colors?: (string | null)[][];
   width?: number;
   images?: { id: string; src: string }[];
   sectionNumber?: number;

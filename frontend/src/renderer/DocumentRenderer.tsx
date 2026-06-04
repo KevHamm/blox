@@ -1,4 +1,4 @@
-import { Fragment, useRef, useEffect } from "react";
+import { Fragment, useRef, useEffect, useState } from "react";
 import type { Chunk } from "../utils/paginateDocument";
 import { isContainerType } from "../utils/paginateDocument";
 import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
@@ -19,16 +19,22 @@ const clampFrac = (v: number, min: number, max: number) =>
 /* -----------------------------
    DROP ZONE (image drop target)
 ----------------------------- */
-function DropZone({ id }: any) {
+function DropZone({ id, containerType }: any) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const { active } = useDndContext();
 
-  // Reveal drop targets while dragging an image or a Blox block — but NOT for
-  // a Section block, which drops anywhere in the document with no zone.
+  // Only reveal a zone where the dragged thing can actually go:
+  //   • images / tables / math  → any container
+  //   • subsection block         → only inside a section
+  //   • subsubsection block      → only inside a subsection
+  //   • section block            → never (it drops anywhere, no zone)
   const activeId = String(active?.id ?? "");
-  const dragging =
-    isImageDragId(activeId) ||
-    (activeId.startsWith("block::") && activeId !== "block::section");
+  let dragging: boolean;
+  if (isImageDragId(activeId)) dragging = true;
+  else if (activeId === "block::section") dragging = false;
+  else if (activeId === "block::subsection") dragging = containerType === "section";
+  else if (activeId === "block::subsubsection") dragging = containerType === "subsection";
+  else dragging = activeId.startsWith("block::"); // table / math → anywhere
 
   if (!dragging) {
     // Idle: zero-height so it never affects layout / pagination.
@@ -490,6 +496,10 @@ function SquareButton({ color, onClick, title, children }: any) {
   );
 }
 
+/* Brush-shaped mouse cursor used in table paint mode. */
+const BRUSH_CURSOR =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24'%3E%3Cpath d='M14 3l7 7-8 8H7v-6z' fill='%23cdb4ff' stroke='%23333' stroke-width='1'/%3E%3Cpath d='M7 18c-1 1-2 3-4 3 0-2 2-3 3-4z' fill='%23333'/%3E%3C/svg%3E\") 2 20, crosshair";
+
 /* -----------------------------
    TABLE
 ----------------------------- */
@@ -502,12 +512,38 @@ function TableBlock(props: any) {
     addTableRow,
     deleteTableRow,
     addTableColumn,
-    updateTableColWidths
+    updateTableColWidths,
+    updateTableCaption,
+    updateTableColors,
+    tableNumbers
   } = props;
 
   const tableRef = useRef<HTMLTableElement>(null);
+  const [brush, setBrush] = useState(false);
+  const [brushColor, setBrushColor] = useState("#ffe08a");
 
   const colCount = node.rows[0]?.length || 0;
+
+  // A normalized colour grid (sized to the current rows; missing = null).
+  const buildColors = () =>
+    node.rows.map((row: string[], r: number) =>
+      row.map((_: string, c: number) => node.colors?.[r]?.[c] ?? null)
+    );
+  const paintCell = (r: number, c: number) => {
+    const cols = buildColors();
+    cols[r][c] = brushColor;
+    updateTableColors(node.id, cols);
+  };
+  const paintColumn = (c: number) => {
+    const cols = buildColors();
+    cols.forEach((row: any[]) => { row[c] = brushColor; });
+    updateTableColors(node.id, cols);
+  };
+  const paintRow = (r: number) => {
+    const cols = buildColors();
+    cols[r] = cols[r].map(() => brushColor);
+    updateTableColors(node.id, cols);
+  };
 
   // Column widths are kept as fractions that always sum to 1, so the table
   // fills exactly the text-column width. Fall back to equal widths whenever
@@ -574,14 +610,26 @@ function TableBlock(props: any) {
               {row.map((cell: string, c: number) => (
                 <td
                   key={c}
+                  onClick={brush ? () => paintCell(r, c) : undefined}
+                  onDoubleClick={
+                    brush
+                      ? () => {
+                          if (r === 0) paintColumn(c);     // header → whole column
+                          else if (c === 0) paintRow(r);   // first cell → whole row
+                        }
+                      : undefined
+                  }
                   style={{
                     border: "1px solid #ccc",
                     padding: 0,
-                    position: "relative"
+                    position: "relative",
+                    background: node.colors?.[r]?.[c] ?? undefined,
+                    cursor: brush ? BRUSH_CURSOR : undefined
                   }}
                 >
                   <input
                     value={cell}
+                    readOnly={brush}
                     onChange={(e) =>
                       updateTableCell(node.id, r, c, e.target.value)
                     }
@@ -593,7 +641,8 @@ function TableBlock(props: any) {
                       padding: "4px 6px",
                       background: "transparent",
                       color: "#000",
-                      fontFamily: "var(--sans)"
+                      fontFamily: "var(--sans)",
+                      pointerEvents: brush ? "none" : undefined
                     }}
                   />
 
@@ -609,7 +658,8 @@ function TableBlock(props: any) {
                         height: "100%",
                         cursor: "col-resize",
                         userSelect: "none",
-                        zIndex: 1
+                        zIndex: 1,
+                        pointerEvents: brush ? "none" : undefined
                       }}
                     />
                   )}
@@ -637,10 +687,75 @@ function TableBlock(props: any) {
         </div>
       </div>
 
-      {/* row +/- on the left, delete-table on the right — all one line */}
+      {/* LaTeX-style caption */}
+      <div
+        style={{
+          marginTop: 8,
+          textAlign: "center",
+          fontSize: 14,
+          fontFamily: "var(--sans)",
+          color: "var(--text)"
+        }}
+      >
+        <strong>Table {tableNumbers?.[node.id]}:</strong>{" "}
+        <input
+          value={node.caption || ""}
+          onChange={(e) => updateTableCaption(node.id, e.target.value)}
+          style={{
+            border: "none",
+            borderBottom: "1px solid #ccc",
+            outline: "none",
+            width: "70%",
+            textAlign: "center",
+            fontFamily: "var(--sans)",
+            background: "transparent",
+            color: "var(--text)"
+          }}
+        />
+      </div>
+
+      {/* row +/-, paint tool, delete-table — all one line */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
         <SquareButton color="green" title="Add row" onClick={() => addTableRow(node.id)}>+</SquareButton>
         <SquareButton color="red" title="Remove row" onClick={() => deleteTableRow(node.id)}>−</SquareButton>
+
+        <button
+          className="tbl-btn"
+          title="Paint cells (click a cell; double-click a header to fill a column, the first cell of a row to fill the row)"
+          onClick={() => setBrush((b) => !b)}
+          style={{
+            width: 24,
+            height: 24,
+            padding: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: brush ? brushColor : "#eee",
+            border: brush ? "2px solid #333" : "1px solid #ccc",
+            borderRadius: 4,
+            cursor: "pointer",
+            fontSize: 13
+          }}
+        >
+          🖌
+        </button>
+        <input
+          type="color"
+          className="tbl-btn"
+          value={brushColor}
+          onChange={(e) => setBrushColor(e.target.value)}
+          title="Brush color"
+          style={{
+            width: 24,
+            height: 24,
+            padding: 0,
+            border: "1px solid #ccc",
+            borderRadius: 4,
+            background: "none",
+            cursor: "pointer"
+          }}
+        />
+
         <TrashButton
           className="tbl-btn"
           onClick={() => deleteNodeById(node.id)}
@@ -811,13 +926,13 @@ function containerInner(chunk: Chunk, props: any) {
         const absIndex = fullChildren.findIndex((c: any) => c.id === ch.node.id);
         return (
           <Fragment key={ch.node.id}>
-            <DropZone id={`dz::${node.id}::${absIndex}`} />
+            <DropZone id={`dz::${node.id}::${absIndex}`} containerType={node.type} />
             {renderChunk(ch, props)}
           </Fragment>
         );
       })}
       {showEndZone && (
-        <DropZone id={`dz::${node.id}::${fullChildren.length}`} />
+        <DropZone id={`dz::${node.id}::${fullChildren.length}`} containerType={node.type} />
       )}
     </>
   );

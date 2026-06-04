@@ -662,6 +662,7 @@ export default function App() {
     addSubsection, addSubsubsection, updateTableCell,
     deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
     addTableColumn, updateTableColWidths, addSectionAfter,
+    updateTableCaption, updateTableColors,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
     deleteFigureImage, updateMathItem, deleteMathItem,
@@ -711,6 +712,18 @@ export default function App() {
     let n = 0;
     const walk = (node: any) => {
       if (node.type === "figure") map[node.id] = ++n;
+      (node.children ?? []).forEach(walk);
+    };
+    (numberedDoc.children ?? []).forEach(walk);
+    return map;
+  }, [numberedDoc]);
+
+  // Global table numbers, assigned in document order.
+  const tableNumbers = useMemo(() => {
+    const map: Record<string, number> = {};
+    let n = 0;
+    const walk = (node: any) => {
+      if (node.type === "table") map[node.id] = ++n;
       (node.children ?? []).forEach(walk);
     };
     (numberedDoc.children ?? []).forEach(walk);
@@ -1071,6 +1084,26 @@ export default function App() {
       if (node.children) {
         return { ...node, children: node.children.map(update) };
       }
+      return node;
+    }
+    setDoc((prev) => update(prev));
+  }
+
+  // Edit a table's caption.
+  function updateTableCaption(tableId: string, caption: string) {
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") return { ...node, caption };
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
+    setDoc((prev) => update(prev));
+  }
+
+  // Replace a table's per-cell colour grid.
+  function updateTableColors(tableId: string, colors: (string | null)[][]) {
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") return { ...node, colors };
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
     setDoc((prev) => update(prev));
@@ -1525,6 +1558,7 @@ export default function App() {
                                 droppableId={`p${pageIndex}-c${colIndex}`}
                                 column={col}
                                 figureNumbers={figureNumbers}
+                                tableNumbers={tableNumbers}
                                 {...rendererProps}
                               />
                             </div>
