@@ -1,9 +1,9 @@
-import { Fragment, useRef, useMemo } from "react";
+import { Fragment, useRef, useEffect } from "react";
 import type { Chunk } from "../utils/paginateDocument";
 import { isContainerType } from "../utils/paginateDocument";
 import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
 import { TrashIcon } from "../components/TrashIcon";
-import katex from "katex";
+import "mathlive";
 import "katex/dist/katex.min.css";
 
 // True while dragging an image — either a sidebar upload (`image::`) or one
@@ -152,65 +152,120 @@ function Paragraph({
 }
 
 /* -----------------------------
-   MATH — a KaTeX-rendered display equation; click to edit its LaTeX.
+   MATH — one or more directly-editable equations (MathLive), side by side.
 ----------------------------- */
-function MathBlock({ node, editingId, setEditingId, updateMath, deleteNodeById }: any) {
-  const isEditing = editingId === node.id;
+// MathLive's <math-field> custom element (typed loosely for JSX).
+const MathFieldTag = "math-field" as any;
 
-  const html = useMemo(() => {
-    try {
-      return katex.renderToString(node.latex || "", {
-        displayMode: true,
-        throwOnError: false
-      });
-    } catch {
-      return "";
-    }
-  }, [node.latex]);
+// Editable math field; renders the equation and edits it visually in place.
+function MathField({ value, onChange }: any) {
+  const ref = useRef<any>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  // Keep the field's value in sync without disturbing the caret while typing.
+  useEffect(() => {
+    const el = ref.current;
+    if (el && el.value !== value) el.value = value;
+  }, [value]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.value = value;
+    // Don't pop the on-screen keyboard on desktop.
+    el.mathVirtualKeyboardPolicy = "manual";
+    const handler = () => onChangeRef.current(el.value);
+    el.addEventListener("input", handler);
+    return () => el.removeEventListener("input", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <div style={{ position: "relative", margin: "12px 0", textAlign: "center" }}>
-      <button
-        onClick={() => deleteNodeById(node.id)}
-        title="Delete equation"
+    <MathFieldTag
+      ref={ref}
+      style={{
+        fontSize: "1.3em",
+        padding: "2px 4px",
+        background: "transparent",
+        color: "#000"
+      }}
+    />
+  );
+}
+
+// Vertical slot to the left/right of an equation; appears while dragging a math
+// block from the palette, so equations can be chained side by side.
+function MathSlot({ id }: any) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const { active } = useDndContext();
+  const dragging = String(active?.id ?? "").startsWith("block::math::");
+
+  if (!dragging) return <div ref={setNodeRef} style={{ width: 0 }} />;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        width: isOver ? 28 : 16,
+        alignSelf: "stretch",
+        minHeight: 40,
+        flexShrink: 0,
+        borderRadius: 4,
+        background: isOver ? "rgba(74,144,226,0.25)" : "rgba(74,144,226,0.08)",
+        border: `1px dashed ${isOver ? "#4a90e2" : "rgba(74,144,226,0.4)"}`
+      }}
+    />
+  );
+}
+
+function MathBlock({ node, updateMathItem, deleteMathItem }: any) {
+  // Support both the container model and any legacy single-latex node.
+  const items: any[] =
+    node.items ?? (node.latex != null ? [{ id: `${node.id}-0`, latex: node.latex }] : []);
+
+  return (
+    <div style={{ margin: "12px 0" }}>
+      <div
         style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          display: "inline-flex",
-          padding: 4,
-          background: "transparent",
-          border: "none",
-          color: "#c0392b",
-          cursor: "pointer"
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          justifyContent: "center",
+          flexWrap: "wrap"
         }}
       >
-        <TrashIcon size={14} />
-      </button>
-
-      {isEditing ? (
-        <input
-          autoFocus
-          value={node.latex || ""}
-          onChange={(e) => updateMath(node.id, e.target.value)}
-          onBlur={() => setEditingId(null)}
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: 6,
-            textAlign: "center",
-            fontFamily: "var(--mono)",
-            fontSize: 14,
-            color: "var(--text)"
-          }}
-        />
-      ) : (
-        <div
-          onClick={() => setEditingId(node.id)}
-          style={{ cursor: "pointer", color: "var(--text)" }}
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      )}
+        <MathSlot id={`mathdz::${node.id}::0`} />
+        {items.map((it, i) => (
+          <Fragment key={it.id}>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <MathField
+                value={it.latex}
+                onChange={(v: string) => updateMathItem(node.id, it.id, v)}
+              />
+              <button
+                onClick={() => deleteMathItem(node.id, it.id)}
+                title="Delete equation"
+                style={{
+                  position: "absolute",
+                  top: -6,
+                  right: -6,
+                  display: "inline-flex",
+                  padding: 2,
+                  background: "white",
+                  border: "1px solid #eee",
+                  borderRadius: 4,
+                  color: "#c0392b",
+                  cursor: "pointer"
+                }}
+              >
+                <TrashIcon size={12} />
+              </button>
+            </div>
+            <MathSlot id={`mathdz::${node.id}::${i + 1}`} />
+          </Fragment>
+        ))}
+      </div>
     </div>
   );
 }

@@ -120,7 +120,7 @@ function dropCollision(args: any) {
   const hits = pointerWithin(args);
   const zones = hits.filter((h: any) => {
     const id = String(h.id);
-    return id.startsWith("dz::") || id.startsWith("figdz::");
+    return id.startsWith("dz::") || id.startsWith("figdz::") || id.startsWith("mathdz::");
   });
   return zones.length ? zones : hits;
 }
@@ -217,12 +217,34 @@ function insertNodeAt(node: any, containerId: string, index: number, newNode: an
   return { ...node, children: node.children.map((c: any) => insertNodeAt(c, containerId, index, newNode)) };
 }
 
-const mathNode = (latex: string) => ({ id: crypto.randomUUID(), type: "math", latex });
+// A math block is a container of one or more equations (so they can be chained
+// side by side, like figures).
+const mathNode = (latex: string) => ({
+  id: crypto.randomUUID(),
+  type: "math",
+  items: [{ id: crypto.randomUUID(), latex }]
+});
 
-// Blox palette: draggable block id → label + factory for a fresh node.
-const BLOCK_DEFS: Record<string, { label: string; make: () => any }> = {
+// Default LaTeX for each math Blox block.
+const MATH_TEMPLATES: Record<string, string> = {
+  "block::math::integral": "\\int_{a}^{b} f(x)\\,dx",
+  "block::math::sum": "\\sum_{i=1}^{n} a_i",
+  "block::math::product": "\\prod_{i=1}^{n} a_i",
+  "block::math::fraction": "\\frac{a}{b}",
+  "block::math::matrix": "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"
+};
+
+const mathBlock = (id: string, label: string, iconTex: string, iconSize = 22) => ({
+  label,
+  icon: () => <KatexIcon tex={iconTex} size={iconSize} />,
+  make: () => mathNode(MATH_TEMPLATES[id])
+});
+
+// Blox palette: block id → label, palette icon and a fresh-node factory.
+const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: () => any }> = {
   "block::table": {
     label: "Table",
+    icon: () => <TableGlyph />,
     make: () => ({
       id: crypto.randomUUID(),
       type: "table",
@@ -231,21 +253,65 @@ const BLOCK_DEFS: Record<string, { label: string; make: () => any }> = {
       )
     })
   },
-  "block::math::integral": { label: "Integral", make: () => mathNode("\\int_{a}^{b} f(x)\\,dx") },
-  "block::math::sum":      { label: "Sum",      make: () => mathNode("\\sum_{i=1}^{n} a_i") },
-  "block::math::product":  { label: "Product",  make: () => mathNode("\\prod_{i=1}^{n} a_i") },
-  "block::math::fraction": { label: "Fraction", make: () => mathNode("\\frac{a}{b}") }
+  "block::math::integral": mathBlock("block::math::integral", "Integral", "\\int"),
+  "block::math::sum":      mathBlock("block::math::sum", "Sum", "\\sum"),
+  "block::math::product":  mathBlock("block::math::product", "Product", "\\prod"),
+  "block::math::fraction": mathBlock("block::math::fraction", "Fraction", "\\frac{a}{b}"),
+  "block::math::matrix":   mathBlock("block::math::matrix", "Matrix", "\\left[\\begin{smallmatrix}a&b\\\\c&d\\end{smallmatrix}\\right]", 15)
 };
 
+const BLOX_ORDER = [
+  "block::table",
+  "block::math::integral",
+  "block::math::sum",
+  "block::math::product",
+  "block::math::fraction",
+  "block::math::matrix"
+];
+
+/* ---- math-container tree edits ---- */
+function insertMathItem(node: any, mathId: string, index: number, latex: string): any {
+  if (node.type === "math" && node.id === mathId) {
+    const items = [...(node.items ?? [])];
+    items.splice(Math.min(Math.max(index, 0), items.length), 0, { id: crypto.randomUUID(), latex });
+    return { ...node, items };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => insertMathItem(c, mathId, index, latex)) };
+}
+
+function updateMathItemTree(node: any, mathId: string, itemId: string, latex: string): any {
+  if (node.type === "math" && node.id === mathId) {
+    return { ...node, items: (node.items ?? []).map((it: any) => it.id === itemId ? { ...it, latex } : it) };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => updateMathItemTree(c, mathId, itemId, latex)) };
+}
+
+// Remove an equation; drop the whole math block if it was the last one.
+function deleteMathItemTree(node: any, mathId: string, itemId: string): any {
+  if (!node.children) return node;
+  const children: any[] = [];
+  for (const child of node.children) {
+    if (child.type === "math" && child.id === mathId) {
+      const items = (child.items ?? []).filter((it: any) => it.id !== itemId);
+      if (items.length > 0) children.push({ ...child, items });
+    } else {
+      children.push(deleteMathItemTree(child, mathId, itemId));
+    }
+  }
+  return { ...node, children };
+}
+
 /* A KaTeX-rendered glyph for the Blox palette icons. */
-function KatexIcon({ tex }: { tex: string }) {
+function KatexIcon({ tex, size = 22 }: { tex: string; size?: number }) {
   const html = useMemo(
     () => katex.renderToString(tex, { throwOnError: false }),
     [tex]
   );
   return (
     <span
-      style={{ fontSize: 22, lineHeight: 1, color: "#333" }}
+      style={{ fontSize: size, lineHeight: 1, color: "#333" }}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
@@ -295,30 +361,55 @@ function LayoutIcon({ columns }: { columns: number }) {
   );
 }
 
-/* A draggable block in the "Blox" palette: an icon with a label below it. */
-function DraggableBlock({ id, label, icon }: any) {
+/* The visual box for a Blox item: an icon with a label below it. */
+function BlockBox({ id, shadow }: { id: string; shadow?: boolean }) {
+  const def = BLOCK_DEFS[id];
+  if (!def) return null;
+  return (
+    <div
+      style={{
+        border: "1px solid #ccc",
+        borderRadius: 6,
+        padding: "10px 6px",
+        background: "#fafafa",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 4,
+        color: "#333",
+        width: "100%",
+        boxSizing: "border-box",
+        boxShadow: shadow ? "0 4px 12px rgba(0,0,0,0.25)" : undefined
+      }}
+    >
+      {/* fixed-height icon area keeps every Blox item the same size */}
+      <div
+        style={{
+          height: 36,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden"
+        }}
+      >
+        {def.icon()}
+      </div>
+      <span style={{ fontSize: 12 }}>{def.label}</span>
+    </div>
+  );
+}
+
+/* A draggable Blox item. */
+function DraggableBlock({ id }: { id: string }) {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id });
   return (
     <div
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      style={{
-        border: "1px solid #ccc",
-        borderRadius: 6,
-        padding: "10px 6px",
-        background: "#fafafa",
-        cursor: "grab",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 4,
-        color: "#333",
-        opacity: isDragging ? 0.5 : 1
-      }}
+      style={{ cursor: "grab", opacity: isDragging ? 0.4 : 1 }}
     >
-      {icon}
-      <span style={{ fontSize: 12 }}>{label}</span>
+      <BlockBox id={id} />
     </div>
   );
 }
@@ -398,8 +489,8 @@ export default function App() {
   const [images, setImages] = useState<{ id: string; src: string; name: string }[]>([]);
   // Source of the image currently being dragged (for the drag overlay preview).
   const [activeDragSrc, setActiveDragSrc] = useState<string | null>(null);
-  // Label of the Blox block currently being dragged (for the drag overlay).
-  const [activeBlock, setActiveBlock] = useState<string | null>(null);
+  // Id of the Blox block currently being dragged (for the drag overlay).
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
 
 
   // LaTeX-like defaults: text fills the margins, ~12pt body, tight leading.
@@ -417,7 +508,7 @@ export default function App() {
     addTableColumn, updateTableColWidths, addSectionAfter,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
-    deleteFigureImage, updateMath,
+    deleteFigureImage, updateMathItem, deleteMathItem,
   };
 
   // ── 2. Derived values ───────────────────────────────────
@@ -555,14 +646,12 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
-  // Edit a math block's LaTeX source.
-  function updateMath(id: string, value: string) {
-    function update(node: any): any {
-      if (node.id === id && node.type === "math") return { ...node, latex: value };
-      if (node.children) return { ...node, children: node.children.map(update) };
-      return node;
-    }
-    setDoc((prev) => update(prev));
+  // Edit / delete an individual equation within a math block.
+  function updateMathItem(mathId: string, itemId: string, latex: string) {
+    setDoc((prev) => updateMathItemTree(prev, mathId, itemId, latex));
+  }
+  function deleteMathItem(mathId: string, itemId: string) {
+    setDoc((prev) => deleteMathItemTree(prev, mathId, itemId));
   }
 
 
@@ -997,7 +1086,7 @@ export default function App() {
   function handleDragStart(event: any) {
     const id = String(event.active.id);
     setActiveDragSrc(null);
-    setActiveBlock(null);
+    setActiveBlockId(null);
     if (id.startsWith("image::")) {
       const img = images.find((i) => i.id === id.slice("image::".length));
       setActiveDragSrc(img?.src ?? null);
@@ -1005,20 +1094,31 @@ export default function App() {
       const [, figId, imgId] = id.split("::");
       setActiveDragSrc(findDocImageSrc(doc, figId, imgId));
     } else if (BLOCK_DEFS[id]) {
-      setActiveBlock(BLOCK_DEFS[id].label);
+      setActiveBlockId(id);
     }
   }
 
   function handleDragEnd(event: any) {
     const { active, over } = event;
     setActiveDragSrc(null);
-    setActiveBlock(null);
+    setActiveBlockId(null);
 
-    // A Blox block (table / math) dropped into a between-block zone.
-    const blockDef = BLOCK_DEFS[String(active.id)];
+    // A Blox block (table / math) dropped into the document.
+    const activeBlockId = String(active.id);
+    const blockDef = BLOCK_DEFS[activeBlockId];
     if (blockDef) {
       const overId = over ? String(over.id) : null;
-      if (overId && overId.startsWith("dz::")) {
+      if (!overId) return;
+
+      // Math block dropped beside an existing equation → chain it in.
+      if (overId.startsWith("mathdz::") && activeBlockId.startsWith("block::math::")) {
+        const [, mathId, idxStr] = overId.split("::");
+        setDoc((prev) => insertMathItem(prev, mathId, Number(idxStr), MATH_TEMPLATES[activeBlockId]));
+        return;
+      }
+
+      // Otherwise drop it as a new block in a between-block zone.
+      if (overId.startsWith("dz::")) {
         const [, containerId, idxStr] = overId.split("::");
         setDoc((prev) => insertNodeAt(prev, containerId, Number(idxStr), blockDef.make()));
       }
@@ -1136,7 +1236,7 @@ export default function App() {
       collisionDetection={dropCollision}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => { setActiveDragSrc(null); setActiveBlock(null); }}
+      onDragCancel={() => { setActiveDragSrc(null); setActiveBlockId(null); }}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
       <div
@@ -1224,11 +1324,9 @@ export default function App() {
 
           <h3 style={{ marginBottom: 0 }}>Blox</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <DraggableBlock id="block::table" label="Table" icon={<TableGlyph />} />
-            <DraggableBlock id="block::math::integral" label="Integral" icon={<KatexIcon tex="\int" />} />
-            <DraggableBlock id="block::math::sum" label="Sum" icon={<KatexIcon tex="\sum" />} />
-            <DraggableBlock id="block::math::product" label="Product" icon={<KatexIcon tex="\prod" />} />
-            <DraggableBlock id="block::math::fraction" label="Fraction" icon={<KatexIcon tex="\frac{a}{b}" />} />
+            {BLOX_ORDER.map((id) => (
+              <DraggableBlock key={id} id={id} />
+            ))}
           </div>
 
           <div style={{ marginTop: "auto"}}>
@@ -1346,18 +1444,9 @@ export default function App() {
               opacity: 0.9
             }}
           />
-        ) : activeBlock ? (
-          <div
-            style={{
-              padding: "10px 16px",
-              border: "1px solid #4a90e2",
-              borderRadius: 6,
-              background: "white",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-              fontFamily: "var(--sans)"
-            }}
-          >
-            {activeBlock}
+        ) : activeBlockId ? (
+          <div style={{ width: 104 }}>
+            <BlockBox id={activeBlockId} shadow />
           </div>
         ) : null}
       </DragOverlay>

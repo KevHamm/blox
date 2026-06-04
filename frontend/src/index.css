@@ -17,7 +17,9 @@
 
   font: 18px/1.6 var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: light dark;
+  /* Always render form controls / equations in the light theme so any text
+     in the document stays black, regardless of the OS dark-mode setting. */
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -105,4 +107,17 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+
+/* MathLive equation fields: always black, no virtual keyboard / menu UI. */
+math-field {
+  color: #000;
+  --caret-color: #000;
+  --selection-background-color: #b3d4fc;
+  border: none;
+  outline: none;
+}
+math-field::part(virtual-keyboard-toggle),
+math-field::part(menu-toggle) {
+  display: none;
 }
