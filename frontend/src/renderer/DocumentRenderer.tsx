@@ -23,9 +23,12 @@ function DropZone({ id }: any) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const { active } = useDndContext();
 
-  // Reveal drop targets while dragging an image or a Blox block.
+  // Reveal drop targets while dragging an image or a Blox block — but NOT for
+  // a Section block, which drops anywhere in the document with no zone.
   const activeId = String(active?.id ?? "");
-  const dragging = isImageDragId(activeId) || activeId.startsWith("block::");
+  const dragging =
+    isImageDragId(activeId) ||
+    (activeId.startsWith("block::") && activeId !== "block::section");
 
   if (!dragging) {
     // Idle: zero-height so it never affects layout / pagination.
@@ -549,14 +552,6 @@ function TableBlock(props: any) {
 
   return (
     <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", marginBottom: 4 }}>
-        <TrashButton
-          className="tbl-btn"
-          onClick={() => deleteNodeById(node.id)}
-          label="Delete table"
-        />
-      </div>
-
       <div style={{ position: "relative" }}>
       <table
         ref={tableRef}
@@ -642,10 +637,15 @@ function TableBlock(props: any) {
         </div>
       </div>
 
-      {/* add / remove ROW — below the table, aligned to the left margin */}
-      <div style={{ display: "flex", justifyContent: "flex-start", gap: 6, marginTop: 6 }}>
+      {/* row +/- on the left, delete-table on the right — all one line */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
         <SquareButton color="green" title="Add row" onClick={() => addTableRow(node.id)}>+</SquareButton>
         <SquareButton color="red" title="Remove row" onClick={() => deleteTableRow(node.id)}>−</SquareButton>
+        <TrashButton
+          className="tbl-btn"
+          onClick={() => deleteNodeById(node.id)}
+          label="Delete table"
+        />
       </div>
     </div>
   );

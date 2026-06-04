@@ -18,6 +18,8 @@ import {
   useSensor,
   useSensors,
   useDraggable,
+  useDroppable,
+  useDndContext,
   MeasuringStrategy
 } from "@dnd-kit/core";
 import { getEventCoordinates } from "@dnd-kit/utilities";
@@ -218,18 +220,18 @@ function insertNodeAt(node: any, containerId: string, index: number, newNode: an
 }
 
 /* ---- structural node factories ---- */
-const newParagraph = () => ({
+const newParagraph = (): DocumentNode => ({
   id: crypto.randomUUID(),
   type: "paragraph",
   text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
 });
-const newSection = () => ({
+const newSection = (): DocumentNode => ({
   id: crypto.randomUUID(), type: "section", title: "Section", children: [newParagraph()]
 });
-const newSubsection = () => ({
+const newSubsection = (): DocumentNode => ({
   id: crypto.randomUUID(), type: "subsection", title: "New Subsection", children: [newParagraph()]
 });
-const newSubsubsection = () => ({
+const newSubsubsection = (): DocumentNode => ({
   id: crypto.randomUUID(), type: "subsubsection", title: "New Subsubsection", children: [newParagraph()]
 });
 
@@ -490,6 +492,32 @@ function BlockBox({ id, shadow }: { id: string; shadow?: boolean }) {
   );
 }
 
+/* The scrollable document area. It becomes a drop target only while a Section
+   block is being dragged, so a section can be dropped anywhere in the document
+   (no visible drop zone) without interfering with image "drop outside to
+   remove" behaviour. */
+function DroppableDocArea({ children }: any) {
+  const { active } = useDndContext();
+  const isSectionDrag = String(active?.id ?? "") === "block::section";
+  const { setNodeRef } = useDroppable({ id: "doc-drop", disabled: !isSectionDrag });
+  return (
+    <div
+      ref={setNodeRef}
+      className="doc-area"
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: 40,
+        overflowY: "auto"
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /* A draggable Blox item. */
 function DraggableBlock({ id }: { id: string }) {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id });
@@ -501,6 +529,43 @@ function DraggableBlock({ id }: { id: string }) {
       style={{ cursor: "grab", opacity: isDragging ? 0.4 : 1 }}
     >
       <BlockBox id={id} />
+    </div>
+  );
+}
+
+/* A collapsible sidebar group with a clickable header. */
+function Collapsible({ title, children, defaultOpen = true }: any) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div>
+      <h3
+        onClick={() => setOpen(!open)}
+        style={{
+          cursor: "pointer",
+          userSelect: "none",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          margin: "0 0 8px"
+        }}
+      >
+        <span
+          style={{
+            display: "inline-block",
+            fontSize: 10,
+            transform: open ? "rotate(90deg)" : "none",
+            transition: "transform 0.1s ease"
+          }}
+        >
+          ▶
+        </span>
+        {title}
+      </h3>
+      {open && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -770,23 +835,6 @@ export default function App() {
       children.splice(index + 1, 0, newSection);
       return { ...prev, children };
     });
-  }
-
-  // Insert a fresh section at the very top of the document (under the title).
-  function addSectionAtStart() {
-    const newSection: DocumentNode = {
-      id: crypto.randomUUID(),
-      type: "section",
-      title: "Section",
-      children: [
-        { id: crypto.randomUUID(), type: "paragraph", text: lorem }
-      ]
-    };
-
-    setDoc((prev) => ({
-      ...prev,
-      children: [newSection, ...(prev.children ?? [])]
-    }));
   }
 
   // Resize every image in a figure container (per-image fraction of column).
@@ -1201,10 +1249,13 @@ export default function App() {
       const overId = over ? String(over.id) : null;
       if (!overId) return;
 
-      // Section / Subsection / Subsubsection → insert at the right hierarchy level.
+      // Section / Subsection / Subsubsection.
       const kind = STRUCTURAL[activeBlockId];
       if (kind) {
-        if (overId.startsWith("dz::")) {
+        // A section drops anywhere in the document → appended (no drop zone).
+        if (kind === "section") {
+          setDoc((prev) => ({ ...prev, children: [...(prev.children ?? []), newSection()] }));
+        } else if (overId.startsWith("dz::")) {
           const [, containerId, idxStr] = overId.split("::");
           setDoc((prev) => insertStructuralAt(prev, containerId, Number(idxStr), kind));
         }
@@ -1361,74 +1412,72 @@ export default function App() {
             overflowY: "auto"
           }}
         >
-          <h3>Typography</h3>
+          <Collapsible title="Typography">
+            <NumberControl
+              label="Text Width"
+              value={layout.textWidth}
+              min={300}
+              max={CONTENT_WIDTH}
+              step={1}
+              unit="px"
+              onChange={(v) => setLayout({ ...layout, textWidth: v })}
+            />
 
-          <NumberControl
-            label="Text Width"
-            value={layout.textWidth}
-            min={300}
-            max={CONTENT_WIDTH}
-            step={1}
-            unit="px"
-            onChange={(v) => setLayout({ ...layout, textWidth: v })}
-          />
+            <NumberControl
+              label="Line Spacing"
+              value={layout.lineHeight}
+              min={1}
+              max={2.5}
+              step={0.1}
+              onChange={(v) => setLayout({ ...layout, lineHeight: v })}
+            />
 
-          <NumberControl
-            label="Line Spacing"
-            value={layout.lineHeight}
-            min={1}
-            max={2.5}
-            step={0.1}
-            onChange={(v) => setLayout({ ...layout, lineHeight: v })}
-          />
+            <NumberControl
+              label="Font Size"
+              value={layout.fontSize}
+              min={8}
+              max={28}
+              step={1}
+              unit="px"
+              onChange={(v) => setLayout({ ...layout, fontSize: v })}
+            />
 
-          <NumberControl
-            label="Font Size"
-            value={layout.fontSize}
-            min={8}
-            max={28}
-            step={1}
-            unit="px"
-            onChange={(v) => setLayout({ ...layout, fontSize: v })}
-          />
+            <div>
+              <label>Layout</label>
+              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                {[1, 2].map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setLayout({ ...layout, columns: c })}
+                    title={c === 1 ? "One column" : "Two columns"}
+                    style={{
+                      padding: 6,
+                      lineHeight: 0,
+                      cursor: "pointer",
+                      borderRadius: 6,
+                      color: "#444",
+                      border:
+                        layout.columns === c
+                          ? "2px solid var(--accent)"
+                          : "1px solid #ccc",
+                      background:
+                        layout.columns === c ? "var(--accent-bg)" : "white"
+                    }}
+                  >
+                    <LayoutIcon columns={c} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Collapsible>
 
-          <hr />
-
-          <label>Layout</label>
-
-          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-            {[1, 2].map((c) => (
-              <button
-                key={c}
-                onClick={() => setLayout({ ...layout, columns: c })}
-                title={c === 1 ? "One column" : "Two columns"}
-                style={{
-                  padding: 6,
-                  lineHeight: 0,
-                  cursor: "pointer",
-                  borderRadius: 6,
-                  color: "#444",
-                  border:
-                    layout.columns === c
-                      ? "2px solid var(--accent)"
-                      : "1px solid #ccc",
-                  background:
-                    layout.columns === c ? "var(--accent-bg)" : "white"
-                }}
-              >
-                <LayoutIcon columns={c} />
-              </button>
-            ))}
-          </div>
-
-          <hr />
-
-          <h3 style={{ marginBottom: 0 }}>Blox</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {BLOX_ORDER.map((id) => (
-              <DraggableBlock key={id} id={id} />
-            ))}
-          </div>
+          <Collapsible title="Blox">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {BLOX_ORDER.map((id) => (
+                <DraggableBlock key={id} id={id} />
+              ))}
+            </div>
+          </Collapsible>
 
           <div style={{ marginTop: "auto"}}>
             <hr />
@@ -1441,17 +1490,7 @@ export default function App() {
 
 
         {/* DOCUMENT */}
-        <div
-          className="doc-area"
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            padding: 40,
-            overflowY: "auto"
-          }}
-        >
+        <DroppableDocArea>
                 {pages.map((cols: any[], pageIndex: number) => (
                   <Page key={pageIndex} pageNumber={pageIndex + 1}>
 
@@ -1466,15 +1505,6 @@ export default function App() {
                                    fontFamily: "var(--sans)", color: "var(--text)",
                                    background: "transparent" }}
                         />
-
-                        {/* Only offered while the document is empty; once a
-                            section exists, sections are added via the buttons
-                            at the end of each section. */}
-                        {numberedDoc.children.length === 0 && (
-                          <div style={{ marginTop: 8, marginBottom: 16 }}>
-                            <button onClick={addSectionAtStart}>+ Add Section</button>
-                          </div>
-                        )}
                       </div>
                     )}
 
@@ -1505,7 +1535,7 @@ export default function App() {
 
                   </Page>
                 ))}
-        </div>
+        </DroppableDocArea>
 
         {/* RIGHT SIDEBAR — IMAGES */}
         <div
