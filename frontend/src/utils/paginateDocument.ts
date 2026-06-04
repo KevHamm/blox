@@ -42,17 +42,17 @@ export function fullChunk(node: any): Chunk {
   };
 }
 
-/**
- * Flow the document into fixed-height columns, splitting wherever needed — even
- * in the middle of a section, subsection or subsubsection. Columns are grouped
- * into pages of `columnsPerPage`.
- */
-export function paginateColumns(
-  doc: any,
+// Special full-width pages that ignore column mode and break onto their own page.
+const SPECIAL_PAGES = new Set(["coverpage", "toc", "bibliography"]);
+export const isSpecialPage = (t: string) => SPECIAL_PAGES.has(t);
+
+/** Flow a run of content nodes into pages of `columnsPerPage` columns. */
+function paginateRun(
+  nodes: any[],
   leafHeights:   Record<string, number>,
   headerHeights: Record<string, number>,
-  titleReserved  = 0,
-  columnsPerPage = 1
+  titleReserved: number,
+  columnsPerPage: number
 ): DocPage[] {
 
   const columns: Chunk[][] = [[]];
@@ -71,8 +71,6 @@ export function paginateColumns(
     else columns[columns.length - 1].push(chunk);
   };
 
-  // Move to a fresh column, re-opening the current container path as
-  // header-less continuations so nesting is preserved.
   const startNewColumn = () => {
     const openNodes = stack.map((c) => c.node);
     columns.push([]);
@@ -94,7 +92,7 @@ export function paginateColumns(
 
   const closeContainer = () => {
     const chunk = stack.pop();
-    if (chunk) chunk.isLast = true;   // the chunk in the final column is "last"
+    if (chunk) chunk.isLast = true;
   };
 
   const placeLeaf = (node: any) => {
@@ -116,7 +114,7 @@ export function paginateColumns(
     else placeLeaf(node);
   }
 
-  for (const section of doc.children ?? []) place(section);
+  for (const node of nodes) place(node);
 
   const pages: DocPage[] = [];
   for (let i = 0; i < columns.length; i += columnsPerPage) {
@@ -125,4 +123,57 @@ export function paginateColumns(
     pages.push(page);
   }
   return pages;
+}
+
+/**
+ * Paginate the whole document. Cover page / table of contents / bibliography
+ * each get their own single-column page (column mode is ignored for them); the
+ * remaining section content flows in `columnsPerPage` columns. Every special
+ * page forces a page break.
+ */
+export function paginateColumns(
+  doc: any,
+  leafHeights:   Record<string, number>,
+  headerHeights: Record<string, number>,
+  titleReserved  = 0,
+  columnsPerPage = 1
+): DocPage[] {
+
+  const children = doc.children ?? [];
+
+  // Split into runs: each special page is its own segment; runs of normal
+  // content stay together.
+  const segments: { special: boolean; nodes: any[] }[] = [];
+  let run: any[] | null = null;
+  for (const child of children) {
+    if (isSpecialPage(child.type)) {
+      if (run) { segments.push({ special: false, nodes: run }); run = null; }
+      segments.push({ special: true, nodes: [child] });
+    } else {
+      (run ??= []).push(child);
+    }
+  }
+  if (run) segments.push({ special: false, nodes: run });
+
+  const out: DocPage[] = [];
+  let firstPageUsed = false;   // the document title is reserved on the first page only
+
+  for (const seg of segments) {
+    if (seg.special) {
+      out.push([[fullChunk(seg.nodes[0])]]);   // one full-width page
+      firstPageUsed = true;
+    } else {
+      const reserve = firstPageUsed ? 0 : titleReserved;
+      const runPages = paginateRun(seg.nodes, leafHeights, headerHeights, reserve, columnsPerPage);
+      out.push(...runPages);
+      firstPageUsed = true;
+    }
+  }
+
+  if (out.length === 0) {
+    const empty: Chunk[][] = [];
+    for (let i = 0; i < columnsPerPage; i++) empty.push([]);
+    return [empty];
+  }
+  return out;
 }

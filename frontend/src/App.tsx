@@ -5,7 +5,7 @@ import type { DocumentNode } from "./types/document";
 import { Page } from "./components/Page";
 import { TrashIcon } from "./components/TrashIcon";
 import { numberDocument } from "./utils/numberDocument";
-import { paginateColumns, fullChunk, heightsUnchanged } from "./utils/paginateDocument";
+import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -766,11 +766,8 @@ export default function App() {
   // `pages[page][column]` is a list of chunks. Content flows left column →
   // right column → next page, and may break in the middle of any container.
   const pages = useMemo(() => {
-    if (Object.keys(leafHeights).length === 0) {
-      const page = [(numberedDoc.children ?? []).map(fullChunk)];
-      while (page.length < layout.columns) page.push([]);
-      return [page];
-    }
+    // paginateColumns handles missing measurements (defaults) and always keeps
+    // cover page / TOC / bibliography on their own single-column pages.
     return paginateColumns(
       numberedDoc,
       leafHeights,
