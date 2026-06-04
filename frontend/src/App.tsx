@@ -1563,19 +1563,19 @@ function Editor() {
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
       <div
+        className="editor-canvas"
         style={{
           display: "flex",
-          minHeight: "100vh",
-          background: "#f3f3f3"
+          minHeight: "100vh"
         }}
       >
         {/* SIDEBAR */}
         <div
+          className="ui-panel"
           style={{
             width: 280,
             padding: 20,
-            borderRight: "1px solid #ddd",
-            background: "white",
+            borderRight: "1px solid rgba(0,0,0,0.08)",
             display: "flex",
             flexDirection: "column",
             gap: 12,
@@ -1622,17 +1622,18 @@ function Editor() {
                     onClick={() => setLayout({ ...layout, columns: c })}
                     title={c === 1 ? "One column" : "Two columns"}
                     style={{
-                      padding: 6,
+                      padding: 7,
                       lineHeight: 0,
                       cursor: "pointer",
-                      borderRadius: 6,
+                      borderRadius: 10,
                       color: "#444",
+                      transition: "border-color 0.15s ease, background 0.15s ease",
                       border:
                         layout.columns === c
-                          ? "2px solid var(--accent)"
-                          : "1px solid #ccc",
+                          ? "2px solid var(--ui-blue)"
+                          : "1px solid rgba(0,0,0,0.12)",
                       background:
-                        layout.columns === c ? "var(--accent-bg)" : "white"
+                        layout.columns === c ? "rgba(0,113,227,0.08)" : "rgba(255,255,255,0.7)"
                     }}
                   >
                     <LayoutIcon columns={c} />
@@ -1659,9 +1660,13 @@ function Editor() {
             </div>
           </Collapsible>
 
-          <div style={{ marginTop: "auto"}}>
-            <hr />
-            <button onClick={() => exportLatex(numberedDoc)}>
+          <div style={{ marginTop: "auto" }}>
+            <hr style={{ border: "none", borderTop: "1px solid rgba(0,0,0,0.08)", margin: "12px 0" }} />
+            <button
+              className="ui-btn primary"
+              style={{ width: "100%" }}
+              onClick={() => exportLatex(numberedDoc)}
+            >
               Export LaTeX
             </button>
           </div>
@@ -1720,11 +1725,11 @@ function Editor() {
 
         {/* RIGHT SIDEBAR — IMAGES */}
         <div
+          className="ui-panel"
           style={{
             width: 260,
             padding: 20,
-            borderLeft: "1px solid #ddd",
-            background: "white",
+            borderLeft: "1px solid rgba(0,0,0,0.08)",
             display: "flex",
             flexDirection: "column",
             gap: 12,
@@ -1734,7 +1739,9 @@ function Editor() {
         >
           <h3>Images</h3>
 
-          <button onClick={uploadImage}>Upload image</button>
+          <button className="ui-btn" style={{ width: "100%" }} onClick={uploadImage}>
+            Upload image
+          </button>
 
           {images.map((img) => (
             <DraggableImage key={img.id} img={img} onDelete={deleteImageUpload} />
