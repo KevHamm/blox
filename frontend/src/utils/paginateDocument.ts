@@ -141,39 +141,28 @@ export function paginateColumns(
 
   const children = doc.children ?? [];
 
-  // Split into runs: each special page is its own segment; runs of normal
-  // content stay together.
-  const segments: { special: boolean; nodes: any[] }[] = [];
-  let run: any[] | null = null;
-  for (const child of children) {
-    if (isSpecialPage(child.type)) {
-      if (run) { segments.push({ special: false, nodes: run }); run = null; }
-      segments.push({ special: true, nodes: [child] });
-    } else {
-      (run ??= []).push(child);
-    }
-  }
-  if (run) segments.push({ special: false, nodes: run });
+  // Leading pages (cover, table of contents), the section body, then trailing
+  // pages (bibliography). Order is already enforced when nodes are inserted.
+  const before  = children.filter((c: any) => c.type === "coverpage" || c.type === "toc");
+  const after   = children.filter((c: any) => c.type === "bibliography");
+  const content = children.filter(
+    (c: any) => c.type !== "coverpage" && c.type !== "toc" && c.type !== "bibliography"
+  );
 
   const out: DocPage[] = [];
-  let firstPageUsed = false;   // the document title is reserved on the first page only
 
-  for (const seg of segments) {
-    if (seg.special) {
-      out.push([[fullChunk(seg.nodes[0])]]);   // one full-width page
-      firstPageUsed = true;
-    } else {
-      const reserve = firstPageUsed ? 0 : titleReserved;
-      const runPages = paginateRun(seg.nodes, leafHeights, headerHeights, reserve, columnsPerPage);
-      out.push(...runPages);
-      firstPageUsed = true;
-    }
+  for (const node of before) {
+    out.push([[fullChunk(node)]]);   // each its own full-width page
   }
 
-  if (out.length === 0) {
-    const empty: Chunk[][] = [];
-    for (let i = 0; i < columnsPerPage; i++) empty.push([]);
-    return [empty];
+  // The document body is always present — at least one page, even when empty —
+  // so a cover page always pushes the body to the next page. The body's first
+  // page carries the document title, so it reserves room for it.
+  out.push(...paginateRun(content, leafHeights, headerHeights, titleReserved, columnsPerPage));
+
+  for (const node of after) {
+    out.push([[fullChunk(node)]]);
   }
+
   return out;
 }

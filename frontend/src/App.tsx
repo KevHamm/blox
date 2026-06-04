@@ -777,6 +777,12 @@ export default function App() {
     );
   }, [numberedDoc, leafHeights, headerHeights, layout.columns]);
 
+  // The document title lives on the body's first page — i.e. after any leading
+  // cover page / table of contents.
+  const titlePageIndex = (numberedDoc.children ?? []).filter(
+    (c: any) => c.type === "coverpage" || c.type === "toc"
+  ).length;
+
   // ── 4. Measure rendered leaf/header heights for pagination ──
   useLayoutEffect(() => {
     const lh: Record<string, number> = {};
@@ -1667,8 +1673,8 @@ export default function App() {
                 {pages.map((cols: any[], pageIndex: number) => (
                   <Page key={pageIndex} pageNumber={pageIndex + 1}>
 
-                    {/* Title always spans full width above the columns */}
-                    {pageIndex === 0 && (
+                    {/* Title sits on the body's first page (after any cover / TOC) */}
+                    {pageIndex === titlePageIndex && (
                       <div style={{ textAlign: "center", marginBottom: 24 }}>
                         <input
                           value={documentTitle}
