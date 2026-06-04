@@ -10,6 +10,9 @@ export function numberDocument(doc: any) {
     ...doc,
     children: doc.children.map((section: any) => {
 
+      // Pages (cover / toc / bibliography) aren't numbered like sections.
+      if (section.type !== "section") return section;
+
       sectionNumber++;
       let subsectionNumber = 0;
 

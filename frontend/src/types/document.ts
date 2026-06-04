@@ -7,6 +7,9 @@ export interface DocumentNode {
   id: string;
   type:
     | "document"
+    | "coverpage"
+    | "toc"
+    | "bibliography"
     | "section"
     | "subsection"
     | "subsubsection"

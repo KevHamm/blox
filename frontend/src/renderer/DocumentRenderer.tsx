@@ -31,7 +31,7 @@ function DropZone({ id, containerType }: any) {
   const activeId = String(active?.id ?? "");
   let dragging: boolean;
   if (isImageDragId(activeId)) dragging = true;
-  else if (activeId === "block::section") dragging = false;
+  else if (activeId === "block::section" || activeId.startsWith("block::page::")) dragging = false;
   else if (activeId === "block::subsection") dragging = containerType === "section";
   else if (activeId === "block::subsubsection") dragging = containerType === "subsection";
   else dragging = activeId.startsWith("block::"); // table / math → anywhere
@@ -941,6 +941,34 @@ function Section({ node, showHeader = true, ...rest }: any) {
 }
 
 /* -----------------------------
+   SPECIAL PAGE (cover / TOC / bibliography) — header only for now.
+----------------------------- */
+const PAGE_TITLES: Record<string, string> = {
+  coverpage: "Cover Page",
+  toc: "Table of Contents",
+  bibliography: "Bibliography"
+};
+function PageBlock({ node, deleteNodeById }: any) {
+  return (
+    <div
+      style={{
+        marginBottom: 30,
+        padding: "20px 0",
+        borderTop: "2px solid #e0e0e0",
+        position: "relative"
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <h1 style={{ margin: 0, fontSize: 30 }}>
+          {PAGE_TITLES[node.type] ?? node.title}
+        </h1>
+        <TrashButton onClick={() => deleteNodeById(node.id)} label="Delete page" />
+      </div>
+    </div>
+  );
+}
+
+/* -----------------------------
    RECURSIVE CHUNK RENDERING
 ----------------------------- */
 // The drop zones + child elements inside a container chunk.
@@ -996,6 +1024,13 @@ function renderChunk(chunk: Chunk, props: any): any {
     return (
       <div data-leaf-id={node.id}>
         <MathBlock node={node} {...props} />
+      </div>
+    );
+  }
+  if (node.type === "coverpage" || node.type === "toc" || node.type === "bibliography") {
+    return (
+      <div data-leaf-id={node.id}>
+        <PageBlock node={node} {...props} />
       </div>
     );
   }

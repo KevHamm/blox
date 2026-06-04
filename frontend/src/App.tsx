@@ -246,6 +246,45 @@ const newSubsubsection = (): DocumentNode => ({
   id: crypto.randomUUID(), type: "subsubsection", title: "New Subsubsection", children: [newParagraph()]
 });
 
+/* ---- special pages ---- */
+const PAGE_LABELS: Record<string, string> = {
+  coverpage: "Cover Page",
+  toc: "Table of Contents",
+  bibliography: "Bibliography"
+};
+const newPage = (type: string): DocumentNode => ({
+  id: crypto.randomUUID(),
+  type: type as any,
+  title: PAGE_LABELS[type]
+});
+
+// Document ordering: cover page → table of contents → sections → bibliography.
+const pageRank = (node: any): number => {
+  switch (node.type) {
+    case "coverpage": return 0;
+    case "toc": return 1;
+    case "bibliography": return 3;
+    default: return 2; // sections / normal content
+  }
+};
+
+// Insert a node into the document at the position dictated by its rank.
+function insertOrdered(doc: any, node: any): any {
+  const kids = [...(doc.children ?? [])];
+  const rank = pageRank(node);
+  let i = kids.findIndex((k: any) => pageRank(k) > rank);
+  if (i === -1) i = kids.length;
+  kids.splice(i, 0, node);
+  return { ...doc, children: kids };
+}
+
+// Cover page / TOC / bibliography are singletons — only one of each.
+function insertPage(doc: any, node: any): any {
+  const kids = doc.children ?? [];
+  if (kids.some((k: any) => k.type === node.type)) return doc;
+  return insertOrdered(doc, node);
+}
+
 // A math block is a container of equation parts rendered flush together (so it
 // reads as one equation). Dropping a math block onto a slot inserts a part at
 // that position — including between two existing parts.
@@ -284,6 +323,33 @@ function HeadingGlyph({ level }: { level: number }) {
   );
 }
 
+// A page glyph (a sheet) with type-specific content lines.
+function PageGlyph({ kind }: { kind: "coverpage" | "toc" | "bibliography" }) {
+  return (
+    <svg width="30" height="34" viewBox="0 0 30 34">
+      <rect x="3" y="2" width="24" height="30" rx="2" fill="white" stroke="currentColor" strokeWidth="1.5" />
+      {kind === "coverpage" && (
+        <>
+          <rect x="8" y="12" width="14" height="3.5" rx="1" fill="currentColor" />
+          <rect x="10" y="18" width="10" height="2" rx="1" fill="currentColor" opacity="0.5" />
+        </>
+      )}
+      {kind === "toc" && [8, 13, 18, 23].map((y) => (
+        <g key={y}>
+          <rect x="7" y={y} width="9" height="2" rx="1" fill="currentColor" opacity="0.7" />
+          <rect x="20" y={y} width="3" height="2" rx="1" fill="currentColor" opacity="0.4" />
+        </g>
+      ))}
+      {kind === "bibliography" && [9, 15, 21].map((y) => (
+        <g key={y}>
+          <rect x="7" y={y} width="16" height="2" rx="1" fill="currentColor" opacity="0.6" />
+          <rect x="9" y={y + 3} width="12" height="2" rx="1" fill="currentColor" opacity="0.35" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 // Blox palette: block id → label, palette icon and a fresh-node factory.
 const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: () => any }> = {
   "block::section":       { label: "Section",       icon: () => <HeadingGlyph level={1} />, make: () => newSection() },
@@ -304,7 +370,11 @@ const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: () => a
   "block::math::sum":      mathBlock("block::math::sum", "Sum", "\\sum"),
   "block::math::product":  mathBlock("block::math::product", "Product", "\\prod"),
   "block::math::fraction": mathBlock("block::math::fraction", "Fraction", "\\frac{a}{b}"),
-  "block::math::matrix":   mathBlock("block::math::matrix", "Matrix", "\\left[\\begin{smallmatrix}a&b\\\\c&d\\end{smallmatrix}\\right]", 15)
+  "block::math::matrix":   mathBlock("block::math::matrix", "Matrix", "\\left[\\begin{smallmatrix}a&b\\\\c&d\\end{smallmatrix}\\right]", 15),
+
+  "block::page::cover":        { label: "Cover Page",        icon: () => <PageGlyph kind="coverpage" />,    make: () => newPage("coverpage") },
+  "block::page::toc":          { label: "Contents",          icon: () => <PageGlyph kind="toc" />,          make: () => newPage("toc") },
+  "block::page::bibliography": { label: "Bibliography",       icon: () => <PageGlyph kind="bibliography" />, make: () => newPage("bibliography") }
 };
 
 // Structural blocks land at the correct hierarchy level, not literally at the
@@ -325,6 +395,12 @@ const BLOX_ORDER = [
   "block::math::product",
   "block::math::fraction",
   "block::math::matrix"
+];
+
+const PAGE_ORDER = [
+  "block::page::cover",
+  "block::page::toc",
+  "block::page::bibliography"
 ];
 
 // Path of nodes from the document root down to (and including) the node with id.
@@ -509,8 +585,10 @@ function BlockBox({ id, shadow }: { id: string; shadow?: boolean }) {
    remove" behaviour. */
 function DroppableDocArea({ children }: any) {
   const { active } = useDndContext();
-  const isSectionDrag = String(active?.id ?? "") === "block::section";
-  const { setNodeRef } = useDroppable({ id: "doc-drop", disabled: !isSectionDrag });
+  const aid = String(active?.id ?? "");
+  // Sections and special pages drop anywhere in the document (no visible zone).
+  const dropAnywhere = aid === "block::section" || aid.startsWith("block::page::");
+  const { setNodeRef } = useDroppable({ id: "doc-drop", disabled: !dropAnywhere });
   return (
     <div
       ref={setNodeRef}
@@ -1331,12 +1409,19 @@ export default function App() {
       const overId = over ? String(over.id) : null;
       if (!overId) return;
 
+      // Special pages drop anywhere → auto-placed by document order (and unique).
+      if (activeBlockId.startsWith("block::page::")) {
+        setDoc((prev) => insertPage(prev, blockDef.make()));
+        return;
+      }
+
       // Section / Subsection / Subsubsection.
       const kind = STRUCTURAL[activeBlockId];
       if (kind) {
-        // A section drops anywhere in the document → appended (no drop zone).
+        // A section drops anywhere in the document → placed before any
+        // bibliography, after any cover / table of contents.
         if (kind === "section") {
-          setDoc((prev) => ({ ...prev, children: [...(prev.children ?? []), newSection()] }));
+          setDoc((prev) => insertOrdered(prev, newSection()));
         } else if (overId.startsWith("dz::")) {
           const [, containerId, idxStr] = overId.split("::");
           setDoc((prev) => insertStructuralAt(prev, containerId, Number(idxStr), kind));
@@ -1556,6 +1641,15 @@ export default function App() {
           <Collapsible title="Blox">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {BLOX_ORDER.map((id) => (
+                <DraggableBlock key={id} id={id} />
+              ))}
+            </div>
+
+            <div style={{ fontWeight: 600, fontSize: 13, marginTop: 4, color: "#555" }}>
+              Pages
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {PAGE_ORDER.map((id) => (
                 <DraggableBlock key={id} id={id} />
               ))}
             </div>
