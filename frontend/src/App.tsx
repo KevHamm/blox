@@ -739,12 +739,12 @@ function Editor() {
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
 
 
-  // LaTeX-like defaults: text fills the margins, ~12pt body, tight leading.
+  // article-class defaults: 10pt Computer Modern, 1.2 leading, ~66-char measure.
   const [layout, setLayout] = useState({
-    textWidth: CONTENT_WIDTH,
-    lineHeight: 1.3,
+    textWidth: 460,
+    lineHeight: 1.2,
     columns: 1,
-    fontSize: 16
+    fontSize: 13
   });
 
   const rendererProps = {
@@ -1679,13 +1679,15 @@ function Editor() {
                 {pages.map((cols: any[], pageIndex: number) => (
                   <Page key={pageIndex} pageNumber={pageIndex + 1}>
 
-                    {/* Title sits on the body's first page (after any cover / TOC) */}
+                    {/* Title sits on the body's first page (after any cover / TOC).
+                        \maketitle: \LARGE (1.728×) Computer Modern, centered. */}
                     {pageIndex === titlePageIndex && (
-                      <div style={{ textAlign: "center", marginBottom: 24 }}>
+                      <div style={{ textAlign: "center", marginTop: layout.fontSize * 1.5, marginBottom: layout.fontSize * 1.8 }}>
                         <input
                           value={documentTitle}
                           onChange={(e) => setDocumentTitle(e.target.value)}
-                          style={{ fontSize: 42, fontWeight: 400, border: "none",
+                          style={{ fontSize: Math.round(layout.fontSize * 1.728 * 100) / 100,
+                                   fontWeight: 400, border: "none",
                                    outline: "none", textAlign: "center", width: "100%",
                                    fontFamily: "var(--sans)", color: "var(--text)",
                                    background: "transparent" }}

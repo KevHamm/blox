@@ -140,6 +140,21 @@ function ChevronButton({ dir, onClick, title }: any) {
   );
 }
 
+// LaTeX heading metrics relative to the body font size:
+//   \section = \Large (1.44×) bold, \subsection = \large (1.2×) bold,
+//   \subsubsection = \normalsize (1×) bold — all Computer Modern Bold.
+function headingStyle(base: number, mult: number) {
+  return {
+    margin: 0,
+    fontFamily: "var(--sans)",
+    fontWeight: 700,
+    fontSize: Math.round(base * mult * 100) / 100,
+    lineHeight: 1.15,
+    letterSpacing: "normal",
+    color: "var(--text)"
+  } as const;
+}
+
 /* -----------------------------
    PARAGRAPH
 ----------------------------- */
@@ -149,44 +164,51 @@ function Paragraph({
   setEditingId,
   updateTextById,
   lineHeight,
-  fontSize
+  fontSize,
+  firstChild = false
 }: any) {
   const isEditing = editingId === node.id;
 
+  if (isEditing) {
+    return (
+      <textarea
+        autoFocus
+        value={node.text}
+        onChange={(e) => updateTextById(node.id, e.target.value)}
+        onBlur={() => setEditingId(null)}
+        style={{
+          width: "100%",
+          minHeight: 120,
+          padding: 8,
+          margin: "2px 0",
+          border: "1px solid #ddd",
+          lineHeight,
+          fontSize,
+          fontFamily: "var(--sans)",
+          color: "var(--text)"
+        }}
+      />
+    );
+  }
+
+  // LaTeX body: justified, hyphenated, first-line indent (none on the first
+  // paragraph after a heading), and no space between paragraphs (\parskip = 0).
   return (
-    <div style={{ padding: 6 }}>
-      {isEditing ? (
-        <textarea
-          autoFocus
-          value={node.text}
-          onChange={(e) => updateTextById(node.id, e.target.value)}
-          onBlur={() => setEditingId(null)}
-          style={{
-            width: "100%",
-            minHeight: 120,
-            padding: 8,
-            border: "1px solid #ddd",
-            lineHeight,
-            fontSize,
-            fontFamily: "var(--sans)",
-            color: "var(--text)"
-          }}
-        />
-      ) : (
-        <p
-          onClick={() => setEditingId(node.id)}
-          style={{
-            margin: 0,
-            cursor: "pointer",
-            textAlign: "justify",
-            lineHeight,
-            fontSize
-          }}
-        >
-          {node.text}
-        </p>
-      )}
-    </div>
+    <p
+      onClick={() => setEditingId(node.id)}
+      style={{
+        margin: 0,
+        cursor: "pointer",
+        textAlign: "justify",
+        hyphens: "auto",
+        WebkitHyphens: "auto",
+        textIndent: firstChild ? 0 : "1.5em",
+        lineHeight,
+        fontSize
+      }}
+    >
+      {node.text}
+    </p>
   );
 }
 
@@ -814,12 +836,13 @@ function Subsection({
   updateSectionTitle,
   deleteNodeById,
   moveSubsection,
+  fontSize = 13,
   children
 }: any) {
   return (
-    <div style={{ marginTop: 20 }}>
+    <div style={{ marginTop: showHeader ? fontSize * 1.3 : 0 }}>
       {showHeader && (
-        <div data-head-id={node.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div data-head-id={node.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: fontSize * 0.5 }}>
           {editingId === node.id ? (
             <input
               autoFocus
@@ -828,7 +851,7 @@ function Subsection({
               onBlur={() => setEditingId(null)}
             />
           ) : (
-            <h3 onClick={() => setEditingId(node.id)}>
+            <h3 style={headingStyle(fontSize, 1.2)} onClick={() => setEditingId(node.id)}>
               {node.title}
             </h3>
           )}
@@ -861,12 +884,13 @@ function Subsubsection({
   setEditingId,
   updateSectionTitle,
   deleteNodeById,
+  fontSize = 13,
   children
 }: any) {
   return (
-    <div style={{ marginTop: 16, marginLeft: 16 }}>
+    <div style={{ marginTop: showHeader ? fontSize * 1.1 : 0 }}>
       {showHeader && (
-        <div data-head-id={node.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div data-head-id={node.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: fontSize * 0.4 }}>
           {editingId === node.id ? (
             <input
               autoFocus
@@ -875,7 +899,7 @@ function Subsubsection({
               onBlur={() => setEditingId(null)}
             />
           ) : (
-            <h4 style={{ margin: 0 }} onClick={() => setEditingId(node.id)}>
+            <h4 style={headingStyle(fontSize, 1)} onClick={() => setEditingId(node.id)}>
               {node.title}
             </h4>
           )}
@@ -898,17 +922,17 @@ function Subsubsection({
 function Section({ node, showHeader = true, ...rest }: any) {
   const {
     editingId, setEditingId, updateSectionTitle,
-    deleteNodeById, moveSection, children
+    deleteNodeById, moveSection, children, fontSize = 13
   } = rest;
 
   return (
-    <div style={{ marginBottom: 30 }}>
+    <div style={{ marginTop: showHeader ? fontSize * 1.6 : 0 }}>
 
       {/* Header row; hidden on continuation columns/pages. */}
       {showHeader && (
         <div
           data-head-id={node.id}
-          style={{ display: "flex", alignItems: "center", gap: 10 }}
+          style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: fontSize * 0.8 }}
         >
           {editingId === node.id ? (
             <input
@@ -917,7 +941,7 @@ function Section({ node, showHeader = true, ...rest }: any) {
               onBlur={() => setEditingId(null)}
             />
           ) : (
-            <h2 onClick={() => setEditingId(node.id)}>
+            <h2 style={headingStyle(fontSize, 1.44)} onClick={() => setEditingId(node.id)}>
               {node.sectionNumber} {node.title}
             </h2>
           )}
@@ -992,7 +1016,7 @@ function containerInner(chunk: Chunk, props: any) {
         return (
           <Fragment key={ch.node.id}>
             <DropZone id={`dz::${node.id}::${absIndex}`} containerType={node.type} />
-            {renderChunk(ch, props)}
+            {renderChunk(ch, props, absIndex === 0)}
           </Fragment>
         );
       })}
@@ -1003,13 +1027,13 @@ function containerInner(chunk: Chunk, props: any) {
   );
 }
 
-function renderChunk(chunk: Chunk, props: any): any {
+function renderChunk(chunk: Chunk, props: any, firstChild = false): any {
   const node = chunk.node;
 
   if (node.type === "paragraph") {
     return (
       <div data-leaf-id={node.id}>
-        <Paragraph node={node} {...props} />
+        <Paragraph node={node} {...props} firstChild={firstChild} />
       </div>
     );
   }
