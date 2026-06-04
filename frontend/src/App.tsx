@@ -219,6 +219,17 @@ function insertNodeAt(node: any, containerId: string, index: number, newNode: an
   return { ...node, children: node.children.map((c: any) => insertNodeAt(c, containerId, index, newNode)) };
 }
 
+/* ---- table colour helpers ---- */
+// A colour grid normalized to the table's current rows (missing cells → null).
+function tableColors(node: any): (string | null)[][] {
+  return (node.rows ?? []).map((row: string[], r: number) =>
+    row.map((_: string, c: number) => node.colors?.[r]?.[c] ?? null)
+  );
+}
+// The shared colour of a row/column, or null if they aren't all the same.
+const uniformColor = (arr: (string | null)[]): string | null =>
+  arr.length > 0 && arr[0] != null && arr.every((x) => x === arr[0]) ? arr[0] : null;
+
 /* ---- structural node factories ---- */
 const newParagraph = (): DocumentNode => ({
   id: crypto.randomUUID(),
@@ -663,6 +674,7 @@ export default function App() {
     deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
     addTableColumn, updateTableColWidths, addSectionAfter,
     updateTableCaption, updateTableColors,
+    deleteTableRowAt, deleteTableColumnAt,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
     deleteFigureImage, updateMathItem, deleteMathItem,
@@ -987,53 +999,74 @@ export default function App() {
   function addTableRow(tableId: string) {
     function update(node: any): any {
       if (node.id === tableId && node.type === "table") {
+        const colors = tableColors(node);
+
+        // Restore a previously removed row, if one is remembered.
+        const stack = node.removedRows ?? [];
+        if (stack.length) {
+          const restored = stack[stack.length - 1];
+          return {
+            ...node,
+            rows: [...node.rows, restored.cells],
+            colors: [...colors, restored.colors],
+            removedRows: stack.slice(0, -1)
+          };
+        }
+
+        // Otherwise a fresh empty row that inherits any fully-coloured column.
         const colCount = node.rows[0]?.length || 1;
-
         const newRow = Array(colCount).fill("");
-
-        return {
-          ...node,
-          rows: [...node.rows, newRow]
-        };
+        const newColorRow = Array.from({ length: colCount }, (_, c) =>
+          uniformColor(colors.map((row) => row[c]))
+        );
+        return { ...node, rows: [...node.rows, newRow], colors: [...colors, newColorRow] };
       }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
-
     setDoc((prev) => update(prev));
   }
 
   // -----------------------------
-  // DELETE ROW
+  // DELETE ROW (last; remembered for re-add)
   // -----------------------------
   function deleteTableRow(tableId: string) {
     function update(node: any): any {
       if (node.id === tableId && node.type === "table") {
         if (node.rows.length <= 1) return node;
-
+        const colors = tableColors(node);
+        const removed = {
+          cells: node.rows[node.rows.length - 1],
+          colors: colors[colors.length - 1]
+        };
         return {
           ...node,
-          rows: node.rows.slice(0, -1)
+          rows: node.rows.slice(0, -1),
+          colors: colors.slice(0, -1),
+          removedRows: [...(node.removedRows ?? []), removed]
         };
       }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
+    setDoc((prev) => update(prev));
+  }
 
+  // Delete a row by index (paint-tool style; not remembered).
+  function deleteTableRowAt(tableId: string, r: number) {
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") {
+        if (node.rows.length <= 1) return node;
+        const colors = tableColors(node);
+        return {
+          ...node,
+          rows: node.rows.filter((_: any, i: number) => i !== r),
+          colors: colors.filter((_, i) => i !== r)
+        };
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
     setDoc((prev) => update(prev));
   }
 
@@ -1043,31 +1076,52 @@ export default function App() {
   function addTableColumn(tableId: string) {
     function update(node: any): any {
       if (node.id === tableId && node.type === "table") {
+        const colors = tableColors(node);
+
+        // Restore a previously removed column, if one is remembered.
+        const stack = node.removedColumns ?? [];
+        if (stack.length) {
+          const restored = stack[stack.length - 1];
+          return {
+            ...node,
+            rows: node.rows.map((row: string[], r: number) => [...row, restored.cells[r] ?? ""]),
+            colors: colors.map((row, r) => [...row, restored.colors[r] ?? null]),
+            removedColumns: stack.slice(0, -1)
+          };
+        }
+
+        // Otherwise a fresh column that inherits any fully-coloured row.
         const colCount = node.rows[0]?.length || 0;
-
-        const newRows = node.rows.map(
-          (row: string[], rowIndex: number) => [
+        return {
+          ...node,
+          rows: node.rows.map((row: string[], r: number) => [
             ...row,
-            rowIndex === 0 ? `Column ${colCount + 1}` : ""
-          ]
-        );
-
-        return {
-          ...node,
-          rows: newRows
+            r === 0 ? `Column ${colCount + 1}` : ""
+          ]),
+          colors: colors.map((row) => [...row, uniformColor(row)])
         };
       }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
+    setDoc((prev) => update(prev));
+  }
 
+  // Delete a column by index (paint-tool style; not remembered).
+  function deleteTableColumnAt(tableId: string, c: number) {
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") {
+        if ((node.rows[0]?.length || 0) <= 1) return node;
+        const colors = tableColors(node);
+        return {
+          ...node,
+          rows: node.rows.map((row: string[]) => row.filter((_, i) => i !== c)),
+          colors: colors.map((row) => row.filter((_, i) => i !== c))
+        };
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
     setDoc((prev) => update(prev));
   }
 
@@ -1116,27 +1170,22 @@ export default function App() {
     function update(node: any): any {
       if (node.id === tableId && node.type === "table") {
         const colCount = node.rows[0]?.length || 0;
-
         if (colCount <= 1) return node;
-
+        const colors = tableColors(node);
+        const removed = {
+          cells: node.rows.map((row: string[]) => row[row.length - 1]),
+          colors: colors.map((row) => row[row.length - 1])
+        };
         return {
           ...node,
-          rows: node.rows.map((row: string[]) =>
-            row.slice(0, -1)
-          )
+          rows: node.rows.map((row: string[]) => row.slice(0, -1)),
+          colors: colors.map((row) => row.slice(0, -1)),
+          removedColumns: [...(node.removedColumns ?? []), removed]
         };
       }
-
-      if (node.children) {
-        return {
-          ...node,
-          children: node.children.map(update)
-        };
-      }
-
+      if (node.children) return { ...node, children: node.children.map(update) };
       return node;
     }
-
     setDoc((prev) => update(prev));
   }
 

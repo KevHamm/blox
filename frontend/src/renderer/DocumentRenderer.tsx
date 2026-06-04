@@ -500,6 +500,10 @@ function SquareButton({ color, onClick, title, children }: any) {
 const BRUSH_CURSOR =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24'%3E%3Cpath d='M14 3l7 7-8 8H7v-6z' fill='%23cdb4ff' stroke='%23333' stroke-width='1'/%3E%3Cpath d='M7 18c-1 1-2 3-4 3 0-2 2-3 3-4z' fill='%23333'/%3E%3C/svg%3E\") 2 20, crosshair";
 
+/* Red-cross cursor used in table delete mode. */
+const DELETE_CURSOR =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'%3E%3Cpath d='M5 5l14 14M19 5L5 19' stroke='%23d23f3f' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E\") 10 10, crosshair";
+
 /* -----------------------------
    TABLE
 ----------------------------- */
@@ -515,12 +519,16 @@ function TableBlock(props: any) {
     updateTableColWidths,
     updateTableCaption,
     updateTableColors,
+    deleteTableRowAt,
+    deleteTableColumnAt,
     tableNumbers
   } = props;
 
   const tableRef = useRef<HTMLTableElement>(null);
-  const [brush, setBrush] = useState(false);
+  // Active table tool: editing, painting cells, or deleting rows/columns.
+  const [tool, setTool] = useState<"none" | "paint" | "delete">("none");
   const [brushColor, setBrushColor] = useState("#ffe08a");
+  const active = tool !== "none";
 
   const colCount = node.rows[0]?.length || 0;
 
@@ -610,9 +618,15 @@ function TableBlock(props: any) {
               {row.map((cell: string, c: number) => (
                 <td
                   key={c}
-                  onClick={brush ? () => paintCell(r, c) : undefined}
+                  onClick={
+                    tool === "paint"
+                      ? () => paintCell(r, c)
+                      : tool === "delete"
+                      ? () => (c === 0 && r > 0 ? deleteTableRowAt(node.id, r) : deleteTableColumnAt(node.id, c))
+                      : undefined
+                  }
                   onDoubleClick={
-                    brush
+                    tool === "paint"
                       ? () => {
                           if (r === 0) paintColumn(c);     // header → whole column
                           else if (c === 0) paintRow(r);   // first cell → whole row
@@ -624,12 +638,13 @@ function TableBlock(props: any) {
                     padding: 0,
                     position: "relative",
                     background: node.colors?.[r]?.[c] ?? undefined,
-                    cursor: brush ? BRUSH_CURSOR : undefined
+                    cursor:
+                      tool === "paint" ? BRUSH_CURSOR : tool === "delete" ? DELETE_CURSOR : undefined
                   }}
                 >
                   <input
                     value={cell}
-                    readOnly={brush}
+                    readOnly={active}
                     onChange={(e) =>
                       updateTableCell(node.id, r, c, e.target.value)
                     }
@@ -642,7 +657,7 @@ function TableBlock(props: any) {
                       background: "transparent",
                       color: "#000",
                       fontFamily: "var(--sans)",
-                      pointerEvents: brush ? "none" : undefined
+                      pointerEvents: active ? "none" : undefined
                     }}
                   />
 
@@ -659,7 +674,7 @@ function TableBlock(props: any) {
                         cursor: "col-resize",
                         userSelect: "none",
                         zIndex: 1,
-                        pointerEvents: brush ? "none" : undefined
+                        pointerEvents: active ? "none" : undefined
                       }}
                     />
                   )}
@@ -722,7 +737,7 @@ function TableBlock(props: any) {
         <button
           className="tbl-btn"
           title="Paint cells (click a cell; double-click a header to fill a column, the first cell of a row to fill the row)"
-          onClick={() => setBrush((b) => !b)}
+          onClick={() => setTool((t) => (t === "paint" ? "none" : "paint"))}
           style={{
             width: 24,
             height: 24,
@@ -730,8 +745,8 @@ function TableBlock(props: any) {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            background: brush ? brushColor : "#eee",
-            border: brush ? "2px solid #333" : "1px solid #ccc",
+            background: tool === "paint" ? brushColor : "#eee",
+            border: tool === "paint" ? "2px solid #333" : "1px solid #ccc",
             borderRadius: 4,
             cursor: "pointer",
             fontSize: 13
@@ -741,7 +756,6 @@ function TableBlock(props: any) {
         </button>
         <input
           type="color"
-          className="tbl-btn"
           value={brushColor}
           onChange={(e) => setBrushColor(e.target.value)}
           title="Brush color"
@@ -755,6 +769,29 @@ function TableBlock(props: any) {
             cursor: "pointer"
           }}
         />
+
+        <button
+          className="tbl-btn"
+          title="Delete tool: click a header to remove its column, the first cell of a row to remove that row"
+          onClick={() => setTool((t) => (t === "delete" ? "none" : "delete"))}
+          style={{
+            width: 24,
+            height: 24,
+            padding: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: tool === "delete" ? "#f5c6c6" : "#eee",
+            border: tool === "delete" ? "2px solid #d23f3f" : "1px solid #ccc",
+            borderRadius: 4,
+            color: "#d23f3f",
+            cursor: "pointer",
+            fontSize: 15,
+            fontWeight: 700
+          }}
+        >
+          ✕
+        </button>
 
         <TrashButton
           className="tbl-btn"

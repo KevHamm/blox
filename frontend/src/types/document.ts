@@ -21,6 +21,8 @@ export interface DocumentNode {
   rows?: string[][];
   colWidths?: number[];
   colors?: (string | null)[][];
+  removedRows?: any[];
+  removedColumns?: any[];
   width?: number;
   images?: { id: string; src: string }[];
   sectionNumber?: number;
