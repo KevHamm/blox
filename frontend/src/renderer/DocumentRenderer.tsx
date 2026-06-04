@@ -78,12 +78,13 @@ function FigureDropZone({ id }: any) {
 /* -----------------------------
    TRASH BUTTON (right-aligned)
 ----------------------------- */
-function TrashButton({ onClick, label }: any) {
+function TrashButton({ onClick, label, className }: any) {
   return (
     <button
       onClick={onClick}
       title={label}
       aria-label={label}
+      className={className}
       style={{
         marginLeft: "auto",          // push to the far right of the line
         display: "inline-flex",
@@ -235,35 +236,30 @@ function MathSlot({ id }: any) {
   );
 }
 
-function MathBlock({ node, updateMath, deleteNodeById }: any) {
-  const latex = node.latex ?? node.items?.[0]?.latex ?? "";
+function MathBlock({ node, updateMathItem, deleteMathItem }: any) {
+  // Support the container model (and any legacy single-latex node).
+  const items: any[] =
+    node.items ?? (node.latex != null ? [{ id: `${node.id}-0`, latex: node.latex }] : []);
 
   return (
     <div style={{ margin: "12px 0" }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center" }}>
-        <MathSlot id={`mathdz::${node.id}::before`} />
-        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-          <MathField value={latex} onChange={(v: string) => updateMath(node.id, v)} />
-          <button
-            onClick={() => deleteNodeById(node.id)}
-            title="Delete equation"
-            style={{
-              position: "absolute",
-              top: -6,
-              right: -6,
-              display: "inline-flex",
-              padding: 2,
-              background: "white",
-              border: "1px solid #eee",
-              borderRadius: 4,
-              color: "#c0392b",
-              cursor: "pointer"
-            }}
-          >
-            <TrashIcon size={12} />
-          </button>
-        </div>
-        <MathSlot id={`mathdz::${node.id}::after`} />
+      {/* parts sit flush so it reads as one equation; slots between them open
+          up while dragging a math block so you can insert anywhere. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <MathSlot id={`mathdz::${node.id}::0`} />
+        {items.map((it, i) => (
+          <Fragment key={it.id}>
+            <MathField
+              value={it.latex}
+              onChange={(v: string) =>
+                v.trim() === ""
+                  ? deleteMathItem(node.id, it.id)   // cleared → remove this part
+                  : updateMathItem(node.id, it.id, v)
+              }
+            />
+            <MathSlot id={`mathdz::${node.id}::${i + 1}`} />
+          </Fragment>
+        ))}
       </div>
     </div>
   );
@@ -439,6 +435,7 @@ function SquareButton({ color, onClick, title, children }: any) {
     <button
       onClick={onClick}
       title={title}
+      className="tbl-btn"
       style={{
         width: 24,
         height: 24,
@@ -522,11 +519,16 @@ function TableBlock(props: any) {
   }
 
   return (
-    <div style={{ marginTop: 20, position: "relative" }}>
+    <div style={{ marginTop: 20 }}>
       <div style={{ display: "flex", marginBottom: 4 }}>
-        <TrashButton onClick={() => deleteNodeById(node.id)} label="Delete table" />
+        <TrashButton
+          className="tbl-btn"
+          onClick={() => deleteNodeById(node.id)}
+          label="Delete table"
+        />
       </div>
 
+      <div style={{ position: "relative" }}>
       <table
         ref={tableRef}
         style={{
@@ -594,26 +596,27 @@ function TableBlock(props: any) {
         </tbody>
       </table>
 
+        {/* add / remove COLUMN — beside the header row, to the right (may
+            overflow the text box) */}
+        <div
+          style={{
+            position: "absolute",
+            top: 2,
+            right: -56,
+            display: "flex",
+            alignItems: "center",
+            gap: 4
+          }}
+        >
+          <SquareButton color="green" title="Add column" onClick={() => addTableColumn(node.id)}>+</SquareButton>
+          <SquareButton color="red" title="Remove column" onClick={() => deleteTableColumn(node.id)}>−</SquareButton>
+        </div>
+      </div>
+
       {/* add / remove ROW — below the last row */}
       <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 6 }}>
         <SquareButton color="green" title="Add row" onClick={() => addTableRow(node.id)}>+</SquareButton>
         <SquareButton color="red" title="Remove row" onClick={() => deleteTableRow(node.id)}>−</SquareButton>
-      </div>
-
-      {/* add / remove COLUMN — to the right of the last column (may overflow) */}
-      <div
-        style={{
-          position: "absolute",
-          right: -34,
-          top: "50%",
-          transform: "translateY(-50%)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 6
-        }}
-      >
-        <SquareButton color="green" title="Add column" onClick={() => addTableColumn(node.id)}>+</SquareButton>
-        <SquareButton color="red" title="Remove column" onClick={() => deleteTableColumn(node.id)}>−</SquareButton>
       </div>
     </div>
   );

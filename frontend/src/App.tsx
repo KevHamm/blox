@@ -217,12 +217,13 @@ function insertNodeAt(node: any, containerId: string, index: number, newNode: an
   return { ...node, children: node.children.map((c: any) => insertNodeAt(c, containerId, index, newNode)) };
 }
 
-// A math block is a single equation. Dropping another math block next to it
-// merges their LaTeX into one equation.
+// A math block is a container of equation parts rendered flush together (so it
+// reads as one equation). Dropping a math block onto a slot inserts a part at
+// that position — including between two existing parts.
 const mathNode = (latex: string) => ({
   id: crypto.randomUUID(),
   type: "math",
-  latex
+  items: [{ id: crypto.randomUUID(), latex }]
 });
 
 // Default LaTeX for each math Blox block.
@@ -270,21 +271,38 @@ const BLOX_ORDER = [
 ];
 
 /* ---- math tree edits ---- */
-function updateMathTree(node: any, mathId: string, latex: string): any {
-  if (node.type === "math" && node.id === mathId) return { ...node, latex };
-  if (!node.children) return node;
-  return { ...node, children: node.children.map((c: any) => updateMathTree(c, mathId, latex)) };
-}
-
-// Merge another equation's LaTeX into this one, before or after it.
-function mergeMathTree(node: any, mathId: string, position: string, addLatex: string): any {
+// Insert an equation part at a given slot index (0..items.length).
+function insertMathItem(node: any, mathId: string, index: number, latex: string): any {
   if (node.type === "math" && node.id === mathId) {
-    const cur = node.latex ?? "";
-    const merged = position === "before" ? `${addLatex} ${cur}` : `${cur} ${addLatex}`;
-    return { ...node, latex: merged.trim() };
+    const items = [...(node.items ?? [])];
+    items.splice(Math.min(Math.max(index, 0), items.length), 0, { id: crypto.randomUUID(), latex });
+    return { ...node, items };
   }
   if (!node.children) return node;
-  return { ...node, children: node.children.map((c: any) => mergeMathTree(c, mathId, position, addLatex)) };
+  return { ...node, children: node.children.map((c: any) => insertMathItem(c, mathId, index, latex)) };
+}
+
+function updateMathItemTree(node: any, mathId: string, itemId: string, latex: string): any {
+  if (node.type === "math" && node.id === mathId) {
+    return { ...node, items: (node.items ?? []).map((it: any) => it.id === itemId ? { ...it, latex } : it) };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => updateMathItemTree(c, mathId, itemId, latex)) };
+}
+
+// Remove an equation part; drop the whole math block when its last part is gone.
+function deleteMathItemTree(node: any, mathId: string, itemId: string): any {
+  if (!node.children) return node;
+  const children: any[] = [];
+  for (const child of node.children) {
+    if (child.type === "math" && child.id === mathId) {
+      const items = (child.items ?? []).filter((it: any) => it.id !== itemId);
+      if (items.length > 0) children.push({ ...child, items });
+    } else {
+      children.push(deleteMathItemTree(child, mathId, itemId));
+    }
+  }
+  return { ...node, children };
 }
 
 /* A KaTeX-rendered glyph for the Blox palette icons. */
@@ -492,7 +510,7 @@ export default function App() {
     addTableColumn, updateTableColWidths, addSectionAfter,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
-    deleteFigureImage, updateMath,
+    deleteFigureImage, updateMathItem, deleteMathItem,
   };
 
   // ── 2. Derived values ───────────────────────────────────
@@ -630,9 +648,12 @@ export default function App() {
     setDoc((prev) => update(prev));
   }
 
-  // Edit a math block's LaTeX.
-  function updateMath(mathId: string, latex: string) {
-    setDoc((prev) => updateMathTree(prev, mathId, latex));
+  // Edit / delete an individual equation part within a math block.
+  function updateMathItem(mathId: string, itemId: string, latex: string) {
+    setDoc((prev) => updateMathItemTree(prev, mathId, itemId, latex));
+  }
+  function deleteMathItem(mathId: string, itemId: string) {
+    setDoc((prev) => deleteMathItemTree(prev, mathId, itemId));
   }
 
 
@@ -1091,10 +1112,10 @@ export default function App() {
       const overId = over ? String(over.id) : null;
       if (!overId) return;
 
-      // Math block dropped beside an existing equation → merge into it.
+      // Math block dropped onto a slot → insert it as a part at that position.
       if (overId.startsWith("mathdz::") && activeBlockId.startsWith("block::math::")) {
-        const [, mathId, position] = overId.split("::");
-        setDoc((prev) => mergeMathTree(prev, mathId, position, MATH_TEMPLATES[activeBlockId]));
+        const [, mathId, idxStr] = overId.split("::");
+        setDoc((prev) => insertMathItem(prev, mathId, Number(idxStr), MATH_TEMPLATES[activeBlockId]));
         return;
       }
 
