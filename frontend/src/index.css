@@ -122,6 +122,16 @@ math-field::part(menu-toggle) {
   display: none;
 }
 
+/* Welcome screen choice card. */
+.welcome-card {
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.welcome-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.15);
+  border-color: var(--accent);
+}
+
 /* Every button inside the document page is faded until hovered. */
 .doc-area button {
   opacity: 0.35;

@@ -4,6 +4,7 @@ import { DocumentRenderer } from "./renderer/DocumentRenderer";
 import type { DocumentNode } from "./types/document";
 import { Page } from "./components/Page";
 import { TrashIcon } from "./components/TrashIcon";
+import { Welcome } from "./components/Welcome";
 import { numberDocument } from "./utils/numberDocument";
 import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
@@ -720,7 +721,7 @@ function NumberControl({
   );
 }
 
-export default function App() {
+function Editor() {
   // ── 1. All state first ──────────────────────────────────
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1764,4 +1765,9 @@ export default function App() {
       </DragOverlay>
     </DndContext>
   );
+}
+
+export default function App() {
+  const [started, setStarted] = useState(false);
+  return started ? <Editor /> : <Welcome onStart={() => setStarted(true)} />;
 }
