@@ -122,14 +122,47 @@ math-field::part(menu-toggle) {
   display: none;
 }
 
-/* Welcome screen choice card. */
+/* Welcome screen ---------------------------------------------------------- */
+@keyframes welcome-floaty {
+  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+  50%      { transform: translateY(-16px) rotate(var(--rot, 0deg)); }
+}
+
+.welcome-bg {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(60% 60% at 18% 20%, hsla(265, 90%, 86%, 0.55) 0, transparent 60%),
+    radial-gradient(55% 55% at 82% 14%, hsla(198, 95%, 80%, 0.50) 0, transparent 60%),
+    radial-gradient(55% 55% at 82% 84%, hsla(330, 90%, 86%, 0.50) 0, transparent 60%),
+    radial-gradient(55% 55% at 18% 82%, hsla(150, 80%, 82%, 0.45) 0, transparent 60%),
+    linear-gradient(180deg, #f7f8fd, #eceff7);
+}
+
+.welcome-sheet {
+  position: absolute;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 14px 36px rgba(60, 60, 120, 0.12);
+  animation: welcome-floaty 9s ease-in-out infinite;
+  pointer-events: none;
+}
+
 .welcome-card {
-  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.3s ease;
 }
 .welcome-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.15);
-  border-color: var(--accent);
+  transform: translateY(-6px) scale(1.012);
+  box-shadow: 0 24px 50px rgba(20, 20, 60, 0.16);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+.welcome-card:active {
+  transform: translateY(-2px) scale(0.998);
+  transition-duration: 0.1s;
 }
 
 /* Every button inside the document page is faded until hovered. */
