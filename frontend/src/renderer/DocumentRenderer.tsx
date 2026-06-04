@@ -1,8 +1,9 @@
-import { Fragment, useRef } from "react";
+import { Fragment, useRef, useMemo } from "react";
 import type { Chunk } from "../utils/paginateDocument";
 import { isContainerType } from "../utils/paginateDocument";
 import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
 import { TrashIcon } from "../components/TrashIcon";
+import katex from "katex";
 import "katex/dist/katex.min.css";
 
 // True while dragging an image — either a sidebar upload (`image::`) or one
@@ -145,6 +146,70 @@ function Paragraph({
         >
           {node.text}
         </p>
+      )}
+    </div>
+  );
+}
+
+/* -----------------------------
+   MATH — a KaTeX-rendered display equation; click to edit its LaTeX.
+----------------------------- */
+function MathBlock({ node, editingId, setEditingId, updateMath, deleteNodeById }: any) {
+  const isEditing = editingId === node.id;
+
+  const html = useMemo(() => {
+    try {
+      return katex.renderToString(node.latex || "", {
+        displayMode: true,
+        throwOnError: false
+      });
+    } catch {
+      return "";
+    }
+  }, [node.latex]);
+
+  return (
+    <div style={{ position: "relative", margin: "12px 0", textAlign: "center" }}>
+      <button
+        onClick={() => deleteNodeById(node.id)}
+        title="Delete equation"
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          display: "inline-flex",
+          padding: 4,
+          background: "transparent",
+          border: "none",
+          color: "#c0392b",
+          cursor: "pointer"
+        }}
+      >
+        <TrashIcon size={14} />
+      </button>
+
+      {isEditing ? (
+        <input
+          autoFocus
+          value={node.latex || ""}
+          onChange={(e) => updateMath(node.id, e.target.value)}
+          onBlur={() => setEditingId(null)}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            padding: 6,
+            textAlign: "center",
+            fontFamily: "var(--mono)",
+            fontSize: 14,
+            color: "var(--text)"
+          }}
+        />
+      ) : (
+        <div
+          onClick={() => setEditingId(node.id)}
+          style={{ cursor: "pointer", color: "var(--text)" }}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
       )}
     </div>
   );
@@ -681,6 +746,13 @@ function renderChunk(chunk: Chunk, props: any): any {
     return (
       <div data-leaf-id={node.id}>
         <TableBlock node={node} {...props} />
+      </div>
+    );
+  }
+  if (node.type === "math") {
+    return (
+      <div data-leaf-id={node.id}>
+        <MathBlock node={node} {...props} />
       </div>
     );
   }

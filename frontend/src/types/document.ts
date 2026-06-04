@@ -12,9 +12,11 @@ export interface DocumentNode {
     | "subsubsection"
     | "paragraph"
     | "table"
-    | "figure";
+    | "figure"
+    | "math";
   title?: string;
   text?: string;
+  latex?: string;
   caption?: string;
   rows?: string[][];
   colWidths?: number[];

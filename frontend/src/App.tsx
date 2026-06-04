@@ -7,6 +7,7 @@ import { TrashIcon } from "./components/TrashIcon";
 import { numberDocument } from "./utils/numberDocument";
 import { paginateColumns, fullChunk, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
+import katex from "katex";
 import "katex/dist/katex.min.css";
 
 import {
@@ -205,22 +206,49 @@ function setFigureWidthTree(node: any, figureId: string, width: number): any {
   return { ...node, children: node.children.map((c: any) => setFigureWidthTree(c, figureId, width)) };
 }
 
-// Insert a fresh 3×3 table into a container at a given index.
-function insertTableAt(node: any, containerId: string, index: number): any {
+// Insert any new node into a container at a given index.
+function insertNodeAt(node: any, containerId: string, index: number, newNode: any): any {
   if (node.id === containerId) {
-    const table = {
+    const kids = [...(node.children ?? [])];
+    kids.splice(Math.min(Math.max(index, 0), kids.length), 0, newNode);
+    return { ...node, children: kids };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => insertNodeAt(c, containerId, index, newNode)) };
+}
+
+const mathNode = (latex: string) => ({ id: crypto.randomUUID(), type: "math", latex });
+
+// Blox palette: draggable block id → label + factory for a fresh node.
+const BLOCK_DEFS: Record<string, { label: string; make: () => any }> = {
+  "block::table": {
+    label: "Table",
+    make: () => ({
       id: crypto.randomUUID(),
       type: "table",
       rows: Array.from({ length: 3 }, (_, r) =>
         Array.from({ length: 3 }, (_, c) => (r === 0 ? `Column ${c + 1}` : ""))
       )
-    };
-    const kids = [...(node.children ?? [])];
-    kids.splice(Math.min(Math.max(index, 0), kids.length), 0, table);
-    return { ...node, children: kids };
-  }
-  if (!node.children) return node;
-  return { ...node, children: node.children.map((c: any) => insertTableAt(c, containerId, index)) };
+    })
+  },
+  "block::math::integral": { label: "Integral", make: () => mathNode("\\int_{a}^{b} f(x)\\,dx") },
+  "block::math::sum":      { label: "Sum",      make: () => mathNode("\\sum_{i=1}^{n} a_i") },
+  "block::math::product":  { label: "Product",  make: () => mathNode("\\prod_{i=1}^{n} a_i") },
+  "block::math::fraction": { label: "Fraction", make: () => mathNode("\\frac{a}{b}") }
+};
+
+/* A KaTeX-rendered glyph for the Blox palette icons. */
+function KatexIcon({ tex }: { tex: string }) {
+  const html = useMemo(
+    () => katex.renderToString(tex, { throwOnError: false }),
+    [tex]
+  );
+  return (
+    <span
+      style={{ fontSize: 22, lineHeight: 1, color: "#333" }}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 }
 
 /* Small line-art table icon for the Blox palette. */
@@ -389,7 +417,7 @@ export default function App() {
     addTableColumn, updateTableColWidths, addSectionAfter,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
-    deleteFigureImage,
+    deleteFigureImage, updateMath,
   };
 
   // ── 2. Derived values ───────────────────────────────────
@@ -524,6 +552,16 @@ export default function App() {
       return node;
     }
 
+    setDoc((prev) => update(prev));
+  }
+
+  // Edit a math block's LaTeX source.
+  function updateMath(id: string, value: string) {
+    function update(node: any): any {
+      if (node.id === id && node.type === "math") return { ...node, latex: value };
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
     setDoc((prev) => update(prev));
   }
 
@@ -966,8 +1004,8 @@ export default function App() {
     } else if (id.startsWith("docimg::")) {
       const [, figId, imgId] = id.split("::");
       setActiveDragSrc(findDocImageSrc(doc, figId, imgId));
-    } else if (id === "block::table") {
-      setActiveBlock("Table");
+    } else if (BLOCK_DEFS[id]) {
+      setActiveBlock(BLOCK_DEFS[id].label);
     }
   }
 
@@ -976,12 +1014,13 @@ export default function App() {
     setActiveDragSrc(null);
     setActiveBlock(null);
 
-    // A Blox block (e.g. a table) dropped into a between-block zone.
-    if (String(active.id) === "block::table") {
+    // A Blox block (table / math) dropped into a between-block zone.
+    const blockDef = BLOCK_DEFS[String(active.id)];
+    if (blockDef) {
       const overId = over ? String(over.id) : null;
       if (overId && overId.startsWith("dz::")) {
         const [, containerId, idxStr] = overId.split("::");
-        setDoc((prev) => insertTableAt(prev, containerId, Number(idxStr)));
+        setDoc((prev) => insertNodeAt(prev, containerId, Number(idxStr), blockDef.make()));
       }
       return;
     }
@@ -1186,6 +1225,10 @@ export default function App() {
           <h3 style={{ marginBottom: 0 }}>Blox</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <DraggableBlock id="block::table" label="Table" icon={<TableGlyph />} />
+            <DraggableBlock id="block::math::integral" label="Integral" icon={<KatexIcon tex="\int" />} />
+            <DraggableBlock id="block::math::sum" label="Sum" icon={<KatexIcon tex="\sum" />} />
+            <DraggableBlock id="block::math::product" label="Product" icon={<KatexIcon tex="\prod" />} />
+            <DraggableBlock id="block::math::fraction" label="Fraction" icon={<KatexIcon tex="\frac{a}{b}" />} />
           </div>
 
           <div style={{ marginTop: "auto"}}>
