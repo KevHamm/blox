@@ -286,6 +286,15 @@ function insertPage(doc: any, node: any): any {
   return insertOrdered(doc, node);
 }
 
+// Insert a new section directly before/after a given top-level section.
+function insertSectionRelative(doc: any, sectionId: string, where: "before" | "after"): any {
+  const kids = [...(doc.children ?? [])];
+  const i = kids.findIndex((c: any) => c.id === sectionId);
+  if (i === -1) return doc;
+  kids.splice(where === "before" ? i : i + 1, 0, newSection());
+  return { ...doc, children: kids };
+}
+
 // A math block is a container of equation parts rendered flush together (so it
 // reads as one equation). Dropping a math block onto a slot inserts a part at
 // that position — including between two existing parts.
@@ -587,8 +596,9 @@ function BlockBox({ id, shadow }: { id: string; shadow?: boolean }) {
 function DroppableDocArea({ children }: any) {
   const { active } = useDndContext();
   const aid = String(active?.id ?? "");
-  // Sections and special pages drop anywhere in the document (no visible zone).
-  const dropAnywhere = aid === "block::section" || aid.startsWith("block::page::");
+  // Special pages drop anywhere in the document (no visible zone). Sections now
+  // use explicit document-level drop zones instead.
+  const dropAnywhere = aid.startsWith("block::page::");
   const { setNodeRef } = useDroppable({ id: "doc-drop", disabled: !dropAnywhere });
   return (
     <div
@@ -1422,11 +1432,27 @@ function Editor() {
       // Section / Subsection / Subsubsection.
       const kind = STRUCTURAL[activeBlockId];
       if (kind) {
-        // A section drops anywhere in the document → placed before any
-        // bibliography, after any cover / table of contents.
         if (kind === "section") {
-          setDoc((prev) => insertOrdered(prev, newSection()));
-        } else if (overId.startsWith("dz::")) {
+          // Document-level zones place the section precisely; the empty-body
+          // zone and in-container zones fall back to ordered placement / after
+          // the containing section.
+          if (overId === "dz::doc::empty") {
+            setDoc((prev) => insertOrdered(prev, newSection()));
+          } else if (overId.startsWith("dz::doc::before::")) {
+            const sid = overId.slice("dz::doc::before::".length);
+            setDoc((prev) => insertSectionRelative(prev, sid, "before"));
+          } else if (overId.startsWith("dz::doc::after::")) {
+            const sid = overId.slice("dz::doc::after::".length);
+            setDoc((prev) => insertSectionRelative(prev, sid, "after"));
+          } else if (overId.startsWith("dz::")) {
+            const [, containerId, idxStr] = overId.split("::");
+            setDoc((prev) => insertStructuralAt(prev, containerId, Number(idxStr), "section"));
+          }
+          return;
+        }
+
+        // Subsection / subsubsection: drop into their (only-eligible) container.
+        if (overId.startsWith("dz::")) {
           const [, containerId, idxStr] = overId.split("::");
           setDoc((prev) => insertStructuralAt(prev, containerId, Number(idxStr), kind));
         }
@@ -1713,6 +1739,7 @@ function Editor() {
                                 column={col}
                                 figureNumbers={figureNumbers}
                                 tableNumbers={tableNumbers}
+                                noSections={!(numberedDoc.children ?? []).some((c: any) => c.type === "section")}
                                 {...rendererProps}
                               />
                             </div>

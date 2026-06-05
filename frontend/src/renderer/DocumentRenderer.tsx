@@ -19,22 +19,25 @@ const clampFrac = (v: number, min: number, max: number) =>
 /* -----------------------------
    DROP ZONE (image drop target)
 ----------------------------- */
-function DropZone({ id, containerType }: any) {
+function DropZone({ id, containerType, headingAdjacent }: any) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const { active } = useDndContext();
 
   // Only reveal a zone where the dragged thing can actually go:
-  //   • images / tables / math  → any container
-  //   • subsection block         → only inside a section
-  //   • subsubsection block      → only inside a subsection
-  //   • section block            → never (it drops anywhere, no zone)
+  //   • section block       → document level + next to any heading
+  //   • subsection block    → only inside a section
+  //   • subsubsection block → only inside a subsection
+  //   • images / tables / math → any container (not the document level)
+  //   • page blocks         → never (they drop anywhere, no zone)
   const activeId = String(active?.id ?? "");
+  const isDoc = containerType === "document";
   let dragging: boolean;
-  if (isImageDragId(activeId)) dragging = true;
-  else if (activeId === "block::section" || activeId.startsWith("block::page::")) dragging = false;
+  if (activeId === "block::section") dragging = isDoc || !!headingAdjacent;
   else if (activeId === "block::subsection") dragging = containerType === "section";
   else if (activeId === "block::subsubsection") dragging = containerType === "subsection";
-  else dragging = activeId.startsWith("block::"); // table / math → anywhere
+  else if (activeId.startsWith("block::page::")) dragging = false;
+  else if (isImageDragId(activeId)) dragging = !isDoc;
+  else dragging = activeId.startsWith("block::") && !isDoc; // table / math
 
   if (!dragging) {
     // Idle: zero-height so it never affects layout / pagination.
@@ -1013,15 +1016,34 @@ function containerInner(chunk: Chunk, props: any) {
     <>
       {chunk.children.map((ch) => {
         const absIndex = fullChildren.findIndex((c: any) => c.id === ch.node.id);
+        const prev = fullChildren[absIndex - 1];
+        // LaTeX: a paragraph is unindented when it's the first block or follows
+        // a heading (so a section's body text stays flush even after a
+        // subsection is dropped in front of it).
+        const noIndent = absIndex === 0 || (prev && isContainerType(prev.type));
+        // A section may be dropped only next to a heading (sub/subsubsection).
+        const headingAdjacent =
+          isContainerType(ch.node.type) || (prev && isContainerType(prev.type));
         return (
           <Fragment key={ch.node.id}>
-            <DropZone id={`dz::${node.id}::${absIndex}`} containerType={node.type} />
-            {renderChunk(ch, props, absIndex === 0)}
+            <DropZone
+              id={`dz::${node.id}::${absIndex}`}
+              containerType={node.type}
+              headingAdjacent={headingAdjacent}
+            />
+            {renderChunk(ch, props, noIndent)}
           </Fragment>
         );
       })}
       {showEndZone && (
-        <DropZone id={`dz::${node.id}::${fullChildren.length}`} containerType={node.type} />
+        <DropZone
+          id={`dz::${node.id}::${fullChildren.length}`}
+          containerType={node.type}
+          headingAdjacent={
+            fullChildren.length > 0 &&
+            isContainerType(fullChildren[fullChildren.length - 1].type)
+          }
+        />
       )}
     </>
   );
@@ -1098,12 +1120,33 @@ function renderChunk(chunk: Chunk, props: any, firstChild = false): any {
 ----------------------------- */
 export function DocumentRenderer(props: any) {
   const { setNodeRef } = useDroppable({ id: props.droppableId ?? "document-root" });
+  const column = props.column as Chunk[];
 
   return (
     <div ref={setNodeRef}>
-      {(props.column as Chunk[]).map((chunk, i) => (
-        <Fragment key={`${chunk.node.id}-${i}`}>{renderChunk(chunk, props)}</Fragment>
-      ))}
+      {/* empty body → a single target so the first section can be dropped */}
+      {props.noSections && column.length === 0 && (
+        <DropZone id="dz::doc::empty" containerType="document" />
+      )}
+
+      {column.map((chunk, i) => {
+        const isSection = chunk.node.type === "section";
+        // Document-level section zones: before each section's first chunk, and
+        // after the final section chunk in this column.
+        const before = isSection && chunk.header;
+        const after = isSection && chunk.isLast && i === column.length - 1;
+        return (
+          <Fragment key={`${chunk.node.id}-${i}`}>
+            {before && (
+              <DropZone id={`dz::doc::before::${chunk.node.id}`} containerType="document" />
+            )}
+            {renderChunk(chunk, props)}
+            {after && (
+              <DropZone id={`dz::doc::after::${chunk.node.id}`} containerType="document" />
+            )}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }
