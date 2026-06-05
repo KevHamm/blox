@@ -17,8 +17,115 @@ const clampFrac = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
 
 /* -----------------------------
-   DROP ZONE (image drop target)
+   DROP INDICATOR (insertion line)
 ----------------------------- */
+const DROP_LINE = "#0071e3";
+
+/* A thin horizontal insertion line shaped like  |>-----------------<|  drawn as
+   an overlay so it never pushes the surrounding content apart. Rendered around a
+   zero-height anchor centered on the drop gap. */
+function InsertionLine() {
+  const cap = (side: "left" | "right") => (
+    <>
+      {/* vertical end bar | */}
+      <div
+        style={{
+          position: "absolute",
+          [side]: 0,
+          top: -5,
+          width: 2,
+          height: 10,
+          background: DROP_LINE,
+          borderRadius: 1
+        }}
+      />
+      {/* inward-pointing arrow > / < */}
+      <div
+        style={{
+          position: "absolute",
+          [side]: 4,
+          top: -4,
+          width: 0,
+          height: 0,
+          borderTop: "4px solid transparent",
+          borderBottom: "4px solid transparent",
+          ...(side === "left"
+            ? { borderLeft: `5px solid ${DROP_LINE}` }
+            : { borderRight: `5px solid ${DROP_LINE}` })
+        }}
+      />
+    </>
+  );
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: 9,
+          right: 9,
+          top: -1,
+          height: 2,
+          background: DROP_LINE,
+          borderRadius: 1
+        }}
+      />
+      {cap("left")}
+      {cap("right")}
+    </>
+  );
+}
+
+/* Vertical sibling of the insertion line, for the slots between side-by-side
+   images inside a figure. */
+function VInsertionLine() {
+  const cap = (side: "top" | "bottom") => (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          [side]: 0,
+          left: -5,
+          height: 2,
+          width: 10,
+          background: DROP_LINE,
+          borderRadius: 1
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          [side]: 4,
+          left: -4,
+          width: 0,
+          height: 0,
+          borderLeft: "4px solid transparent",
+          borderRight: "4px solid transparent",
+          ...(side === "top"
+            ? { borderTop: `5px solid ${DROP_LINE}` }
+            : { borderBottom: `5px solid ${DROP_LINE}` })
+        }}
+      />
+    </>
+  );
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          top: 9,
+          bottom: 9,
+          left: -1,
+          width: 2,
+          background: DROP_LINE,
+          borderRadius: 1
+        }}
+      />
+      {cap("top")}
+      {cap("bottom")}
+    </>
+  );
+}
+
 function DropZone({ id, containerType, headingAdjacent }: any) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const { active } = useDndContext();
@@ -31,36 +138,47 @@ function DropZone({ id, containerType, headingAdjacent }: any) {
   //   • page blocks         → never (they drop anywhere, no zone)
   const activeId = String(active?.id ?? "");
   const isDoc = containerType === "document";
-  let dragging: boolean;
-  if (activeId === "block::section") dragging = isDoc || !!headingAdjacent;
-  else if (activeId === "block::subsection") dragging = containerType === "section";
-  else if (activeId === "block::subsubsection") dragging = containerType === "subsection";
-  else if (activeId.startsWith("block::page::")) dragging = false;
-  else if (isImageDragId(activeId)) dragging = !isDoc;
-  else dragging = activeId.startsWith("block::") && !isDoc; // table / math
+  let eligible: boolean;
+  if (activeId === "block::section") eligible = isDoc || !!headingAdjacent;
+  else if (activeId === "block::subsection") eligible = containerType === "section";
+  else if (activeId === "block::subsubsection") eligible = containerType === "subsection";
+  else if (activeId.startsWith("block::page::")) eligible = false;
+  else if (isImageDragId(activeId)) eligible = !isDoc;
+  else eligible = activeId.startsWith("block::") && !isDoc; // table / math
 
-  if (!dragging) {
-    // Idle: zero-height so it never affects layout / pagination.
+  if (!eligible) {
+    // Not a target for this drag: zero-height, never affects layout.
     return <div ref={setNodeRef} style={{ height: 0 }} />;
   }
 
+  // Zero-height anchor. The hit band + line are absolutely positioned so the
+  // surrounding content is never pushed apart. The line only appears on hover.
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        height: isOver ? 28 : 12,
-        margin: "2px 0",
-        borderRadius: 4,
-        background: isOver ? "rgba(74,144,226,0.25)" : "rgba(74,144,226,0.08)",
-        border: `1px dashed ${isOver ? "#4a90e2" : "rgba(74,144,226,0.4)"}`,
-        transition: "height 0.08s ease"
-      }}
-    />
+    <div style={{ position: "relative", height: 0 }}>
+      <div
+        ref={setNodeRef}
+        style={{ position: "absolute", left: 0, right: 0, top: -7, height: 14, zIndex: 6 }}
+      />
+      {isOver && (
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 0,
+            zIndex: 7,
+            pointerEvents: "none"
+          }}
+        >
+          <InsertionLine />
+        </div>
+      )}
+    </div>
   );
 }
 
-/* Vertical drop slot that appears to the left/right of images inside a figure
-   container while an image is being dragged. */
+/* Vertical insertion slot between images inside a figure container. */
 function FigureDropZone({ id }: any) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const { active } = useDndContext();
@@ -71,19 +189,27 @@ function FigureDropZone({ id }: any) {
   }
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        width: isOver ? 30 : 16,
-        alignSelf: "stretch",
-        minHeight: 48,
-        flexShrink: 0,
-        borderRadius: 4,
-        background: isOver ? "rgba(74,144,226,0.25)" : "rgba(74,144,226,0.08)",
-        border: `1px dashed ${isOver ? "#4a90e2" : "rgba(74,144,226,0.4)"}`,
-        transition: "width 0.08s ease"
-      }}
-    />
+    <div style={{ position: "relative", width: 0, alignSelf: "stretch" }}>
+      <div
+        ref={setNodeRef}
+        style={{ position: "absolute", top: 0, bottom: 0, left: -7, width: 14, zIndex: 6 }}
+      />
+      {isOver && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: 0,
+            zIndex: 7,
+            pointerEvents: "none"
+          }}
+        >
+          <VInsertionLine />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -284,18 +410,27 @@ function MathSlot({ id }: any) {
   if (!dragging) return <div ref={setNodeRef} style={{ width: 0 }} />;
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        width: isOver ? 28 : 16,
-        alignSelf: "stretch",
-        minHeight: 40,
-        flexShrink: 0,
-        borderRadius: 4,
-        background: isOver ? "rgba(74,144,226,0.25)" : "rgba(74,144,226,0.08)",
-        border: `1px dashed ${isOver ? "#4a90e2" : "rgba(74,144,226,0.4)"}`
-      }}
-    />
+    <div style={{ position: "relative", width: 0, alignSelf: "stretch", minHeight: 40 }}>
+      <div
+        ref={setNodeRef}
+        style={{ position: "absolute", top: 0, bottom: 0, left: -7, width: 14, zIndex: 6 }}
+      />
+      {isOver && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: 0,
+            zIndex: 7,
+            pointerEvents: "none"
+          }}
+        >
+          <VInsertionLine />
+        </div>
+      )}
+    </div>
   );
 }
 
