@@ -1790,11 +1790,11 @@ function Editor() {
               borderRadius: 4,
               border: "1px solid #4a90e2",
               boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-              opacity: 0.9
+              opacity: 0.5
             }}
           />
         ) : activeBlockId ? (
-          <div style={{ width: 104 }}>
+          <div style={{ width: 104, opacity: 0.55 }}>
             <BlockBox id={activeBlockId} shadow />
           </div>
         ) : null}

@@ -153,18 +153,19 @@ function DropZone({ id, containerType, headingAdjacent }: any) {
 
   // Zero-height anchor. The hit band + line are absolutely positioned so the
   // surrounding content is never pushed apart. The line only appears on hover.
+  // The hit band is a generous ±18px grace zone so it's easy to target.
   return (
     <div style={{ position: "relative", height: 0 }}>
       <div
         ref={setNodeRef}
-        style={{ position: "absolute", left: 0, right: 0, top: -7, height: 14, zIndex: 6 }}
+        style={{ position: "absolute", left: 0, right: 0, top: -18, height: 36, zIndex: 6 }}
       />
       {isOver && (
         <div
           style={{
             position: "absolute",
-            left: 0,
-            right: 0,
+            left: 28,
+            right: 28,
             top: 0,
             height: 0,
             zIndex: 7,
@@ -192,14 +193,14 @@ function FigureDropZone({ id }: any) {
     <div style={{ position: "relative", width: 0, alignSelf: "stretch" }}>
       <div
         ref={setNodeRef}
-        style={{ position: "absolute", top: 0, bottom: 0, left: -7, width: 14, zIndex: 6 }}
+        style={{ position: "absolute", top: 0, bottom: 0, left: -16, width: 32, zIndex: 6 }}
       />
       {isOver && (
         <div
           style={{
             position: "absolute",
-            top: 0,
-            bottom: 0,
+            top: 12,
+            bottom: 12,
             left: 0,
             width: 0,
             zIndex: 7,
@@ -413,14 +414,14 @@ function MathSlot({ id }: any) {
     <div style={{ position: "relative", width: 0, alignSelf: "stretch", minHeight: 40 }}>
       <div
         ref={setNodeRef}
-        style={{ position: "absolute", top: 0, bottom: 0, left: -7, width: 14, zIndex: 6 }}
+        style={{ position: "absolute", top: 0, bottom: 0, left: -16, width: 32, zIndex: 6 }}
       />
       {isOver && (
         <div
           style={{
             position: "absolute",
-            top: 0,
-            bottom: 0,
+            top: 8,
+            bottom: 8,
             left: 0,
             width: 0,
             zIndex: 7,
