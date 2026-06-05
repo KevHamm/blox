@@ -256,3 +256,15 @@ math-field::part(menu-toggle) {
 .doc-area button:hover {
   opacity: 1;
 }
+
+/* Table row/column reorder grips: hidden until the table is hovered. */
+.tbl-grip {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.table-wrap:hover .tbl-grip {
+  opacity: 0.5;
+}
+.tbl-grip:hover {
+  opacity: 1;
+}

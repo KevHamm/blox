@@ -764,6 +764,7 @@ function Editor() {
     addTableColumn, updateTableColWidths, addSectionAfter,
     updateTableCaption, updateTableColors,
     deleteTableRowAt, deleteTableColumnAt,
+    toggleTableBorder, reorderTableColumn, reorderTableRow,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
     deleteFigureImage, updateMathItem, deleteMathItem,
@@ -1274,6 +1275,66 @@ function Editor() {
           colors: colors.map((row) => row.slice(0, -1)),
           removedColumns: [...(node.removedColumns ?? []), removed]
         };
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
+    setDoc((prev) => update(prev));
+  }
+
+  // Toggle a table's vertical (between-column) or horizontal (between-row) grid
+  // lines. Defaults to visible; stored as { v, h } on the node.
+  function toggleTableBorder(tableId: string, axis: "v" | "h") {
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") {
+        const borders = { v: node.borders?.v !== false, h: node.borders?.h !== false };
+        borders[axis] = !borders[axis];
+        return { ...node, borders };
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
+    setDoc((prev) => update(prev));
+  }
+
+  // Move a column from one position to another (cells, widths and colours all
+  // travel together).
+  function reorderTableColumn(tableId: string, from: number, to: number) {
+    if (from === to) return;
+    const move = <T,>(arr: T[]): T[] => {
+      const a = arr.slice();
+      a.splice(to, 0, a.splice(from, 1)[0]);
+      return a;
+    };
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") {
+        const colors = tableColors(node);
+        const next: any = {
+          ...node,
+          rows: node.rows.map((row: string[]) => move(row)),
+          colors: colors.map((row) => move(row))
+        };
+        if (Array.isArray(node.colWidths) && node.colWidths.length === (node.rows[0]?.length || 0))
+          next.colWidths = move(node.colWidths);
+        return next;
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
+    setDoc((prev) => update(prev));
+  }
+
+  // Move a row from one position to another (cells + colours).
+  function reorderTableRow(tableId: string, from: number, to: number) {
+    if (from === to) return;
+    function update(node: any): any {
+      if (node.id === tableId && node.type === "table") {
+        const colors = tableColors(node);
+        const rows = node.rows.slice();
+        rows.splice(to, 0, rows.splice(from, 1)[0]);
+        const cl = colors.slice();
+        cl.splice(to, 0, cl.splice(from, 1)[0]);
+        return { ...node, rows, colors: cl };
       }
       if (node.children) return { ...node, children: node.children.map(update) };
       return node;

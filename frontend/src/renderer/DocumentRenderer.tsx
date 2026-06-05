@@ -1,4 +1,4 @@
-import { Fragment, useRef, useEffect, useState } from "react";
+import { Fragment, useRef, useEffect, useLayoutEffect, useState } from "react";
 import type { Chunk } from "../utils/paginateDocument";
 import { isContainerType } from "../utils/paginateDocument";
 import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
@@ -665,6 +665,65 @@ const BRUSH_CURSOR =
 const DELETE_CURSOR =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'%3E%3Cpath d='M5 5l14 14M19 5L5 19' stroke='%23d23f3f' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E\") 10 10, crosshair";
 
+/* Auto-growing, multi-line table cell. Shift+Enter inserts a line break; a plain
+   Enter is swallowed so it can't accidentally add one. Long / pasted text wraps,
+   and the cell (and therefore the whole row) grows downward to fit. */
+function CellTextarea({ value, readOnly, onChange, fontSize, widthKey, pointerNone }: any) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  const grow = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  // Re-fit when the text, font size, or column width changes.
+  useLayoutEffect(grow, [value, fontSize, widthKey]);
+
+  // Re-fit when the cell box is resized for any other reason.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined" || !el.parentElement) return;
+    const ro = new ResizeObserver(grow);
+    ro.observe(el.parentElement);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      readOnly={readOnly}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        // Shift+Enter = line break (textarea default); plain Enter does nothing.
+        if (e.key === "Enter" && !e.shiftKey) e.preventDefault();
+      }}
+      style={{
+        display: "block",
+        width: "100%",
+        boxSizing: "border-box",
+        border: "none",
+        outline: "none",
+        resize: "none",
+        overflow: "hidden",
+        padding: "4px 6px",
+        margin: 0,
+        background: "transparent",
+        color: "#000",
+        fontFamily: "var(--sans)",
+        fontSize,
+        lineHeight: 1.3,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+        pointerEvents: pointerNone ? "none" : undefined
+      }}
+    />
+  );
+}
+
 /* -----------------------------
    TABLE
 ----------------------------- */
@@ -682,7 +741,11 @@ function TableBlock(props: any) {
     updateTableColors,
     deleteTableRowAt,
     deleteTableColumnAt,
-    tableNumbers
+    toggleTableBorder,
+    reorderTableColumn,
+    reorderTableRow,
+    tableNumbers,
+    fontSize = 13
   } = props;
 
   const tableRef = useRef<HTMLTableElement>(null);
@@ -691,7 +754,78 @@ function TableBlock(props: any) {
   const [brushColor, setBrushColor] = useState("#ffe08a");
   const active = tool !== "none";
 
+  // Live reorder indicator (a blue line showing where a row/column will land).
+  const [marker, setMarker] = useState<{ axis: "col" | "row"; px: number } | null>(null);
+
   const colCount = node.rows[0]?.length || 0;
+
+  // Grid lines default to visible; either axis can be switched off.
+  const bV = node.borders?.v !== false;
+  const bH = node.borders?.h !== false;
+  const sideBorder = (on: boolean) => (on ? "1px solid #ccc" : "none");
+
+  // ── Drag-to-reorder columns / rows ──────────────────────────────
+  function startColReorder(from: number, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const table = tableRef.current;
+    if (!table) return;
+    let to = from;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.cursor = "grabbing";
+
+    function onMove(ev: MouseEvent) {
+      const cells = Array.from(table!.rows[0].cells) as HTMLElement[];
+      const n = cells.length;
+      const rects = cells.map((td) => td.getBoundingClientRect());
+      const tableLeft = table!.getBoundingClientRect().left;
+      let ins = rects.findIndex((r) => ev.clientX < r.left + r.width / 2);
+      if (ins === -1) ins = n;
+      to = ins > from ? ins - 1 : ins;
+      const px = ins < n ? rects[ins].left - tableLeft : rects[n - 1].right - tableLeft;
+      setMarker({ axis: "col", px });
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = prevCursor;
+      setMarker(null);
+      if (to !== from) reorderTableColumn(node.id, from, to);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  function startRowReorder(from: number, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const table = tableRef.current;
+    if (!table) return;
+    let to = from;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.cursor = "grabbing";
+
+    function onMove(ev: MouseEvent) {
+      const rowsEls = Array.from(table!.rows) as HTMLElement[];
+      const n = rowsEls.length;
+      const rects = rowsEls.map((tr) => tr.getBoundingClientRect());
+      const tableTop = table!.getBoundingClientRect().top;
+      let ins = rects.findIndex((r) => ev.clientY < r.top + r.height / 2);
+      if (ins === -1) ins = n;
+      to = ins > from ? ins - 1 : ins;
+      const px = ins < n ? rects[ins].top - tableTop : rects[n - 1].bottom - tableTop;
+      setMarker({ axis: "row", px });
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = prevCursor;
+      setMarker(null);
+      if (to !== from) reorderTableRow(node.id, from, to);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
 
   // A normalized colour grid (sized to the current rows; missing = null).
   const buildColors = () =>
@@ -756,7 +890,7 @@ function TableBlock(props: any) {
   }
 
   return (
-    <div style={{ marginTop: 20 }}>
+    <div className="table-wrap" style={{ marginTop: 20 }}>
       <div style={{ position: "relative" }}>
       <table
         ref={tableRef}
@@ -795,32 +929,72 @@ function TableBlock(props: any) {
                       : undefined
                   }
                   style={{
-                    border: "1px solid #ccc",
+                    borderLeft: sideBorder(bV),
+                    borderRight: sideBorder(bV),
+                    borderTop: sideBorder(bH),
+                    borderBottom: sideBorder(bH),
                     padding: 0,
+                    verticalAlign: "top",
                     position: "relative",
                     background: node.colors?.[r]?.[c] ?? undefined,
                     cursor:
                       tool === "paint" ? BRUSH_CURSOR : tool === "delete" ? DELETE_CURSOR : undefined
                   }}
                 >
-                  <input
+                  <CellTextarea
                     value={cell}
                     readOnly={active}
-                    onChange={(e) =>
-                      updateTableCell(node.id, r, c, e.target.value)
-                    }
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      border: "none",
-                      outline: "none",
-                      padding: "4px 6px",
-                      background: "transparent",
-                      color: "#000",
-                      fontFamily: "var(--sans)",
-                      pointerEvents: active ? "none" : undefined
-                    }}
+                    pointerNone={active}
+                    fontSize={fontSize}
+                    widthKey={widths[c]}
+                    onChange={(v: string) => updateTableCell(node.id, r, c, v)}
                   />
+
+                  {/* reorder grip above each column (top row only) */}
+                  {!active && r === 0 && (
+                    <div
+                      className="tbl-grip"
+                      title="Drag to reorder column"
+                      onMouseDown={(e) => startColReorder(c, e)}
+                      style={{
+                        position: "absolute",
+                        top: -15,
+                        left: 1,
+                        right: 1,
+                        height: 11,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "grab",
+                        zIndex: 3
+                      }}
+                    >
+                      <div style={{ width: "100%", maxWidth: 46, height: 7, borderRadius: 4, background: "#c2c8d2" }} />
+                    </div>
+                  )}
+
+                  {/* reorder grip left of each row (first column only) */}
+                  {!active && c === 0 && (
+                    <div
+                      className="tbl-grip"
+                      title="Drag to reorder row"
+                      onMouseDown={(e) => startRowReorder(r, e)}
+                      style={{
+                        position: "absolute",
+                        left: -15,
+                        top: 1,
+                        bottom: 1,
+                        width: 11,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "grab",
+                        zIndex: 3
+                      }}
+                    >
+                      <div style={{ height: "100%", maxHeight: 46, width: 7, borderRadius: 4, background: "#c2c8d2" }} />
+                    </div>
+                  )}
 
                   {/* drag handle straddling the right edge of each column */}
                   {c < colCount - 1 && (
@@ -861,6 +1035,22 @@ function TableBlock(props: any) {
           <SquareButton color="green" title="Add column" onClick={() => addTableColumn(node.id)}>+</SquareButton>
           <SquareButton color="red" title="Remove column" onClick={() => deleteTableColumn(node.id)}>−</SquareButton>
         </div>
+
+        {/* live reorder indicator */}
+        {marker && (
+          <div
+            style={{
+              position: "absolute",
+              pointerEvents: "none",
+              zIndex: 5,
+              background: DROP_LINE,
+              borderRadius: 1,
+              ...(marker.axis === "col"
+                ? { left: marker.px - 1, top: 0, bottom: 0, width: 2 }
+                : { top: marker.px - 1, left: 0, right: 0, height: 2 })
+            }}
+          />
+        )}
       </div>
 
       {/* LaTeX-style caption */}
@@ -952,6 +1142,39 @@ function TableBlock(props: any) {
           }}
         >
           ✕
+        </button>
+
+        {/* grid-line toggles */}
+        <span style={{ width: 1, height: 20, background: "#ddd", margin: "0 2px" }} />
+        <button
+          className="tbl-btn"
+          title={bV ? "Hide vertical lines" : "Show vertical lines"}
+          onClick={() => toggleTableBorder(node.id, "v")}
+          style={{
+            width: 24, height: 24, padding: 0,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            background: bV ? "#e8eefc" : "#eee",
+            border: bV ? `1px solid ${DROP_LINE}` : "1px solid #ccc",
+            color: bV ? DROP_LINE : "#999",
+            borderRadius: 4, cursor: "pointer", fontSize: 14
+          }}
+        >
+          ▥
+        </button>
+        <button
+          className="tbl-btn"
+          title={bH ? "Hide horizontal lines" : "Show horizontal lines"}
+          onClick={() => toggleTableBorder(node.id, "h")}
+          style={{
+            width: 24, height: 24, padding: 0,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            background: bH ? "#e8eefc" : "#eee",
+            border: bH ? `1px solid ${DROP_LINE}` : "1px solid #ccc",
+            color: bH ? DROP_LINE : "#999",
+            borderRadius: 4, cursor: "pointer", fontSize: 14
+          }}
+        >
+          ▤
         </button>
 
         <TrashButton
