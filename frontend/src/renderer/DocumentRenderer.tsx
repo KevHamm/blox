@@ -628,35 +628,6 @@ function FigureBlock({
   );
 }
 
-/* Small green "+" / red "−" control button. */
-function SquareButton({ color, onClick, title, children }: any) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="tbl-btn"
-      style={{
-        width: 24,
-        height: 24,
-        padding: 0,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: color === "green" ? "#2e9e44" : "#d23f3f",
-        color: "white",
-        border: "none",
-        borderRadius: 4,
-        cursor: "pointer",
-        fontSize: 17,
-        fontWeight: 700,
-        lineHeight: 1
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 /* Brush-shaped mouse cursor used in table paint mode. */
 const BRUSH_CURSOR =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24'%3E%3Cpath d='M14 3l7 7-8 8H7v-6z' fill='%23cdb4ff' stroke='%23333' stroke-width='1'/%3E%3Cpath d='M7 18c-1 1-2 3-4 3 0-2 2-3 3-4z' fill='%23333'/%3E%3C/svg%3E\") 2 20, crosshair";
@@ -668,7 +639,7 @@ const DELETE_CURSOR =
 /* Auto-growing, multi-line table cell. Shift+Enter inserts a line break; a plain
    Enter is swallowed so it can't accidentally add one. Long / pasted text wraps,
    and the cell (and therefore the whole row) grows downward to fit. */
-function CellTextarea({ value, readOnly, onChange, fontSize, widthKey, pointerNone }: any) {
+function CellTextarea({ value, readOnly, onChange, onEnter, fontSize, widthKey, pointerNone }: any) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const grow = () => {
@@ -698,8 +669,12 @@ function CellTextarea({ value, readOnly, onChange, fontSize, widthKey, pointerNo
       readOnly={readOnly}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={(e) => {
-        // Shift+Enter = line break (textarea default); plain Enter does nothing.
-        if (e.key === "Enter" && !e.shiftKey) e.preventDefault();
+        // Shift+Enter = line break (textarea default). Plain Enter grows the
+        // table: a new row (or a new column when in the header row).
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          onEnter?.();
+        }
       }}
       style={{
         display: "block",
@@ -731,10 +706,8 @@ function TableBlock(props: any) {
   const {
     node,
     updateTableCell,
-    deleteTableColumn,
     deleteNodeById,
     addTableRow,
-    deleteTableRow,
     addTableColumn,
     updateTableColWidths,
     updateTableCaption,
@@ -948,6 +921,9 @@ function TableBlock(props: any) {
                     fontSize={fontSize}
                     widthKey={widths[c]}
                     onChange={(v: string) => updateTableCell(node.id, r, c, v)}
+                    onEnter={() =>
+                      r === 0 ? addTableColumn(node.id) : addTableRow(node.id)
+                    }
                   />
 
                   {/* reorder grip above each column (top row only) */}
@@ -1020,22 +996,6 @@ function TableBlock(props: any) {
         </tbody>
       </table>
 
-        {/* add / remove COLUMN — beside the header row, to the right (may
-            overflow the text box) */}
-        <div
-          style={{
-            position: "absolute",
-            top: 2,
-            right: -56,
-            display: "flex",
-            alignItems: "center",
-            gap: 4
-          }}
-        >
-          <SquareButton color="green" title="Add column" onClick={() => addTableColumn(node.id)}>+</SquareButton>
-          <SquareButton color="red" title="Remove column" onClick={() => deleteTableColumn(node.id)}>−</SquareButton>
-        </div>
-
         {/* live reorder indicator */}
         {marker && (
           <div
@@ -1080,11 +1040,8 @@ function TableBlock(props: any) {
         />
       </div>
 
-      {/* row +/-, paint tool, delete-table — all one line */}
+      {/* paint tool, grid-line toggles, delete-table — all one line */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
-        <SquareButton color="green" title="Add row" onClick={() => addTableRow(node.id)}>+</SquareButton>
-        <SquareButton color="red" title="Remove row" onClick={() => deleteTableRow(node.id)}>−</SquareButton>
-
         <button
           className="tbl-btn"
           title="Paint cells (click a cell; double-click a header to fill a column, the first cell of a row to fill the row)"
