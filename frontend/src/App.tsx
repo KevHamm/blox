@@ -1149,7 +1149,9 @@ function Editor() {
   function deleteTableRowAt(tableId: string, r: number) {
     function update(node: any): any {
       if (node.id === tableId && node.type === "table") {
-        if (node.rows.length <= 1) return node;
+        // The header row is permanent, and a table always keeps at least one
+        // content row (so never fewer than two rows total).
+        if (r === 0 || node.rows.length <= 2) return node;
         const colors = tableColors(node);
         return {
           ...node,

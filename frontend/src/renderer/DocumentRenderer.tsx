@@ -639,7 +639,7 @@ const DELETE_CURSOR =
 /* Auto-growing, multi-line table cell. Shift+Enter inserts a line break; a plain
    Enter is swallowed so it can't accidentally add one. Long / pasted text wraps,
    and the cell (and therefore the whole row) grows downward to fit. */
-function CellTextarea({ value, readOnly, onChange, onEnter, fontSize, widthKey, pointerNone }: any) {
+function CellTextarea({ value, readOnly, onChange, onEnter, onDelete, fontSize, widthKey, pointerNone }: any) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const grow = () => {
@@ -674,6 +674,14 @@ function CellTextarea({ value, readOnly, onChange, onEnter, fontSize, widthKey, 
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           onEnter?.();
+          return;
+        }
+        // Backspace / Delete in an empty cell may remove an empty row/column.
+        if (
+          (e.key === "Backspace" || e.key === "Delete") &&
+          String(value ?? "").trim() === ""
+        ) {
+          if (onDelete?.()) e.preventDefault();
         }
       }}
       style={{
@@ -736,6 +744,11 @@ function TableBlock(props: any) {
   const bV = node.borders?.v !== false;
   const bH = node.borders?.h !== false;
   const sideBorder = (on: boolean) => (on ? "1px solid #ccc" : "none");
+
+  // Whole-row / whole-column emptiness (for backspace-to-remove).
+  const isEmpty = (v: any) => String(v ?? "").trim() === "";
+  const rowEmpty = (r: number) => node.rows[r].every(isEmpty);
+  const colEmpty = (c: number) => node.rows.every((row: string[]) => isEmpty(row[c]));
 
   // ── Drag-to-reorder columns / rows ──────────────────────────────
   function startColReorder(from: number, e: React.MouseEvent) {
@@ -924,6 +937,16 @@ function TableBlock(props: any) {
                     onEnter={() =>
                       r === 0 ? addTableColumn(node.id) : addTableRow(node.id)
                     }
+                    onDelete={() => {
+                      // Header cell → drop an empty column; first cell of a data
+                      // row → drop an empty row.
+                      if (r === 0) {
+                        if (colEmpty(c)) { deleteTableColumnAt(node.id, c); return true; }
+                      } else if (c === 0) {
+                        if (rowEmpty(r)) { deleteTableRowAt(node.id, r); return true; }
+                      }
+                      return false;
+                    }}
                   />
 
                   {/* reorder grip above each column (top row only) */}
