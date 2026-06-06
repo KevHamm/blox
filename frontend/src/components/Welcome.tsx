@@ -1,8 +1,8 @@
 import { useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 
 interface WelcomeProps {
-  onStart: (preset?: string) => void;
+  onStart: (preset?: string, rect?: DOMRect) => void;
 }
 
 // San-Francisco-first system stack — the Apple typography feel.
@@ -55,16 +55,23 @@ const PRESETS = [
   { id: "book",    label: "Book",    desc: "A multi-chapter book with front- and back-matter." }
 ];
 
-// The original intro copy for the two end cards (index 0 and 4).
+// The three intro buttons live in the middle slots (1, 2, 3). Clicking
+// "Start new project" fans the two end cards (0, 4) outward and morphs all
+// three into the document presets.
 const INTRO: Record<number, { label: string; desc: string; enabled: boolean }> = {
-  0: {
+  1: {
     label: "Design page",
     desc: "Design single or multiple pages such as resumes, cover pages, and more.",
     enabled: false
   },
-  4: {
-    label: "Work on project",
-    desc: "Edit existing projects or choose a template to start a new one.",
+  2: {
+    label: "Open project",
+    desc: "Continue working on one of your saved projects.",
+    enabled: false
+  },
+  3: {
+    label: "Start new project",
+    desc: "Pick a template and start from a clean document.",
     enabled: true
   }
 };
@@ -172,17 +179,18 @@ export function Welcome({ onStart }: WelcomeProps) {
           }}
         >
           {PRESETS.map((p, i) => {
-            const isOuter = i === 0 || i === 4;
-            const collapsed = !picking && !isOuter;
+            const isEnd = i === 0 || i === 4;
+            const collapsed = !picking && isEnd; // the ends are hidden until the fan-out
             const intro = INTRO[i];
             const interactive = picking || (intro?.enabled ?? false);
             const disabled = !interactive;
 
-            const handleClick = () => {
+            const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
               if (!picking) {
-                if (i === 4) setPicking(true); // "Work on project" fans out the presets
+                if (intro?.enabled) setPicking(true); // "Start new project" fans out the presets
               } else {
-                onStart(p.id);
+                // Hand the card's exact rect to App so it can grow into the page.
+                onStart(p.id, e.currentTarget.getBoundingClientRect());
               }
             };
 
@@ -197,7 +205,7 @@ export function Welcome({ onStart }: WelcomeProps) {
                   opacity: collapsed ? 0 : 1,
                   transform: collapsed ? "scale(0.92)" : "scale(1)",
                   transition: `width 0.5s ${EASE}, margin 0.5s ${EASE}, opacity 0.45s ease, transform 0.45s ease`,
-                  transitionDelay: collapsed ? "0s" : isOuter ? "0s" : "0.12s",
+                  transitionDelay: collapsed ? "0s" : isEnd ? "0.12s" : "0s",
                   overflow: "hidden",
                   pointerEvents: collapsed ? "none" : "auto",
                   display: "flex",
@@ -217,7 +225,7 @@ export function Welcome({ onStart }: WelcomeProps) {
                     opacity: disabled ? 0.6 : 1
                   }}
                 >
-                  {isOuter ? (
+                  {intro ? (
                     <>
                       <span style={labelLayer(!picking)}>{intro.label}</span>
                       <span style={labelLayer(picking)}>{p.label}</span>
@@ -228,7 +236,7 @@ export function Welcome({ onStart }: WelcomeProps) {
                 </button>
 
                 <div style={{ position: "relative", width: CARD_W, height: 70, marginTop: 16 }}>
-                  {isOuter ? (
+                  {intro ? (
                     <>
                       <span style={descLayer(!picking)}>{intro.desc}</span>
                       <span style={descLayer(picking)}>{p.desc}</span>

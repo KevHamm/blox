@@ -15,6 +15,7 @@ interface PageProps {
 export function Page({ children, pageNumber }: PageProps) {
   return (
     <div
+      className="blox-page"
       style={{
         position: "relative",
         width: PAGE_WIDTH,

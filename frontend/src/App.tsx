@@ -27,7 +27,9 @@ import { getEventCoordinates } from "@dnd-kit/utilities";
 
 import {
   CONTENT_WIDTH,
-  COLUMN_GAP
+  COLUMN_GAP,
+  PAGE_WIDTH,
+  PAGE_HEIGHT
 } from "./utils/pageConfig";
 
 /* A sidebar image the user can drag into the document or delete. */
@@ -593,7 +595,7 @@ function BlockBox({ id, shadow }: { id: string; shadow?: boolean }) {
    block is being dragged, so a section can be dropped anywhere in the document
    (no visible drop zone) without interfering with image "drop outside to
    remove" behaviour. */
-function DroppableDocArea({ children }: any) {
+function DroppableDocArea({ children, visible = true }: any) {
   const { active } = useDndContext();
   const aid = String(active?.id ?? "");
   // Special pages drop anywhere in the document (no visible zone). Sections now
@@ -610,7 +612,11 @@ function DroppableDocArea({ children }: any) {
         flexDirection: "column",
         alignItems: "center",
         padding: 40,
-        overflowY: "auto"
+        overflowY: "auto",
+        // Hidden (but still laid out, so the morph overlay can measure the
+        // page) until the editor is revealed.
+        opacity: visible ? 1 : 0,
+        transition: "opacity 0.3s ease"
       }}
     >
       {children}
@@ -731,7 +737,7 @@ function NumberControl({
   );
 }
 
-function Editor() {
+function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
   // ── 1. All state first ──────────────────────────────────
   const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1655,7 +1661,8 @@ function Editor() {
         className="editor-canvas"
         style={{
           display: "flex",
-          minHeight: "100vh"
+          minHeight: "100vh",
+          overflowX: "hidden"
         }}
       >
         {/* SIDEBAR */}
@@ -1669,7 +1676,11 @@ function Editor() {
             flexDirection: "column",
             gap: 12,
             height: "100vh",
-            overflowY: "auto"
+            overflowY: "auto",
+            transform: sidebarsIn ? "translateX(0)" : "translateX(-100%)",
+            opacity: sidebarsIn ? 1 : 0,
+            transition:
+              "transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease"
           }}
         >
           <Collapsible title="Typography">
@@ -1764,7 +1775,7 @@ function Editor() {
 
 
         {/* DOCUMENT */}
-        <DroppableDocArea>
+        <DroppableDocArea visible={sidebarsIn}>
                 {pages.map((cols: any[], pageIndex: number) => (
                   <Page key={pageIndex} pageNumber={pageIndex + 1}>
 
@@ -1826,7 +1837,11 @@ function Editor() {
             flexDirection: "column",
             gap: 12,
             height: "100vh",
-            overflowY: "auto"
+            overflowY: "auto",
+            transform: sidebarsIn ? "translateX(0)" : "translateX(100%)",
+            opacity: sidebarsIn ? 1 : 0,
+            transition:
+              "transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease"
           }}
         >
           <h3>Images</h3>
@@ -1866,7 +1881,101 @@ function Editor() {
   );
 }
 
+type MorphRect = { left: number; top: number; width: number; height: number };
+const MORPH_EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
+
 export default function App() {
-  const [started, setStarted] = useState(false);
-  return started ? <Editor /> : <Welcome onStart={() => setStarted(true)} />;
+  // welcome → morph (card grows into the page) → editor (sidebars slide in).
+  const [phase, setPhase] = useState<"welcome" | "morph" | "editor">("welcome");
+  const [origin, setOrigin] = useState<MorphRect | null>(null);
+  const [target, setTarget] = useState<MorphRect | null>(null);
+  const [grown, setGrown] = useState(false);
+  const [overlayOn, setOverlayOn] = useState(false);
+
+  function start(_preset?: string, rect?: DOMRect) {
+    if (!rect) {
+      setPhase("editor");
+      return;
+    }
+    setOrigin({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
+    setOverlayOn(true);
+    setGrown(false);
+    setPhase("morph"); // mounts the editor behind the (fading) welcome screen
+
+    requestAnimationFrame(() => {
+      // The editor is now in the DOM — land the overlay exactly on the page.
+      const el = document.querySelector(".blox-page") as HTMLElement | null;
+      const t: MorphRect = el
+        ? (() => {
+            const r = el.getBoundingClientRect();
+            return { left: r.left, top: r.top, width: r.width, height: r.height };
+          })()
+        : {
+            left: (window.innerWidth - PAGE_WIDTH) / 2,
+            top: 24,
+            width: PAGE_WIDTH,
+            height: PAGE_HEIGHT
+          };
+      setTarget(t);
+      requestAnimationFrame(() => setGrown(true)); // trigger the grow transition
+    });
+
+    window.setTimeout(() => setPhase("editor"), 520); // sidebars slide in, welcome unmounts
+    window.setTimeout(() => setOverlayOn(false), 560); // fade overlay → reveal the real document
+    window.setTimeout(() => {
+      setOrigin(null);
+      setTarget(null);
+      setGrown(false);
+    }, 860);
+  }
+
+  const showEditor = phase === "morph" || phase === "editor";
+  const cur = grown && target ? target : origin;
+
+  return (
+    <>
+      {showEditor && <Editor sidebarsIn={phase === "editor"} />}
+
+      {phase !== "editor" && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 40,
+            opacity: phase === "morph" ? 0 : 1,
+            transition: "opacity 0.4s ease",
+            pointerEvents: phase === "morph" ? "none" : "auto"
+          }}
+        >
+          <Welcome onStart={start} />
+        </div>
+      )}
+
+      {cur && (
+        <div
+          style={{
+            position: "fixed",
+            left: cur.left,
+            top: cur.top,
+            width: cur.width,
+            height: cur.height,
+            background: grown ? "#ffffff" : "rgba(255, 255, 255, 0.66)",
+            backdropFilter: grown ? "none" : "blur(20px) saturate(180%)",
+            WebkitBackdropFilter: grown ? "none" : "blur(20px) saturate(180%)",
+            borderRadius: grown ? 6 : 22,
+            border: grown
+              ? "1px solid rgba(0, 0, 0, 0.06)"
+              : "1px solid rgba(255, 255, 255, 0.7)",
+            boxShadow: grown
+              ? "0 12px 40px rgba(20, 20, 50, 0.18), 0 2px 6px rgba(20, 20, 50, 0.06)"
+              : "0 10px 34px rgba(30, 25, 70, 0.10)",
+            opacity: overlayOn ? 1 : 0,
+            transition: `left 0.5s ${MORPH_EASE}, top 0.5s ${MORPH_EASE}, width 0.5s ${MORPH_EASE}, height 0.5s ${MORPH_EASE}, background 0.5s ease, border-radius 0.5s ease, box-shadow 0.5s ease, opacity 0.28s ease`,
+            zIndex: 60,
+            pointerEvents: "none"
+          }}
+        />
+      )}
+    </>
+  );
 }
