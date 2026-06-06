@@ -77,9 +77,14 @@ export function DraggableImage({ img, onDelete }: any) {
 export function DroppableDocArea({ children, visible = true }: any) {
   const { active } = useDndContext();
   const aid = String(active?.id ?? "");
-  // Special pages drop anywhere in the document (no visible zone). Sections now
-  // use explicit document-level drop zones instead.
-  const dropAnywhere = aid.startsWith("block::page::");
+  // These blocks have no visible insertion line — dropping anywhere in the
+  // document auto-places them (sections, abstract, special pages) or starts a
+  // word-pick (footnote).
+  const dropAnywhere =
+    aid.startsWith("block::page::") ||
+    aid === "block::section" ||
+    aid === "block::abstract" ||
+    aid === "block::footnote";
   const { setNodeRef } = useDroppable({ id: "doc-drop", disabled: !dropAnywhere });
   return (
     <div

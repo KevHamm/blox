@@ -126,7 +126,7 @@ function VInsertionLine() {
   );
 }
 
-function DropZone({ id, containerType, headingAdjacent }: any) {
+function DropZone({ id, containerType }: any) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const { active } = useDndContext();
 
@@ -139,10 +139,16 @@ function DropZone({ id, containerType, headingAdjacent }: any) {
   const activeId = String(active?.id ?? "");
   const isDoc = containerType === "document";
   let eligible: boolean;
-  if (activeId === "block::section") eligible = isDoc || !!headingAdjacent;
+  // Sections, abstracts, footnotes and pages have no insertion lines — they are
+  // dropped anywhere and auto-placed.
+  if (
+    activeId === "block::section" ||
+    activeId === "block::abstract" ||
+    activeId === "block::footnote" ||
+    activeId.startsWith("block::page::")
+  ) eligible = false;
   else if (activeId === "block::subsection") eligible = containerType === "section";
   else if (activeId === "block::subsubsection") eligible = containerType === "subsection";
-  else if (activeId.startsWith("block::page::")) eligible = false;
   else if (isImageDragId(activeId)) eligible = !isDoc;
   else eligible = activeId.startsWith("block::") && !isDoc; // table / math
 
@@ -288,6 +294,15 @@ function headingStyle(base: number, mult: number) {
 /* -----------------------------
    PARAGRAPH
 ----------------------------- */
+// A small superscript footnote marker.
+function FootnoteMark({ n }: { n: number }) {
+  return (
+    <sup style={{ fontSize: "0.7em", lineHeight: 0, verticalAlign: "super", color: "var(--text)" }}>
+      {n}
+    </sup>
+  );
+}
+
 function Paragraph({
   node,
   editingId,
@@ -295,9 +310,13 @@ function Paragraph({
   updateTextById,
   lineHeight,
   fontSize,
-  firstChild = false
+  firstChild = false,
+  pendingFootnote = false,
+  onWordClick,
+  footnoteNumbers
 }: any) {
   const isEditing = editingId === node.id;
+  const footnotes: any[] = node.footnotes ?? [];
 
   if (isEditing) {
     return (
@@ -321,24 +340,104 @@ function Paragraph({
     );
   }
 
+  const baseStyle: any = {
+    margin: 0,
+    textAlign: "justify",
+    hyphens: "auto",
+    WebkitHyphens: "auto",
+    textIndent: firstChild ? 0 : "1.5em",
+    lineHeight,
+    fontSize
+  };
+
+  // Tokenize into words + whitespace, tracking the running word index so both
+  // footnote markers and the word-picker can target the same indices.
+  const needTokens = pendingFootnote || footnotes.length > 0;
+  if (needTokens) {
+    const tokens = node.text.split(/(\s+)/);
+    let wordIdx = -1;
+    const out: any[] = [];
+    tokens.forEach((tok: string, i: number) => {
+      if (tok === "" ) return;
+      if (/^\s+$/.test(tok)) { out.push(tok); return; }
+      wordIdx++;
+      const w = wordIdx;
+      if (pendingFootnote) {
+        out.push(
+          <span
+            key={i}
+            className="fn-word"
+            onClick={(e) => { e.stopPropagation(); onWordClick?.(node.id, w); }}
+          >
+            {tok}
+          </span>
+        );
+      } else {
+        out.push(<Fragment key={i}>{tok}</Fragment>);
+      }
+      // Append any footnote markers attached to this word.
+      footnotes
+        .filter((f) => f.word === w)
+        .forEach((f) => out.push(<FootnoteMark key={`${i}-${f.id}`} n={footnoteNumbers?.[f.id] ?? 0} />));
+    });
+
+    return (
+      <p
+        onClick={pendingFootnote ? undefined : () => setEditingId(node.id)}
+        style={{ ...baseStyle, cursor: pendingFootnote ? "default" : "pointer" }}
+      >
+        {out}
+      </p>
+    );
+  }
+
   // LaTeX body: justified, hyphenated, first-line indent (none on the first
   // paragraph after a heading), and no space between paragraphs (\parskip = 0).
   return (
     <p
       onClick={() => setEditingId(node.id)}
-      style={{
-        margin: 0,
-        cursor: "pointer",
-        textAlign: "justify",
-        hyphens: "auto",
-        WebkitHyphens: "auto",
-        textIndent: firstChild ? 0 : "1.5em",
-        lineHeight,
-        fontSize
-      }}
+      style={{ ...baseStyle, cursor: "pointer" }}
     >
       {node.text}
     </p>
+  );
+}
+
+/* -----------------------------
+   ABSTRACT — a singleton block after the title, before the first section.
+----------------------------- */
+function AbstractBlock({ node, editingId, setEditingId, updateTextById, deleteNodeById, fontSize = 13, lineHeight = 1.2 }: any) {
+  const isEditing = editingId === node.id;
+  return (
+    <div data-leaf-id={node.id} style={{ width: "86%", margin: "0 auto", marginTop: fontSize * 1.6, marginBottom: fontSize * 1.6 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: fontSize * 0.5 }}>
+        <div style={{ fontWeight: 700, fontSize, fontFamily: "var(--sans)", color: "var(--text)" }}>Abstract</div>
+        <TrashButton onClick={() => deleteNodeById(node.id)} label="Delete abstract" />
+      </div>
+      {isEditing ? (
+        <textarea
+          autoFocus
+          value={node.text}
+          onChange={(e) => updateTextById(node.id, e.target.value)}
+          onBlur={() => setEditingId(null)}
+          style={{
+            width: "100%", minHeight: 90, padding: 8, border: "1px solid #ddd",
+            lineHeight, fontSize: fontSize * 0.95, fontFamily: "var(--sans)", color: "var(--text)"
+          }}
+        />
+      ) : (
+        <p
+          onClick={() => setEditingId(node.id)}
+          style={{
+            margin: 0, cursor: "pointer", textAlign: "justify",
+            hyphens: "auto", WebkitHyphens: "auto",
+            lineHeight, fontSize: fontSize * 0.95
+          }}
+        >
+          {node.text}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -1398,6 +1497,9 @@ function renderChunk(chunk: Chunk, props: any, firstChild = false): any {
       </div>
     );
   }
+  if (node.type === "abstract") {
+    return <AbstractBlock node={node} {...props} />;
+  }
   if (node.type === "table") {
     return (
       <div data-leaf-id={node.id}>
@@ -1463,29 +1565,11 @@ export function DocumentRenderer(props: any) {
 
   return (
     <div ref={setNodeRef}>
-      {/* empty body → a single target so the first section can be dropped */}
-      {props.noSections && column.length === 0 && (
-        <DropZone id="dz::doc::empty" containerType="document" />
-      )}
-
-      {column.map((chunk, i) => {
-        const isSection = chunk.node.type === "section";
-        // Document-level section zones: before each section's first chunk, and
-        // after the final section chunk in this column.
-        const before = isSection && chunk.header;
-        const after = isSection && chunk.isLast && i === column.length - 1;
-        return (
-          <Fragment key={`${chunk.node.id}-${i}`}>
-            {before && (
-              <DropZone id={`dz::doc::before::${chunk.node.id}`} containerType="document" />
-            )}
-            {renderChunk(chunk, props)}
-            {after && (
-              <DropZone id={`dz::doc::after::${chunk.node.id}`} containerType="document" />
-            )}
-          </Fragment>
-        );
-      })}
+      {column.map((chunk, i) => (
+        <Fragment key={`${chunk.node.id}-${i}`}>
+          {renderChunk(chunk, props)}
+        </Fragment>
+      ))}
     </div>
   );
 }

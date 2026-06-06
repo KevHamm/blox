@@ -7,7 +7,9 @@ import {
   removeFigureImage,
   setFigureWidthTree,
   updateMathItemTree,
-  deleteMathItemTree
+  deleteMathItemTree,
+  updateFootnoteText,
+  deleteFootnote
 } from "../utils/docTree";
 
 const lorem =
@@ -32,7 +34,7 @@ export function useDocument() {
   // -----------------------------
   function updateTextById(id: string, value: string) {
     function update(node: any): any {
-      if (node.id === id && node.type === "paragraph") {
+      if (node.id === id && (node.type === "paragraph" || node.type === "abstract")) {
         return { ...node, text: value };
       }
 
@@ -96,6 +98,14 @@ export function useDocument() {
   }
   function deleteMathItem(mathId: string, itemId: string) {
     setDoc((prev) => deleteMathItemTree(prev, mathId, itemId));
+  }
+
+  // Edit / remove a footnote attached to a paragraph word.
+  function setFootnoteText(paragraphId: string, footnoteId: string, text: string) {
+    setDoc((prev) => updateFootnoteText(prev, paragraphId, footnoteId, text));
+  }
+  function removeFootnote(paragraphId: string, footnoteId: string) {
+    setDoc((prev) => deleteFootnote(prev, paragraphId, footnoteId));
   }
 
   // -----------------------------
@@ -597,6 +607,8 @@ export function useDocument() {
     updateFigureCaption,
     updateMathItem,
     deleteMathItem,
+    setFootnoteText,
+    removeFootnote,
     addSectionAfter,
     updateFigureWidth,
     deleteFigureImage,

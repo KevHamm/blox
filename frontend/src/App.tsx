@@ -1,6 +1,7 @@
-import { useState, useLayoutEffect, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo } from "react";
 import { DocumentRenderer } from "./renderer/DocumentRenderer";
 import { Page } from "./components/Page";
+import { TrashIcon } from "./components/TrashIcon";
 import { Welcome } from "./components/Welcome";
 import { useDocument } from "./hooks/useDocument";
 import { numberDocument } from "./utils/numberDocument";
@@ -35,10 +36,11 @@ import {
   newSection,
   insertOrdered,
   insertPage,
-  insertSectionRelative,
   MATH_TEMPLATES,
   insertStructuralAt,
-  insertMathItem
+  insertMathItem,
+  addFootnoteToWord,
+  footnoteNumbering
 } from "./utils/docTree";
 import {
   BLOCK_DEFS,
@@ -82,13 +84,34 @@ function dropCollision(args: any) {
   return zones.length ? zones : hits;
 }
 
+// Gather every footnote whose target paragraph lands on this page (paragraphs
+// are never split across pages), ordered by their global number.
+function collectPageFootnotes(
+  cols: any[],
+  footnoteNumbers: Record<string, number>
+): { paragraphId: string; fn: any; number: number }[] {
+  const out: { paragraphId: string; fn: any; number: number }[] = [];
+  const walk = (chunk: any) => {
+    const n = chunk.node;
+    if (n.type === "paragraph" && n.footnotes?.length) {
+      n.footnotes.forEach((fn: any) =>
+        out.push({ paragraphId: n.id, fn, number: footnoteNumbers[fn.id] ?? 0 })
+      );
+    }
+    (chunk.children ?? []).forEach(walk);
+  };
+  cols.forEach((col: any[]) => col.forEach(walk));
+  return out.sort((a, b) => a.number - b.number);
+}
+
 function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
   // ── 1. All state first ──────────────────────────────────
   // The document tree + every mutation handler live in this hook.
   const {
     doc, setDoc,
     updateTextById, updateSectionTitle, updateFigureCaption,
-    updateMathItem, deleteMathItem, addSectionAfter, updateFigureWidth,
+    updateMathItem, deleteMathItem, setFootnoteText, removeFootnote,
+    addSectionAfter, updateFigureWidth,
     deleteFigureImage, addSubsection, addSubsubsection, updateTableCell,
     deleteNodeById, addTableRow, deleteTableRow, deleteTableRowAt,
     addTableColumn, deleteTableColumnAt, updateTableColWidths,
@@ -97,6 +120,8 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     moveSection, moveSubsection
   } = useDocument();
   const [editingId, setEditingId] = useState<string | null>(null);
+  // While true, the next click on a paragraph word attaches a footnote there.
+  const [pendingFootnote, setPendingFootnote] = useState(false);
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
   // Measured heights: every flow leaf (paragraph/table/figure) and every
   // container header (section/subsection/subsubsection).
@@ -197,6 +222,26 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     return map;
   }, [numberedDoc]);
 
+  // Global footnote numbers, assigned in reading order.
+  const footnoteNumbers = useMemo(() => footnoteNumbering(numberedDoc), [numberedDoc]);
+
+  // Click a paragraph word while in "pick a word" mode → attach a footnote.
+  function handleWordClick(paragraphId: string, word: number) {
+    if (!pendingFootnote) return;
+    setDoc((prev) => addFootnoteToWord(prev, paragraphId, word, crypto.randomUUID()));
+    setPendingFootnote(false);
+  }
+
+  // Esc cancels footnote word-picking.
+  useEffect(() => {
+    if (!pendingFootnote) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPendingFootnote(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pendingFootnote]);
+
+  const hasAbstract = (doc.children ?? []).some((c: any) => c.type === "abstract");
+
   // -----------------------------
   // DND SENSORS
   // -----------------------------
@@ -272,6 +317,18 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
       const overId = over ? String(over.id) : null;
       if (!overId) return;
 
+      // Footnote: no placement — drop anywhere to enter "pick a word" mode.
+      if (activeBlockId === "block::footnote") {
+        setPendingFootnote(true);
+        return;
+      }
+
+      // Abstract: a singleton auto-placed between the title and first section.
+      if (activeBlockId === "block::abstract") {
+        setDoc((prev) => insertPage(prev, blockDef.make()));
+        return;
+      }
+
       // Special pages drop anywhere → auto-placed by document order (and unique).
       if (activeBlockId.startsWith("block::page::")) {
         setDoc((prev) => insertPage(prev, blockDef.make()));
@@ -281,22 +338,10 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
       // Section / Subsection / Subsubsection.
       const kind = STRUCTURAL[activeBlockId];
       if (kind) {
+        // A section is dropped anywhere and simply appended after the last
+        // section (ordered placement keeps it ahead of the bibliography).
         if (kind === "section") {
-          // Document-level zones place the section precisely; the empty-body
-          // zone and in-container zones fall back to ordered placement / after
-          // the containing section.
-          if (overId === "dz::doc::empty") {
-            setDoc((prev) => insertOrdered(prev, newSection()));
-          } else if (overId.startsWith("dz::doc::before::")) {
-            const sid = overId.slice("dz::doc::before::".length);
-            setDoc((prev) => insertSectionRelative(prev, sid, "before"));
-          } else if (overId.startsWith("dz::doc::after::")) {
-            const sid = overId.slice("dz::doc::after::".length);
-            setDoc((prev) => insertSectionRelative(prev, sid, "after"));
-          } else if (overId.startsWith("dz::")) {
-            const [, containerId, idxStr] = overId.split("::");
-            setDoc((prev) => insertStructuralAt(prev, containerId, Number(idxStr), "section"));
-          }
+          setDoc((prev) => insertOrdered(prev, newSection()));
           return;
         }
 
@@ -445,6 +490,30 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
           overflowX: "hidden"
         }}
       >
+        {/* Footnote "pick a word" instruction banner. */}
+        {pendingFootnote && (
+          <div
+            style={{
+              position: "fixed",
+              top: 16,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 100,
+              background: "var(--ui-blue)",
+              color: "#fff",
+              fontFamily: "var(--ui-font)",
+              fontSize: 13,
+              fontWeight: 500,
+              padding: "8px 16px",
+              borderRadius: 999,
+              boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
+              pointerEvents: "none"
+            }}
+          >
+            Click a word to attach the footnote · Esc to cancel
+          </div>
+        )}
+
         {/* SIDEBAR */}
         <div
           className="ui-panel"
@@ -525,9 +594,11 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
 
           <Collapsible title="Blox">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {BLOX_ORDER.map((id) => (
-                <DraggableBlock key={id} id={id} />
-              ))}
+              {BLOX_ORDER
+                .filter((id) => id !== "block::abstract" || !hasAbstract)
+                .map((id) => (
+                  <DraggableBlock key={id} id={id} />
+                ))}
             </div>
 
             <div style={{ fontWeight: 600, fontSize: 13, marginTop: 4, color: "#555" }}>
@@ -593,9 +664,44 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
                                 column={col}
                                 figureNumbers={figureNumbers}
                                 tableNumbers={tableNumbers}
-                                noSections={!(numberedDoc.children ?? []).some((c: any) => c.type === "section")}
+                                pendingFootnote={pendingFootnote}
+                                onWordClick={handleWordClick}
+                                footnoteNumbers={footnoteNumbers}
                                 {...rendererProps}
                               />
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Footnotes for this page, beneath a short rule. */}
+                    {(() => {
+                      const fns = collectPageFootnotes(cols, footnoteNumbers);
+                      if (!fns.length) return null;
+                      return (
+                        <div style={{ marginTop: 20, width: Math.min(layout.textWidth, CONTENT_WIDTH), marginLeft: "auto", marginRight: "auto" }}>
+                          <div style={{ borderTop: "1px solid #999", width: 160, marginBottom: 6 }} />
+                          {fns.map(({ paragraphId, fn, number }) => (
+                            <div key={fn.id} style={{ display: "flex", alignItems: "flex-start", gap: 4, marginBottom: 2 }}>
+                              <sup style={{ fontSize: layout.fontSize * 0.7, fontFamily: "var(--sans)", color: "var(--text)", lineHeight: 1.6 }}>{number}</sup>
+                              <input
+                                value={fn.text}
+                                placeholder="Footnote text…"
+                                onChange={(e) => setFootnoteText(paragraphId, fn.id, e.target.value)}
+                                style={{
+                                  flex: 1, border: "none", outline: "none", background: "transparent",
+                                  fontFamily: "var(--sans)", color: "var(--text)",
+                                  fontSize: layout.fontSize * 0.8
+                                }}
+                              />
+                              <button
+                                onClick={() => removeFootnote(paragraphId, fn.id)}
+                                title="Delete footnote"
+                                style={{ border: "none", background: "transparent", color: "#c0392b", cursor: "pointer", padding: 0 }}
+                              >
+                                <TrashIcon size={13} />
+                              </button>
                             </div>
                           ))}
                         </div>

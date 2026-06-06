@@ -141,13 +141,23 @@ export const newPage = (type: string): DocumentNode => ({
   title: PAGE_LABELS[type]
 });
 
-// Document ordering: cover page → table of contents → sections → bibliography.
+// The abstract — a singleton that always sits between the title and the first
+// section.
+export const newAbstract = (): DocumentNode => ({
+  id: crypto.randomUUID(),
+  type: "abstract" as any,
+  text: "Write a short summary of the document here."
+});
+
+// Document ordering: cover page → table of contents → abstract → sections →
+// bibliography.
 export const pageRank = (node: any): number => {
   switch (node.type) {
     case "coverpage": return 0;
     case "toc": return 1;
-    case "bibliography": return 3;
-    default: return 2; // sections / normal content
+    case "abstract": return 2;
+    case "bibliography": return 4;
+    default: return 3; // sections / normal content
   }
 };
 
@@ -258,6 +268,53 @@ export function updateMathItemTree(node: any, mathId: string, itemId: string, la
   }
   if (!node.children) return node;
   return { ...node, children: node.children.map((c: any) => updateMathItemTree(c, mathId, itemId, latex)) };
+}
+
+/* ---- footnotes (attached to a word inside a paragraph) ---- */
+// Attach a new footnote to the given word index of a paragraph.
+export function addFootnoteToWord(node: any, paragraphId: string, word: number, id: string): any {
+  if (node.type === "paragraph" && node.id === paragraphId) {
+    const footnotes = [...(node.footnotes ?? []), { id, word, text: "" }];
+    return { ...node, footnotes };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => addFootnoteToWord(c, paragraphId, word, id)) };
+}
+
+export function updateFootnoteText(node: any, paragraphId: string, footnoteId: string, text: string): any {
+  if (node.type === "paragraph" && node.id === paragraphId) {
+    return {
+      ...node,
+      footnotes: (node.footnotes ?? []).map((f: any) => (f.id === footnoteId ? { ...f, text } : f))
+    };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => updateFootnoteText(c, paragraphId, footnoteId, text)) };
+}
+
+export function deleteFootnote(node: any, paragraphId: string, footnoteId: string): any {
+  if (node.type === "paragraph" && node.id === paragraphId) {
+    return { ...node, footnotes: (node.footnotes ?? []).filter((f: any) => f.id !== footnoteId) };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => deleteFootnote(c, paragraphId, footnoteId)) };
+}
+
+// A map of footnote id → global number, assigned in document reading order
+// (paragraph order, then by word index within a paragraph).
+export function footnoteNumbering(doc: any): Record<string, number> {
+  const map: Record<string, number> = {};
+  let n = 0;
+  const walk = (node: any) => {
+    if (node.type === "paragraph" && node.footnotes?.length) {
+      [...node.footnotes]
+        .sort((a: any, b: any) => a.word - b.word)
+        .forEach((f: any) => { map[f.id] = ++n; });
+    }
+    (node.children ?? []).forEach(walk);
+  };
+  walk(doc);
+  return map;
 }
 
 // Remove an equation part; drop the whole math block when its last part is gone.

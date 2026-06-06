@@ -6,6 +6,7 @@ import {
   newSubsection,
   newSubsubsection,
   newPage,
+  newAbstract,
   mathNode,
   MATH_TEMPLATES
 } from "../utils/docTree";
@@ -109,6 +110,30 @@ export function LayoutIcon({ columns }: { columns: number }) {
   );
 }
 
+// An abstract glyph: a centered heading bar over a justified block.
+export function AbstractGlyph() {
+  return (
+    <svg width="32" height="30" viewBox="0 0 32 30">
+      <rect x="11" y="3" width="10" height="3" rx="1" fill="currentColor" />
+      {[10, 14, 18, 22].map((y) => (
+        <rect key={y} x="4" y={y} width="24" height="2" rx="1" fill="currentColor" opacity="0.45" />
+      ))}
+    </svg>
+  );
+}
+
+// A footnote glyph: a text line with a superscript marker and a rule + note.
+export function FootnoteGlyph() {
+  return (
+    <svg width="32" height="30" viewBox="0 0 32 30">
+      <rect x="4" y="5" width="16" height="2.5" rx="1" fill="currentColor" opacity="0.7" />
+      <text x="21" y="7" fontSize="7" fill="currentColor" fontFamily="serif">1</text>
+      <line x1="4" y1="18" x2="14" y2="18" stroke="currentColor" strokeWidth="1" />
+      <text x="4" y="27" fontSize="6" fill="currentColor" fontFamily="serif">¹ note</text>
+    </svg>
+  );
+}
+
 const mathBlock = (id: string, label: string, iconTex: string, iconSize = 22) => ({
   label,
   icon: () => <KatexIcon tex={iconTex} size={iconSize} />,
@@ -120,6 +145,8 @@ export const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: 
   "block::section":       { label: "Section",       icon: () => <HeadingGlyph level={1} />, make: () => newSection() },
   "block::subsection":    { label: "Subsection",    icon: () => <HeadingGlyph level={2} />, make: () => newSubsection() },
   "block::subsubsection": { label: "Subsubsection", icon: () => <HeadingGlyph level={3} />, make: () => newSubsubsection() },
+  "block::abstract":      { label: "Abstract",      icon: () => <AbstractGlyph />,          make: () => newAbstract() },
+  "block::footnote":      { label: "Footnote",      icon: () => <FootnoteGlyph />,          make: () => null },
   "block::table": {
     label: "Table",
     icon: () => <TableGlyph />,
@@ -154,6 +181,8 @@ export const BLOX_ORDER = [
   "block::section",
   "block::subsection",
   "block::subsubsection",
+  "block::abstract",
+  "block::footnote",
   "block::table",
   "block::math::integral",
   "block::math::sum",

@@ -257,6 +257,17 @@ math-field::part(menu-toggle) {
   opacity: 1;
 }
 
+/* Footnote "pick a word" mode: every paragraph word is a clickable target. */
+.fn-word {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.1s ease;
+}
+.fn-word:hover {
+  background: rgba(0, 113, 227, 0.18);
+  box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.35);
+}
+
 /* Table row/column reorder grips: hidden until the table is hovered. */
 .tbl-grip {
   opacity: 0;
