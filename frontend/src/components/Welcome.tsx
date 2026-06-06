@@ -1,7 +1,8 @@
+import { useState } from "react";
 import type { CSSProperties } from "react";
 
 interface WelcomeProps {
-  onStart: () => void;
+  onStart: (preset?: string) => void;
 }
 
 // San-Francisco-first system stack — the Apple typography feel.
@@ -11,6 +12,9 @@ const APPLE_FONT =
 // DIN-A4 portrait proportions for the choice cards.
 const CARD_W = 232;
 const CARD_H = Math.round((CARD_W * 297) / 210); // ≈ 328
+const GAP = 26;
+
+const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 
 const card: CSSProperties = {
   width: CARD_W,
@@ -33,14 +37,36 @@ const card: CSSProperties = {
   boxShadow: "0 10px 34px rgba(30, 25, 70, 0.10)"
 };
 
-const desc: CSSProperties = {
-  marginTop: 18,
-  maxWidth: CARD_W,
-  textAlign: "center",
+const descText: CSSProperties = {
   fontSize: 14,
   lineHeight: 1.5,
   color: "#6e6e73",
-  fontFamily: APPLE_FONT
+  fontFamily: APPLE_FONT,
+  padding: "0 4px"
+};
+
+// The five document presets. The two ends (article / book) are the cards the
+// intro buttons morph into; the three in the middle fade in between them.
+const PRESETS = [
+  { id: "article", label: "Article", desc: "A clean single-column article — LaTeX’s article class." },
+  { id: "report",  label: "Report",  desc: "A longer document with a title page, chapters and sections." },
+  { id: "letter",  label: "Letter",  desc: "Formal correspondence with sender, recipient and a signature." },
+  { id: "beamer",  label: "Beamer",  desc: "A slide deck built from individual frames." },
+  { id: "book",    label: "Book",    desc: "A multi-chapter book with front- and back-matter." }
+];
+
+// The original intro copy for the two end cards (index 0 and 4).
+const INTRO: Record<number, { label: string; desc: string; enabled: boolean }> = {
+  0: {
+    label: "Design page",
+    desc: "Design single or multiple pages such as resumes, cover pages, and more.",
+    enabled: false
+  },
+  4: {
+    label: "Work on project",
+    desc: "Edit existing projects or choose a template to start a new one.",
+    enabled: true
+  }
 };
 
 // Decorative floating "paper sheets" in the background.
@@ -53,7 +79,33 @@ const sheets: any[] = [
   { width: 70,  height: 96,  top: "40%", right: "5%",  "--rot": "-5deg",  animationDelay: "1.1s" }
 ];
 
+const labelLayer = (show: boolean): CSSProperties => ({
+  position: "absolute",
+  inset: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 22,
+  boxSizing: "border-box",
+  opacity: show ? 1 : 0,
+  transition: "opacity 0.35s ease"
+});
+
+const descLayer = (show: boolean): CSSProperties => ({
+  position: "absolute",
+  inset: 0,
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "center",
+  textAlign: "center",
+  opacity: show ? 1 : 0,
+  transition: "opacity 0.35s ease",
+  ...descText
+});
+
 export function Welcome({ onStart }: WelcomeProps) {
+  const [picking, setPicking] = useState(false);
+
   return (
     <div
       className="welcome-bg"
@@ -69,7 +121,17 @@ export function Welcome({ onStart }: WelcomeProps) {
         <div key={i} className="welcome-sheet" style={s} />
       ))}
 
-      <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          width: "100%",
+          maxWidth: 1320,
+          padding: "0 24px",
+          boxSizing: "border-box",
+          textAlign: "center"
+        }}
+      >
         <h1
           style={{
             margin: "0 0 8px",
@@ -90,39 +152,94 @@ export function Welcome({ onStart }: WelcomeProps) {
             fontWeight: 400,
             letterSpacing: "-0.01em",
             color: "#6e6e73",
-            fontFamily: APPLE_FONT
+            fontFamily: APPLE_FONT,
+            transition: "opacity 0.3s ease"
           }}
         >
-          Beautiful documents, designed visually.
+          {picking
+            ? "Choose a template to start a new project."
+            : "Beautiful documents, designed visually."}
         </p>
 
-        <div style={{ display: "flex", gap: 60, alignItems: "flex-start", justifyContent: "center" }}>
-          {/* Design page — disabled for now */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: CARD_W }}>
-            <div
-              aria-disabled
-              style={{ ...card, color: "#86868b", opacity: 0.6, cursor: "not-allowed" }}
-            >
-              Design page
-            </div>
-            <p style={desc}>
-              Design single or multiple pages such as resumes, cover pages, and more.
-            </p>
-          </div>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            rowGap: 28,
+            justifyContent: "center",
+            alignItems: "flex-start",
+            maxWidth: "100%"
+          }}
+        >
+          {PRESETS.map((p, i) => {
+            const isOuter = i === 0 || i === 4;
+            const collapsed = !picking && !isOuter;
+            const intro = INTRO[i];
+            const interactive = picking || (intro?.enabled ?? false);
+            const disabled = !interactive;
 
-          {/* Work on project — opens the editor */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: CARD_W }}>
-            <button
-              className="welcome-card"
-              onClick={onStart}
-              style={{ ...card, color: "#1d1d1f", cursor: "pointer" }}
-            >
-              Work on project
-            </button>
-            <p style={desc}>
-              Edit existing projects or choose a template to start a new one.
-            </p>
-          </div>
+            const handleClick = () => {
+              if (!picking) {
+                if (i === 4) setPicking(true); // "Work on project" fans out the presets
+              } else {
+                onStart(p.id);
+              }
+            };
+
+            return (
+              <div
+                key={p.id}
+                style={{
+                  flex: "0 0 auto",
+                  width: collapsed ? 0 : CARD_W,
+                  marginLeft: collapsed ? 0 : i === 0 ? 0 : GAP / 2,
+                  marginRight: collapsed ? 0 : i === 4 ? 0 : GAP / 2,
+                  opacity: collapsed ? 0 : 1,
+                  transform: collapsed ? "scale(0.92)" : "scale(1)",
+                  transition: `width 0.5s ${EASE}, margin 0.5s ${EASE}, opacity 0.45s ease, transform 0.45s ease`,
+                  transitionDelay: collapsed ? "0s" : isOuter ? "0s" : "0.12s",
+                  overflow: "hidden",
+                  pointerEvents: collapsed ? "none" : "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center"
+                }}
+              >
+                <button
+                  className={interactive ? "welcome-card" : undefined}
+                  disabled={disabled}
+                  onClick={handleClick}
+                  style={{
+                    ...card,
+                    position: "relative",
+                    color: "#1d1d1f",
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    opacity: disabled ? 0.6 : 1
+                  }}
+                >
+                  {isOuter ? (
+                    <>
+                      <span style={labelLayer(!picking)}>{intro.label}</span>
+                      <span style={labelLayer(picking)}>{p.label}</span>
+                    </>
+                  ) : (
+                    p.label
+                  )}
+                </button>
+
+                <div style={{ position: "relative", width: CARD_W, height: 70, marginTop: 16 }}>
+                  {isOuter ? (
+                    <>
+                      <span style={descLayer(!picking)}>{intro.desc}</span>
+                      <span style={descLayer(picking)}>{p.desc}</span>
+                    </>
+                  ) : (
+                    <span style={descLayer(true)}>{p.desc}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
