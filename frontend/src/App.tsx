@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo } from "react";
-import { DocumentRenderer } from "./renderer/DocumentRenderer";
+import { DocumentRenderer, HeadingInput } from "./renderer/DocumentRenderer";
 import { Page } from "./components/Page";
 import { TrashIcon } from "./components/TrashIcon";
 import { Welcome } from "./components/Welcome";
@@ -634,14 +634,14 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
                         \maketitle: \LARGE (1.728×) Computer Modern, centered. */}
                     {pageIndex === titlePageIndex && (
                       <div style={{ textAlign: "center", marginTop: layout.fontSize * 1.5, marginBottom: layout.fontSize * 1.8 }}>
-                        <input
+                        <HeadingInput
                           value={documentTitle}
-                          onChange={(e) => setDocumentTitle(e.target.value)}
+                          onChange={setDocumentTitle}
+                          ariaLabel="Document title"
                           style={{ fontSize: Math.round(layout.fontSize * 1.728 * 100) / 100,
-                                   fontWeight: 400, border: "none",
-                                   outline: "none", textAlign: "center", width: "100%",
+                                   fontWeight: 400, textAlign: "center",
                                    fontFamily: "var(--sans)", color: "var(--text)",
-                                   background: "transparent" }}
+                                   lineHeight: 1.15 }}
                         />
                       </div>
                     )}

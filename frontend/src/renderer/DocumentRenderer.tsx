@@ -291,6 +291,55 @@ function headingStyle(base: number, mult: number) {
   } as const;
 }
 
+/* An always-editable, auto-growing inline text field (like the document title).
+   No click-to-edit popup; Enter inserts a line break. Used for headings/title. */
+export function HeadingInput({ value, onChange, style, ariaLabel }: any) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  const grow = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  useLayoutEffect(grow, [value, style?.fontSize]);
+
+  // Re-fit when the field's width changes (e.g. the text-width slider).
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined" || !el.parentElement) return;
+    const ro = new ResizeObserver(grow);
+    ro.observe(el.parentElement);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value ?? ""}
+      aria-label={ariaLabel}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        ...style,
+        display: "block",
+        width: "100%",
+        boxSizing: "border-box",
+        resize: "none",
+        overflow: "hidden",
+        border: "none",
+        outline: "none",
+        background: "transparent",
+        padding: 0,
+        margin: 0,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word"
+      }}
+    />
+  );
+}
+
 /* -----------------------------
    PARAGRAPH
 ----------------------------- */
@@ -1272,8 +1321,6 @@ function TableBlock(props: any) {
 function Subsection({
   node,
   showHeader = true,
-  editingId,
-  setEditingId,
   updateSectionTitle,
   deleteNodeById,
   moveSubsection,
@@ -1283,19 +1330,18 @@ function Subsection({
   return (
     <div style={{ marginTop: showHeader ? fontSize * 1.3 : 0 }}>
       {showHeader && (
-        <div data-head-id={node.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: fontSize * 0.5 }}>
-          {editingId === node.id ? (
-            <input
-              autoFocus
+        <div data-head-id={node.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: fontSize * 0.5 }}>
+          <div style={{ display: "flex", gap: "0.4em", flex: 1, minWidth: 0 }}>
+            {node.numberLabel && (
+              <span style={{ ...headingStyle(fontSize, 1.2), whiteSpace: "nowrap" }}>{node.numberLabel}</span>
+            )}
+            <HeadingInput
               value={node.title}
-              onChange={(e) => updateSectionTitle(node.id, e.target.value)}
-              onBlur={() => setEditingId(null)}
+              onChange={(v: string) => updateSectionTitle(node.id, v)}
+              style={headingStyle(fontSize, 1.2)}
+              ariaLabel="Subsection title"
             />
-          ) : (
-            <h3 style={headingStyle(fontSize, 1.2)} onClick={() => setEditingId(node.id)}>
-              {node.title}
-            </h3>
-          )}
+          </div>
 
           {/* MOVE BUTTONS — to the right of the title */}
           <div style={{ display: "flex", gap: 4 }}>
@@ -1321,8 +1367,6 @@ function Subsection({
 function Subsubsection({
   node,
   showHeader = true,
-  editingId,
-  setEditingId,
   updateSectionTitle,
   deleteNodeById,
   fontSize = 13,
@@ -1331,19 +1375,18 @@ function Subsubsection({
   return (
     <div style={{ marginTop: showHeader ? fontSize * 1.1 : 0 }}>
       {showHeader && (
-        <div data-head-id={node.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: fontSize * 0.4 }}>
-          {editingId === node.id ? (
-            <input
-              autoFocus
+        <div data-head-id={node.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: fontSize * 0.4 }}>
+          <div style={{ display: "flex", gap: "0.4em", flex: 1, minWidth: 0 }}>
+            {node.numberLabel && (
+              <span style={{ ...headingStyle(fontSize, 1), whiteSpace: "nowrap" }}>{node.numberLabel}</span>
+            )}
+            <HeadingInput
               value={node.title}
-              onChange={(e) => updateSectionTitle(node.id, e.target.value)}
-              onBlur={() => setEditingId(null)}
+              onChange={(v: string) => updateSectionTitle(node.id, v)}
+              style={headingStyle(fontSize, 1)}
+              ariaLabel="Subsubsection title"
             />
-          ) : (
-            <h4 style={headingStyle(fontSize, 1)} onClick={() => setEditingId(node.id)}>
-              {node.title}
-            </h4>
-          )}
+          </div>
 
           <TrashButton
             onClick={() => deleteNodeById(node.id)}
@@ -1362,7 +1405,7 @@ function Subsubsection({
 ----------------------------- */
 function Section({ node, showHeader = true, ...rest }: any) {
   const {
-    editingId, setEditingId, updateSectionTitle,
+    updateSectionTitle,
     deleteNodeById, moveSection, children, fontSize = 13
   } = rest;
 
@@ -1373,19 +1416,19 @@ function Section({ node, showHeader = true, ...rest }: any) {
       {showHeader && (
         <div
           data-head-id={node.id}
-          style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: fontSize * 0.8 }}
+          style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: fontSize * 0.8 }}
         >
-          {editingId === node.id ? (
-            <input
+          <div style={{ display: "flex", gap: "0.4em", flex: 1, minWidth: 0 }}>
+            {node.sectionNumber != null && (
+              <span style={{ ...headingStyle(fontSize, 1.44), whiteSpace: "nowrap" }}>{node.sectionNumber}</span>
+            )}
+            <HeadingInput
               value={node.title}
-              onChange={e => updateSectionTitle(node.id, e.target.value)}
-              onBlur={() => setEditingId(null)}
+              onChange={(v: string) => updateSectionTitle(node.id, v)}
+              style={headingStyle(fontSize, 1.44)}
+              ariaLabel="Section title"
             />
-          ) : (
-            <h2 style={headingStyle(fontSize, 1.44)} onClick={() => setEditingId(node.id)}>
-              {node.sectionNumber} {node.title}
-            </h2>
-          )}
+          </div>
 
           {/* MOVE BUTTONS — to the right of the title */}
           <div style={{ display: "flex", gap: 4 }}>

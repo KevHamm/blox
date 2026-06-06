@@ -1,22 +1,18 @@
 export function numberDocument(doc: any) {
 
-  function stripPrefix(title: string) {
-    return title.replace(/(\d+(\.\d+)+\s*)+/g, "").trim();
-  }
-
   let sectionNumber = 0;
 
   return {
     ...doc,
-    children: doc.children.map((section: any) => {
+    children: (doc.children ?? []).map((section: any) => {
 
-      // Pages (cover / toc / bibliography) aren't numbered like sections.
+      // Pages (cover / toc / bibliography / abstract) aren't numbered.
       if (section.type !== "section") return section;
 
       sectionNumber++;
       let subsectionNumber = 0;
 
-      const newChildren = section.children.map((child: any) => {
+      const newChildren = (section.children ?? []).map((child: any) => {
 
         if (child.type === "subsection") {
           subsectionNumber++;
@@ -27,7 +23,8 @@ export function numberDocument(doc: any) {
               subsubsectionNumber++;
               return {
                 ...gc,
-                title: `${sectionNumber}.${subsectionNumber}.${subsubsectionNumber} ${stripPrefix(gc.title)}`
+                // Title stays raw — the number is rendered as a separate label.
+                numberLabel: `${sectionNumber}.${subsectionNumber}.${subsubsectionNumber}`
               };
             }
             return gc;
@@ -35,7 +32,7 @@ export function numberDocument(doc: any) {
 
           return {
             ...child,
-            title: `${sectionNumber}.${subsectionNumber} ${stripPrefix(child.title)}`,
+            numberLabel: `${sectionNumber}.${subsectionNumber}`,
             children: subChildren
           };
         }

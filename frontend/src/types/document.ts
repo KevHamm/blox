@@ -30,6 +30,7 @@ export interface DocumentNode {
   width?: number;
   images?: { id: string; src: string }[];
   sectionNumber?: number;
+  numberLabel?: string;
   footnotes?: { id: string; word: number; text: string }[];
   children?: DocumentNode[];
 }
