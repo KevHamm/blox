@@ -1,15 +1,12 @@
-import { useState, useEffect, useLayoutEffect, useMemo } from "react";
+import { useState, useLayoutEffect, useMemo } from "react";
 import { sampleDocument } from "./data/sampleDocument";
 import { DocumentRenderer } from "./renderer/DocumentRenderer";
 import type { DocumentNode } from "./types/document";
 import { Page } from "./components/Page";
-import { TrashIcon } from "./components/TrashIcon";
 import { Welcome } from "./components/Welcome";
 import { numberDocument } from "./utils/numberDocument";
 import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
-import katex from "katex";
-import "katex/dist/katex.min.css";
 
 import {
   DndContext,
@@ -18,9 +15,6 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  useDraggable,
-  useDroppable,
-  useDndContext,
   MeasuringStrategy
 } from "@dnd-kit/core";
 import { getEventCoordinates } from "@dnd-kit/utilities";
@@ -32,7 +26,6 @@ import {
   PAGE_HEIGHT
 } from "./utils/pageConfig";
 import {
-  clamp,
   findFigureNode,
   findDocImageSrc,
   locateFigure,
@@ -44,85 +37,30 @@ import {
   tableColors,
   uniformColor,
   newSection,
-  newSubsection,
-  newSubsubsection,
-  newPage,
   insertOrdered,
   insertPage,
   insertSectionRelative,
-  mathNode,
   MATH_TEMPLATES,
   insertStructuralAt,
   insertMathItem,
   updateMathItemTree,
   deleteMathItemTree
 } from "./utils/docTree";
-
-/* A sidebar image the user can drag into the document or delete. */
-function DraggableImage({ img, onDelete }: any) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `image::${img.id}`
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      style={{
-        position: "relative",
-        textAlign: "center",
-        cursor: "grab",
-        opacity: isDragging ? 0.4 : 1
-      }}
-    >
-      <button
-        onClick={() => onDelete(img.id)}
-        onPointerDown={(e) => e.stopPropagation()}
-        title="Delete image"
-        style={{
-          position: "absolute",
-          top: 4,
-          right: 4,
-          display: "inline-flex",
-          background: "rgba(0,0,0,0.6)",
-          color: "white",
-          border: "none",
-          borderRadius: 4,
-          padding: 3,
-          cursor: "pointer",
-          zIndex: 1
-        }}
-      >
-        <TrashIcon size={14} />
-      </button>
-
-      <img
-        src={img.src}
-        alt={img.name}
-        draggable={false}
-        style={{
-          width: "100%",
-          height: "auto",
-          borderRadius: 4,
-          border: "1px solid #ddd",
-          display: "block",
-          pointerEvents: "none"
-        }}
-      />
-      <div
-        style={{
-          marginTop: 4,
-          fontSize: 12,
-          color: "#444",
-          wordBreak: "break-word"
-        }}
-      >
-        {img.name}
-      </div>
-    </div>
-  );
-}
+import {
+  BLOCK_DEFS,
+  STRUCTURAL,
+  BLOX_ORDER,
+  PAGE_ORDER,
+  BlockBox,
+  LayoutIcon
+} from "./components/blocks";
+import {
+  DraggableImage,
+  DroppableDocArea,
+  DraggableBlock,
+  Collapsible,
+  NumberControl
+} from "./components/editorUi";
 
 // Keep the drag preview centered on the cursor, so the pointer (what the drop
 // zones actually test against) sits in the middle of the image being placed.
@@ -148,348 +86,6 @@ function dropCollision(args: any) {
     return id.startsWith("dz::") || id.startsWith("figdz::") || id.startsWith("mathdz::");
   });
   return zones.length ? zones : hits;
-}
-
-const mathBlock = (id: string, label: string, iconTex: string, iconSize = 22) => ({
-  label,
-  icon: () => <KatexIcon tex={iconTex} size={iconSize} />,
-  make: () => mathNode(MATH_TEMPLATES[id])
-});
-
-// A heading glyph for the structural Blox items; the bar shrinks with depth.
-function HeadingGlyph({ level }: { level: number }) {
-  const headW = level === 1 ? 26 : level === 2 ? 20 : 15;
-  const headH = level === 1 ? 6 : level === 2 ? 5 : 4;
-  const y2 = 4 + headH + 5;
-  return (
-    <svg width="34" height="30" viewBox="0 0 34 30">
-      <rect x="4" y="4" width={headW} height={headH} rx="1" fill="currentColor" />
-      <rect x="4" y={y2} width="26" height="2.5" rx="1" fill="currentColor" opacity="0.45" />
-      <rect x="4" y={y2 + 5} width="26" height="2.5" rx="1" fill="currentColor" opacity="0.45" />
-    </svg>
-  );
-}
-
-// A page glyph (a sheet) with type-specific content lines.
-function PageGlyph({ kind }: { kind: "coverpage" | "toc" | "bibliography" }) {
-  return (
-    <svg width="30" height="34" viewBox="0 0 30 34">
-      <rect x="3" y="2" width="24" height="30" rx="2" fill="white" stroke="currentColor" strokeWidth="1.5" />
-      {kind === "coverpage" && (
-        <>
-          <rect x="8" y="12" width="14" height="3.5" rx="1" fill="currentColor" />
-          <rect x="10" y="18" width="10" height="2" rx="1" fill="currentColor" opacity="0.5" />
-        </>
-      )}
-      {kind === "toc" && [8, 13, 18, 23].map((y) => (
-        <g key={y}>
-          <rect x="7" y={y} width="9" height="2" rx="1" fill="currentColor" opacity="0.7" />
-          <rect x="20" y={y} width="3" height="2" rx="1" fill="currentColor" opacity="0.4" />
-        </g>
-      ))}
-      {kind === "bibliography" && [9, 15, 21].map((y) => (
-        <g key={y}>
-          <rect x="7" y={y} width="16" height="2" rx="1" fill="currentColor" opacity="0.6" />
-          <rect x="9" y={y + 3} width="12" height="2" rx="1" fill="currentColor" opacity="0.35" />
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-// Blox palette: block id → label, palette icon and a fresh-node factory.
-const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: () => any }> = {
-  "block::section":       { label: "Section",       icon: () => <HeadingGlyph level={1} />, make: () => newSection() },
-  "block::subsection":    { label: "Subsection",    icon: () => <HeadingGlyph level={2} />, make: () => newSubsection() },
-  "block::subsubsection": { label: "Subsubsection", icon: () => <HeadingGlyph level={3} />, make: () => newSubsubsection() },
-  "block::table": {
-    label: "Table",
-    icon: () => <TableGlyph />,
-    make: () => ({
-      id: crypto.randomUUID(),
-      type: "table",
-      rows: Array.from({ length: 3 }, (_, r) =>
-        Array.from({ length: 3 }, (_, c) => (r === 0 ? `Column ${c + 1}` : ""))
-      )
-    })
-  },
-  "block::math::integral": mathBlock("block::math::integral", "Integral", "\\int"),
-  "block::math::sum":      mathBlock("block::math::sum", "Sum", "\\sum"),
-  "block::math::product":  mathBlock("block::math::product", "Product", "\\prod"),
-  "block::math::fraction": mathBlock("block::math::fraction", "Fraction", "\\frac{a}{b}"),
-  "block::math::matrix":   mathBlock("block::math::matrix", "Matrix", "\\left[\\begin{smallmatrix}a&b\\\\c&d\\end{smallmatrix}\\right]", 15),
-
-  "block::page::cover":        { label: "Cover Page",        icon: () => <PageGlyph kind="coverpage" />,    make: () => newPage("coverpage") },
-  "block::page::toc":          { label: "Contents",          icon: () => <PageGlyph kind="toc" />,          make: () => newPage("toc") },
-  "block::page::bibliography": { label: "Bibliography",       icon: () => <PageGlyph kind="bibliography" />, make: () => newPage("bibliography") }
-};
-
-// Structural blocks land at the correct hierarchy level, not literally at the
-// drop index.
-const STRUCTURAL: Record<string, "section" | "subsection" | "subsubsection"> = {
-  "block::section": "section",
-  "block::subsection": "subsection",
-  "block::subsubsection": "subsubsection"
-};
-
-const BLOX_ORDER = [
-  "block::section",
-  "block::subsection",
-  "block::subsubsection",
-  "block::table",
-  "block::math::integral",
-  "block::math::sum",
-  "block::math::product",
-  "block::math::fraction",
-  "block::math::matrix"
-];
-
-const PAGE_ORDER = [
-  "block::page::cover",
-  "block::page::toc",
-  "block::page::bibliography"
-];
-
-/* A KaTeX-rendered glyph for the Blox palette icons. */
-function KatexIcon({ tex, size = 22 }: { tex: string; size?: number }) {
-  const html = useMemo(
-    () => katex.renderToString(tex, { throwOnError: false }),
-    [tex]
-  );
-  return (
-    <span
-      style={{ fontSize: size, lineHeight: 1, color: "#333" }}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
-}
-
-/* Small line-art table icon for the Blox palette. */
-function TableGlyph() {
-  return (
-    <svg
-      width="30"
-      height="30"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-    >
-      <rect x="3" y="4" width="18" height="16" rx="1" />
-      <line x1="3" y1="9.5" x2="21" y2="9.5" />
-      <line x1="3" y1="14.5" x2="21" y2="14.5" />
-      <line x1="9" y1="4" x2="9" y2="20" />
-      <line x1="15" y1="4" x2="15" y2="20" />
-    </svg>
-  );
-}
-
-/* A page glyph filled with solid text blocks, in one or two columns. */
-function LayoutIcon({ columns }: { columns: number }) {
-  const pageW = 40, pageH = 50, pad = 6, top = 7, lineH = 3, gap = 3, rows = 6;
-  const bars: any[] = [];
-  if (columns === 1) {
-    const w = pageW - pad * 2;
-    for (let i = 0; i < rows; i++)
-      bars.push(<rect key={i} x={pad} y={top + i * (lineH + gap)} width={w} height={lineH} rx={1} fill="currentColor" />);
-  } else {
-    const colW = (pageW - pad * 3) / 2;
-    for (const c of [0, 1]) {
-      const x = pad + c * (colW + pad);
-      for (let i = 0; i < rows; i++)
-        bars.push(<rect key={`${c}-${i}`} x={x} y={top + i * (lineH + gap)} width={colW} height={lineH} rx={1} fill="currentColor" />);
-    }
-  }
-  return (
-    <svg width={pageW} height={pageH} viewBox={`0 0 ${pageW} ${pageH}`}>
-      <rect x={0.5} y={0.5} width={pageW - 1} height={pageH - 1} rx={3} fill="white" stroke="currentColor" strokeWidth={1} />
-      {bars}
-    </svg>
-  );
-}
-
-/* The visual box for a Blox item: an icon with a label below it. */
-function BlockBox({ id, shadow }: { id: string; shadow?: boolean }) {
-  const def = BLOCK_DEFS[id];
-  if (!def) return null;
-  return (
-    <div
-      style={{
-        border: "1px solid #ccc",
-        borderRadius: 6,
-        padding: "10px 6px",
-        background: "#fafafa",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 4,
-        color: "#333",
-        width: "100%",
-        boxSizing: "border-box",
-        boxShadow: shadow ? "0 4px 12px rgba(0,0,0,0.25)" : undefined
-      }}
-    >
-      {/* fixed-height icon area keeps every Blox item the same size */}
-      <div
-        style={{
-          height: 36,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden"
-        }}
-      >
-        {def.icon()}
-      </div>
-      <span style={{ fontSize: 12 }}>{def.label}</span>
-    </div>
-  );
-}
-
-/* The scrollable document area. It becomes a drop target only while a Section
-   block is being dragged, so a section can be dropped anywhere in the document
-   (no visible drop zone) without interfering with image "drop outside to
-   remove" behaviour. */
-function DroppableDocArea({ children, visible = true }: any) {
-  const { active } = useDndContext();
-  const aid = String(active?.id ?? "");
-  // Special pages drop anywhere in the document (no visible zone). Sections now
-  // use explicit document-level drop zones instead.
-  const dropAnywhere = aid.startsWith("block::page::");
-  const { setNodeRef } = useDroppable({ id: "doc-drop", disabled: !dropAnywhere });
-  return (
-    <div
-      ref={setNodeRef}
-      className="doc-area"
-      style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        padding: 40,
-        overflowY: "auto",
-        // Hidden (but still laid out, so the morph overlay can measure the
-        // page) until the editor is revealed.
-        opacity: visible ? 1 : 0,
-        transition: "opacity 0.3s ease"
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/* A draggable Blox item. */
-function DraggableBlock({ id }: { id: string }) {
-  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      style={{ cursor: "grab", opacity: isDragging ? 0.4 : 1 }}
-    >
-      <BlockBox id={id} />
-    </div>
-  );
-}
-
-/* A collapsible sidebar group with a clickable header. */
-function Collapsible({ title, children, defaultOpen = true }: any) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div>
-      <h3
-        onClick={() => setOpen(!open)}
-        style={{
-          cursor: "pointer",
-          userSelect: "none",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          margin: "0 0 8px"
-        }}
-      >
-        <span
-          style={{
-            display: "inline-block",
-            fontSize: 10,
-            transform: open ? "rotate(90deg)" : "none",
-            transition: "transform 0.1s ease"
-          }}
-        >
-          ▶
-        </span>
-        {title}
-      </h3>
-      {open && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* A labelled slider paired with a typed number input. Both edit the same
-   value and are clamped to [min, max]. */
-function NumberControl({
-  label,
-  value,
-  min,
-  max,
-  step,
-  unit,
-  onChange
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit?: string;
-  onChange: (v: number) => void;
-}) {
-  // Local text so the user can type freely; committed (and clamped) on blur.
-  const [text, setText] = useState(String(value));
-  useEffect(() => setText(String(value)), [value]);
-
-  const commit = (raw: string) => {
-    const n = Number(raw);
-    if (Number.isFinite(n)) onChange(clamp(n, min, max));
-    else setText(String(value));
-  };
-
-  return (
-    <div>
-      <label>{label}</label>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          style={{ flex: 1, minWidth: 0 }}
-        />
-        <input
-          type="number"
-          min={min}
-          max={max}
-          step={step}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={(e) => commit(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commit((e.target as HTMLInputElement).value);
-          }}
-          style={{ width: 64 }}
-        />
-        {unit && <span style={{ fontSize: 12, color: "#666" }}>{unit}</span>}
-      </div>
-    </div>
-  );
 }
 
 function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
