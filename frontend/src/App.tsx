@@ -31,6 +31,32 @@ import {
   PAGE_WIDTH,
   PAGE_HEIGHT
 } from "./utils/pageConfig";
+import {
+  clamp,
+  findFigureNode,
+  findDocImageSrc,
+  locateFigure,
+  removeFigureImage,
+  insertFigureImageAt,
+  insertFigure,
+  setFigureWidthTree,
+  insertNodeAt,
+  tableColors,
+  uniformColor,
+  newSection,
+  newSubsection,
+  newSubsubsection,
+  newPage,
+  insertOrdered,
+  insertPage,
+  insertSectionRelative,
+  mathNode,
+  MATH_TEMPLATES,
+  insertStructuralAt,
+  insertMathItem,
+  updateMathItemTree,
+  deleteMathItemTree
+} from "./utils/docTree";
 
 /* A sidebar image the user can drag into the document or delete. */
 function DraggableImage({ img, onDelete }: any) {
@@ -98,12 +124,6 @@ function DraggableImage({ img, onDelete }: any) {
   );
 }
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, v));
-
-// A freshly dropped image fills the whole column width.
-const DEFAULT_FIG_WIDTH = 1;
-
 // Keep the drag preview centered on the cursor, so the pointer (what the drop
 // zones actually test against) sits in the middle of the image being placed.
 const snapCenterToCursor = ({ activatorEvent, draggingNodeRect, transform }: any) => {
@@ -129,191 +149,6 @@ function dropCollision(args: any) {
   });
   return zones.length ? zones : hits;
 }
-
-/* -----------------------------------------------------------------
-   Pure document-tree helpers for figure (image container) editing.
------------------------------------------------------------------ */
-function findFigureNode(node: any, figureId: string): any | null {
-  if (node?.type === "figure" && node.id === figureId) return node;
-  for (const c of node?.children ?? []) {
-    const f = findFigureNode(c, figureId);
-    if (f) return f;
-  }
-  return null;
-}
-
-function findDocImageSrc(root: any, figureId: string, imageId: string): string | null {
-  const fig = findFigureNode(root, figureId);
-  const im = (fig?.images ?? []).find((x: any) => x.id === imageId);
-  return im?.src ?? null;
-}
-
-// Where a figure sits: the id of its parent and its index among siblings.
-function locateFigure(node: any, figureId: string): { parentId: string; index: number } | null {
-  const kids = node?.children ?? [];
-  for (let i = 0; i < kids.length; i++) {
-    if (kids[i].id === figureId) return { parentId: node.id, index: i };
-    const r = locateFigure(kids[i], figureId);
-    if (r) return r;
-  }
-  return null;
-}
-
-// Remove one image from a figure; drop the figure entirely if it becomes empty.
-function removeFigureImage(node: any, figureId: string, imageId: string): any {
-  if (!node.children) return node;
-  const children: any[] = [];
-  for (const child of node.children) {
-    if (child.type === "figure" && child.id === figureId) {
-      const imgs = (child.images ?? []).filter((im: any) => im.id !== imageId);
-      if (imgs.length > 0) children.push({ ...child, images: imgs });
-    } else {
-      children.push(removeFigureImage(child, figureId, imageId));
-    }
-  }
-  return { ...node, children };
-}
-
-// Insert an image into a figure at a given slot. The stored `width` (the
-// intended per-image width) is left untouched — the renderer caps the visible
-// size at 1/n so the row always fits, and the remembered width is restored
-// when images are removed again.
-function insertFigureImageAt(node: any, figureId: string, index: number, src: string): any {
-  if (node.type === "figure" && node.id === figureId) {
-    const imgs = [...(node.images ?? [])];
-    imgs.splice(Math.min(Math.max(index, 0), imgs.length), 0, { id: crypto.randomUUID(), src });
-    return { ...node, images: imgs };
-  }
-  if (!node.children) return node;
-  return { ...node, children: node.children.map((c: any) => insertFigureImageAt(c, figureId, index, src)) };
-}
-
-function insertFigure(node: any, containerId: string, index: number, src: string): any {
-  if (node.id === containerId) {
-    const fig = {
-      id: crypto.randomUUID(),
-      type: "figure",
-      caption: "",
-      width: DEFAULT_FIG_WIDTH,
-      images: [{ id: crypto.randomUUID(), src }]
-    };
-    const kids = [...(node.children ?? [])];
-    kids.splice(Math.min(Math.max(index, 0), kids.length), 0, fig);
-    return { ...node, children: kids };
-  }
-  if (!node.children) return node;
-  return { ...node, children: node.children.map((c: any) => insertFigure(c, containerId, index, src)) };
-}
-
-function setFigureWidthTree(node: any, figureId: string, width: number): any {
-  if (node.type === "figure" && node.id === figureId) return { ...node, width };
-  if (!node.children) return node;
-  return { ...node, children: node.children.map((c: any) => setFigureWidthTree(c, figureId, width)) };
-}
-
-// Insert any new node into a container at a given index.
-function insertNodeAt(node: any, containerId: string, index: number, newNode: any): any {
-  if (node.id === containerId) {
-    const kids = [...(node.children ?? [])];
-    kids.splice(Math.min(Math.max(index, 0), kids.length), 0, newNode);
-    return { ...node, children: kids };
-  }
-  if (!node.children) return node;
-  return { ...node, children: node.children.map((c: any) => insertNodeAt(c, containerId, index, newNode)) };
-}
-
-/* ---- table colour helpers ---- */
-// A colour grid normalized to the table's current rows (missing cells → null).
-function tableColors(node: any): (string | null)[][] {
-  return (node.rows ?? []).map((row: string[], r: number) =>
-    row.map((_: string, c: number) => node.colors?.[r]?.[c] ?? null)
-  );
-}
-// The shared colour of a row/column, or null if they aren't all the same.
-const uniformColor = (arr: (string | null)[]): string | null =>
-  arr.length > 0 && arr[0] != null && arr.every((x) => x === arr[0]) ? arr[0] : null;
-
-/* ---- structural node factories ---- */
-const newParagraph = (): DocumentNode => ({
-  id: crypto.randomUUID(),
-  type: "paragraph",
-  text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
-});
-const newSection = (): DocumentNode => ({
-  id: crypto.randomUUID(), type: "section", title: "Section", children: [newParagraph()]
-});
-const newSubsection = (): DocumentNode => ({
-  id: crypto.randomUUID(), type: "subsection", title: "New Subsection", children: [newParagraph()]
-});
-const newSubsubsection = (): DocumentNode => ({
-  id: crypto.randomUUID(), type: "subsubsection", title: "New Subsubsection", children: [newParagraph()]
-});
-
-/* ---- special pages ---- */
-const PAGE_LABELS: Record<string, string> = {
-  coverpage: "Cover Page",
-  toc: "Table of Contents",
-  bibliography: "Bibliography"
-};
-const newPage = (type: string): DocumentNode => ({
-  id: crypto.randomUUID(),
-  type: type as any,
-  title: PAGE_LABELS[type]
-});
-
-// Document ordering: cover page → table of contents → sections → bibliography.
-const pageRank = (node: any): number => {
-  switch (node.type) {
-    case "coverpage": return 0;
-    case "toc": return 1;
-    case "bibliography": return 3;
-    default: return 2; // sections / normal content
-  }
-};
-
-// Insert a node into the document at the position dictated by its rank.
-function insertOrdered(doc: any, node: any): any {
-  const kids = [...(doc.children ?? [])];
-  const rank = pageRank(node);
-  let i = kids.findIndex((k: any) => pageRank(k) > rank);
-  if (i === -1) i = kids.length;
-  kids.splice(i, 0, node);
-  return { ...doc, children: kids };
-}
-
-// Cover page / TOC / bibliography are singletons — only one of each.
-function insertPage(doc: any, node: any): any {
-  const kids = doc.children ?? [];
-  if (kids.some((k: any) => k.type === node.type)) return doc;
-  return insertOrdered(doc, node);
-}
-
-// Insert a new section directly before/after a given top-level section.
-function insertSectionRelative(doc: any, sectionId: string, where: "before" | "after"): any {
-  const kids = [...(doc.children ?? [])];
-  const i = kids.findIndex((c: any) => c.id === sectionId);
-  if (i === -1) return doc;
-  kids.splice(where === "before" ? i : i + 1, 0, newSection());
-  return { ...doc, children: kids };
-}
-
-// A math block is a container of equation parts rendered flush together (so it
-// reads as one equation). Dropping a math block onto a slot inserts a part at
-// that position — including between two existing parts.
-const mathNode = (latex: string) => ({
-  id: crypto.randomUUID(),
-  type: "math",
-  items: [{ id: crypto.randomUUID(), latex }]
-});
-
-// Default LaTeX for each math Blox block.
-const MATH_TEMPLATES: Record<string, string> = {
-  "block::math::integral": "\\int_{a}^{b} f(x)\\,dx",
-  "block::math::sum": "\\sum_{i=1}^{n} a_i",
-  "block::math::product": "\\prod_{i=1}^{n} a_i",
-  "block::math::fraction": "\\frac{a}{b}",
-  "block::math::matrix": "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"
-};
 
 const mathBlock = (id: string, label: string, iconTex: string, iconSize = 22) => ({
   label,
@@ -414,86 +249,6 @@ const PAGE_ORDER = [
   "block::page::toc",
   "block::page::bibliography"
 ];
-
-// Path of nodes from the document root down to (and including) the node with id.
-function pathTo(node: any, id: string, acc: any[] = []): any[] | null {
-  const next = [...acc, node];
-  if (node.id === id) return next;
-  for (const c of node.children ?? []) {
-    const r = pathTo(c, id, next);
-    if (r) return r;
-  }
-  return null;
-}
-
-// Insert a section / subsection / subsubsection at the correct level relative
-// to the drop zone's container.
-function insertStructuralAt(doc: any, containerId: string, index: number, kind: string): any {
-  const path = pathTo(doc, containerId);
-  if (!path) return doc;
-  const container = path[path.length - 1];
-
-  if (kind === "section") {
-    const top = path.find((n: any) => n.type === "section");
-    if (!top) return insertNodeAt(doc, doc.id, index, newSection());
-    const di = (doc.children ?? []).findIndex((c: any) => c.id === top.id);
-    return insertNodeAt(doc, doc.id, di + 1, newSection());
-  }
-
-  if (kind === "subsection") {
-    const section = [...path].reverse().find((n: any) => n.type === "section");
-    if (!section) return doc;
-    if (container.id === section.id) return insertNodeAt(doc, section.id, index, newSubsection());
-    const childOfSection = path[path.indexOf(section) + 1];
-    const ci = (section.children ?? []).findIndex((c: any) => c.id === childOfSection.id);
-    return insertNodeAt(doc, section.id, ci + 1, newSubsection());
-  }
-
-  if (kind === "subsubsection") {
-    const subsection = [...path].reverse().find((n: any) => n.type === "subsection");
-    if (!subsection) return doc;          // needs a subsection to live in
-    if (container.id === subsection.id) return insertNodeAt(doc, subsection.id, index, newSubsubsection());
-    const childOfSub = path[path.indexOf(subsection) + 1];
-    const ci = (subsection.children ?? []).findIndex((c: any) => c.id === childOfSub.id);
-    return insertNodeAt(doc, subsection.id, ci + 1, newSubsubsection());
-  }
-  return doc;
-}
-
-/* ---- math tree edits ---- */
-// Insert an equation part at a given slot index (0..items.length).
-function insertMathItem(node: any, mathId: string, index: number, latex: string): any {
-  if (node.type === "math" && node.id === mathId) {
-    const items = [...(node.items ?? [])];
-    items.splice(Math.min(Math.max(index, 0), items.length), 0, { id: crypto.randomUUID(), latex });
-    return { ...node, items };
-  }
-  if (!node.children) return node;
-  return { ...node, children: node.children.map((c: any) => insertMathItem(c, mathId, index, latex)) };
-}
-
-function updateMathItemTree(node: any, mathId: string, itemId: string, latex: string): any {
-  if (node.type === "math" && node.id === mathId) {
-    return { ...node, items: (node.items ?? []).map((it: any) => it.id === itemId ? { ...it, latex } : it) };
-  }
-  if (!node.children) return node;
-  return { ...node, children: node.children.map((c: any) => updateMathItemTree(c, mathId, itemId, latex)) };
-}
-
-// Remove an equation part; drop the whole math block when its last part is gone.
-function deleteMathItemTree(node: any, mathId: string, itemId: string): any {
-  if (!node.children) return node;
-  const children: any[] = [];
-  for (const child of node.children) {
-    if (child.type === "math" && child.id === mathId) {
-      const items = (child.items ?? []).filter((it: any) => it.id !== itemId);
-      if (items.length > 0) children.push({ ...child, items });
-    } else {
-      children.push(deleteMathItemTree(child, mathId, itemId));
-    }
-  }
-  return { ...node, children };
-}
 
 /* A KaTeX-rendered glyph for the Blox palette icons. */
 function KatexIcon({ tex, size = 22 }: { tex: string; size?: number }) {
@@ -1930,7 +1685,18 @@ export default function App() {
   }
 
   const showEditor = phase === "morph" || phase === "editor";
-  const cur = grown && target ? target : origin;
+
+  // Map the (full-size) page box back onto the clicked card, so we can animate a
+  // single GPU-composited `transform` from card → page instead of janky
+  // width/height/top/left reflows.
+  let morphTransform = "none";
+  if (origin && target && !grown) {
+    const sx = origin.width / target.width;
+    const sy = origin.height / target.height;
+    const tx = origin.left - target.left;
+    const ty = origin.top - target.top;
+    morphTransform = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`;
+  }
 
   return (
     <>
@@ -1951,26 +1717,23 @@ export default function App() {
         </div>
       )}
 
-      {cur && (
+      {origin && target && (
         <div
           style={{
             position: "fixed",
-            left: cur.left,
-            top: cur.top,
-            width: cur.width,
-            height: cur.height,
-            background: grown ? "#ffffff" : "rgba(255, 255, 255, 0.66)",
-            backdropFilter: grown ? "none" : "blur(20px) saturate(180%)",
-            WebkitBackdropFilter: grown ? "none" : "blur(20px) saturate(180%)",
-            borderRadius: grown ? 6 : 22,
-            border: grown
-              ? "1px solid rgba(0, 0, 0, 0.06)"
-              : "1px solid rgba(255, 255, 255, 0.7)",
-            boxShadow: grown
-              ? "0 12px 40px rgba(20, 20, 50, 0.18), 0 2px 6px rgba(20, 20, 50, 0.06)"
-              : "0 10px 34px rgba(30, 25, 70, 0.10)",
+            left: target.left,
+            top: target.top,
+            width: target.width,
+            height: target.height,
+            background: "#ffffff",
+            borderRadius: 8,
+            boxShadow:
+              "0 12px 40px rgba(20, 20, 50, 0.18), 0 2px 6px rgba(20, 20, 50, 0.06)",
+            transformOrigin: "0 0",
+            transform: morphTransform,
             opacity: overlayOn ? 1 : 0,
-            transition: `left 0.5s ${MORPH_EASE}, top 0.5s ${MORPH_EASE}, width 0.5s ${MORPH_EASE}, height 0.5s ${MORPH_EASE}, background 0.5s ease, border-radius 0.5s ease, box-shadow 0.5s ease, opacity 0.28s ease`,
+            transition: `transform 0.55s ${MORPH_EASE}, opacity 0.3s ease`,
+            willChange: "transform, opacity",
             zIndex: 60,
             pointerEvents: "none"
           }}
