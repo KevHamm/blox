@@ -257,6 +257,13 @@ math-field::part(menu-toggle) {
   opacity: 1;
 }
 
+/* Faint placeholder for empty section / title fields, so an unnamed heading
+   stays visible. */
+.heading-input::placeholder {
+  color: #c7c7cf;
+  opacity: 1;
+}
+
 /* Footnote "pick a word" mode: every paragraph word is a clickable target. */
 .fn-word {
   cursor: pointer;

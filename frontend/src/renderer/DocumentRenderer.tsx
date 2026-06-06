@@ -1,4 +1,4 @@
-import { Fragment, useRef, useEffect, useLayoutEffect, useState } from "react";
+import { Fragment, useRef, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { Chunk } from "../utils/paginateDocument";
 import { isContainerType } from "../utils/paginateDocument";
 import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
@@ -291,9 +291,10 @@ function headingStyle(base: number, mult: number) {
   } as const;
 }
 
-/* An always-editable, auto-growing inline text field (like the document title).
-   No click-to-edit popup; Enter inserts a line break. Used for headings/title. */
-export function HeadingInput({ value, onChange, style, ariaLabel }: any) {
+/* An always-editable, auto-growing inline title field (like the document title).
+   No click-to-edit popup. Titles are single-line — Enter is ignored (the field
+   still soft-wraps long titles). Shows a faint placeholder when empty. */
+export function HeadingInput({ value, onChange, style, ariaLabel, placeholder }: any) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const grow = () => {
@@ -318,9 +319,12 @@ export function HeadingInput({ value, onChange, style, ariaLabel }: any) {
     <textarea
       ref={ref}
       rows={1}
+      className="heading-input"
       value={value ?? ""}
       aria-label={ariaLabel}
+      placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
       style={{
         ...style,
         display: "block",
@@ -343,7 +347,46 @@ export function HeadingInput({ value, onChange, style, ariaLabel }: any) {
 /* -----------------------------
    PARAGRAPH
 ----------------------------- */
-// A small superscript footnote marker.
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// Render the paragraph body as HTML: plain (escaped) text with non-editable
+// superscript footnote markers inserted after their target word.
+function buildParagraphHtml(
+  text: string,
+  footnotes: any[],
+  footnoteNumbers: Record<string, number> | undefined
+): string {
+  if (!footnotes.length) return escapeHtml(text);
+  const tokens = text.split(/(\s+)/);
+  let wordIdx = -1;
+  let html = "";
+  for (const tok of tokens) {
+    if (tok === "") continue;
+    if (/^\s+$/.test(tok)) { html += escapeHtml(tok); continue; }
+    wordIdx++;
+    html += escapeHtml(tok);
+    footnotes
+      .filter((f) => f.word === wordIdx)
+      .forEach((f) => {
+        html +=
+          `<sup data-fn="${f.id}" contenteditable="false" ` +
+          `style="font-size:0.7em;vertical-align:super;">${footnoteNumbers?.[f.id] ?? 0}</sup>`;
+      });
+  }
+  return html;
+}
+
+// Read the plain text back out of the contentEditable, dropping footnote
+// markers and turning <br> into newlines.
+function readEditableText(el: HTMLElement): string {
+  const clone = el.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll("[data-fn]").forEach((n) => n.remove());
+  clone.querySelectorAll("br").forEach((br) => br.replaceWith(document.createTextNode("\n")));
+  return clone.textContent ?? "";
+}
+
+// A small superscript footnote marker (used in the footnote word-picker view).
 function FootnoteMark({ n }: { n: number }) {
   return (
     <sup style={{ fontSize: "0.7em", lineHeight: 0, verticalAlign: "super", color: "var(--text)" }}>
@@ -352,104 +395,105 @@ function FootnoteMark({ n }: { n: number }) {
   );
 }
 
-function Paragraph({
-  node,
-  editingId,
-  setEditingId,
-  updateTextById,
-  lineHeight,
-  fontSize,
-  firstChild = false,
-  pendingFootnote = false,
-  onWordClick,
-  footnoteNumbers
-}: any) {
-  const isEditing = editingId === node.id;
+// The normal paragraph: an always-editable, inline rich text region (no popup).
+// Typing edits in place; Enter inserts a line break; footnote markers render as
+// non-editable superscripts. State is committed on blur to avoid caret jumps.
+function EditableParagraph({ node, updateTextById, lineHeight, fontSize, firstChild, footnoteNumbers }: any) {
+  const ref = useRef<HTMLParagraphElement>(null);
   const footnotes: any[] = node.footnotes ?? [];
+  const html = useMemo(
+    () => buildParagraphHtml(node.text ?? "", footnotes, footnoteNumbers),
+    [node.text, footnotes, footnoteNumbers]
+  );
 
-  if (isEditing) {
-    return (
-      <textarea
-        autoFocus
-        value={node.text}
-        onChange={(e) => updateTextById(node.id, e.target.value)}
-        onBlur={() => setEditingId(null)}
-        style={{
-          width: "100%",
-          minHeight: 120,
-          padding: 8,
-          margin: "2px 0",
-          border: "1px solid #ddd",
-          lineHeight,
-          fontSize,
-          fontFamily: "var(--sans)",
-          color: "var(--text)"
-        }}
-      />
-    );
-  }
+  // Push content into the DOM only when it changed externally and we're not
+  // actively editing (so the caret is never reset mid-type).
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || document.activeElement === el) return;
+    if (el.innerHTML !== html) el.innerHTML = html;
+  }, [html]);
 
-  const baseStyle: any = {
-    margin: 0,
-    textAlign: "justify",
-    hyphens: "auto",
-    WebkitHyphens: "auto",
-    textIndent: firstChild ? 0 : "1.5em",
-    lineHeight,
-    fontSize
+  const commit = () => {
+    const el = ref.current;
+    if (!el) return;
+    const text = readEditableText(el);
+    if (text !== (node.text ?? "")) updateTextById(node.id, text);
   };
 
-  // Tokenize into words + whitespace, tracking the running word index so both
-  // footnote markers and the word-picker can target the same indices.
-  const needTokens = pendingFootnote || footnotes.length > 0;
-  if (needTokens) {
-    const tokens = node.text.split(/(\s+)/);
+  return (
+    <p
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      onBlur={commit}
+      onKeyDown={(e) => {
+        // Enter = line break (kept simple as a literal "\n" + pre-wrap).
+        if (e.key === "Enter") {
+          e.preventDefault();
+          document.execCommand("insertText", false, "\n");
+        }
+      }}
+      style={{
+        margin: 0,
+        cursor: "text",
+        outline: "none",
+        textAlign: "justify",
+        hyphens: "auto",
+        WebkitHyphens: "auto",
+        whiteSpace: "pre-wrap",
+        textIndent: firstChild ? 0 : "1.5em",
+        lineHeight,
+        fontSize,
+        color: "var(--text)"
+      }}
+    />
+  );
+}
+
+function Paragraph(props: any) {
+  const { node, lineHeight, fontSize, firstChild = false, pendingFootnote = false, onWordClick, footnoteNumbers } = props;
+
+  // Footnote "pick a word" mode: a read-only view where each word is clickable.
+  if (pendingFootnote) {
+    const footnotes: any[] = node.footnotes ?? [];
+    const tokens = (node.text ?? "").split(/(\s+)/);
     let wordIdx = -1;
     const out: any[] = [];
     tokens.forEach((tok: string, i: number) => {
-      if (tok === "" ) return;
+      if (tok === "") return;
       if (/^\s+$/.test(tok)) { out.push(tok); return; }
       wordIdx++;
       const w = wordIdx;
-      if (pendingFootnote) {
-        out.push(
-          <span
-            key={i}
-            className="fn-word"
-            onClick={(e) => { e.stopPropagation(); onWordClick?.(node.id, w); }}
-          >
-            {tok}
-          </span>
-        );
-      } else {
-        out.push(<Fragment key={i}>{tok}</Fragment>);
-      }
-      // Append any footnote markers attached to this word.
+      out.push(
+        <span key={i} className="fn-word" onClick={() => onWordClick?.(node.id, w)}>
+          {tok}
+        </span>
+      );
       footnotes
         .filter((f) => f.word === w)
         .forEach((f) => out.push(<FootnoteMark key={`${i}-${f.id}`} n={footnoteNumbers?.[f.id] ?? 0} />));
     });
-
     return (
       <p
-        onClick={pendingFootnote ? undefined : () => setEditingId(node.id)}
-        style={{ ...baseStyle, cursor: pendingFootnote ? "default" : "pointer" }}
+        style={{
+          margin: 0,
+          cursor: "default",
+          textAlign: "justify",
+          hyphens: "auto",
+          WebkitHyphens: "auto",
+          whiteSpace: "pre-wrap",
+          textIndent: firstChild ? 0 : "1.5em",
+          lineHeight,
+          fontSize
+        }}
       >
         {out}
       </p>
     );
   }
 
-  // LaTeX body: justified, hyphenated, first-line indent (none on the first
-  // paragraph after a heading), and no space between paragraphs (\parskip = 0).
-  return (
-    <p
-      onClick={() => setEditingId(node.id)}
-      style={{ ...baseStyle, cursor: "pointer" }}
-    >
-      {node.text}
-    </p>
-  );
+  return <EditableParagraph {...props} />;
 }
 
 /* -----------------------------
@@ -1340,6 +1384,7 @@ function Subsection({
               onChange={(v: string) => updateSectionTitle(node.id, v)}
               style={headingStyle(fontSize, 1.2)}
               ariaLabel="Subsection title"
+              placeholder="Add subsection title here"
             />
           </div>
 
@@ -1385,6 +1430,7 @@ function Subsubsection({
               onChange={(v: string) => updateSectionTitle(node.id, v)}
               style={headingStyle(fontSize, 1)}
               ariaLabel="Subsubsection title"
+              placeholder="Add subsubsection title here"
             />
           </div>
 
@@ -1427,6 +1473,7 @@ function Section({ node, showHeader = true, ...rest }: any) {
               onChange={(v: string) => updateSectionTitle(node.id, v)}
               style={headingStyle(fontSize, 1.44)}
               ariaLabel="Section title"
+              placeholder="Add section title here"
             />
           </div>
 
