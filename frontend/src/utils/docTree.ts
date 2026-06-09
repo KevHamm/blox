@@ -197,6 +197,26 @@ export function setListStyleTree(node: any, listId: string, style: "dash" | "dot
   return { ...node, children: node.children.map((c: any) => setListStyleTree(c, listId, style)) };
 }
 
+// Toggle a single internal grid separator of a table on/off, for custom tables.
+// axis "v" = the line to the right of cell (r,c); "h" = the line below it.
+export function toggleTableCellBorderTree(
+  node: any,
+  tableId: string,
+  axis: "v" | "h",
+  r: number,
+  c: number
+): any {
+  if (node.type === "table" && node.id === tableId) {
+    const field = axis === "v" ? "removedVBorders" : "removedHBorders";
+    const key = `${r}:${c}`;
+    const cur: string[] = node[field] ?? [];
+    const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
+    return { ...node, [field]: next };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((ch: any) => toggleTableCellBorderTree(ch, tableId, axis, r, c)) };
+}
+
 // Document ordering: cover page → table of contents → abstract → sections →
 // bibliography.
 export const pageRank = (node: any): number => {

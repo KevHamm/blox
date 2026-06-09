@@ -267,10 +267,9 @@ math-field::part(menu-toggle) {
   opacity: 1;
   pointer-events: auto;
 }
-/* Don't double-fade the buttons inside — visibility is gated by the wrapper. */
-.hover-tools button {
-  opacity: 1;
-}
+/* The buttons themselves keep the normal faded look (.doc-area button = 0.35)
+   and only go fully opaque when hovered individually. The wrapper above gates
+   whether they appear at all (on section hover). */
 
 /* Faint placeholder for empty section / title fields, so an unnamed heading
    stays visible. */
@@ -288,6 +287,11 @@ math-field::part(menu-toggle) {
 .fn-word:hover {
   background: rgba(0, 113, 227, 0.18);
   box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.35);
+}
+
+/* Border-editor click strips between table cells. */
+.tbl-border-edge:hover {
+  background: rgba(0, 113, 227, 0.25);
 }
 
 /* Table row/column reorder grips: hidden until the table is hovered. */

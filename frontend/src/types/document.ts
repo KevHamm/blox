@@ -28,6 +28,10 @@ export interface DocumentNode {
   colors?: (string | null)[][];
   removedRows?: any[];
   removedColumns?: any[];
+  // Custom grid: internal separators removed, keyed "row:col" (vertical = line to
+  // the right of the cell; horizontal = line below the cell).
+  removedVBorders?: string[];
+  removedHBorders?: string[];
   width?: number;
   images?: { id: string; src: string }[];
   sectionNumber?: number;

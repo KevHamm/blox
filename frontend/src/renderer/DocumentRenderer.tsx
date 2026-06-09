@@ -929,6 +929,7 @@ function TableBlock(props: any) {
     deleteTableRowAt,
     deleteTableColumnAt,
     toggleTableBorder,
+    toggleCellBorder,
     reorderTableColumn,
     reorderTableRow,
     tableNumbers,
@@ -936,8 +937,8 @@ function TableBlock(props: any) {
   } = props;
 
   const tableRef = useRef<HTMLTableElement>(null);
-  // Active table tool: editing, painting cells, or deleting rows/columns.
-  const [tool, setTool] = useState<"none" | "paint" | "delete">("none");
+  // Active table tool: editing, painting, deleting, or editing grid separators.
+  const [tool, setTool] = useState<"none" | "paint" | "delete" | "borders">("none");
   const [brushColor, setBrushColor] = useState("#ffe08a");
   const active = tool !== "none";
 
@@ -945,11 +946,26 @@ function TableBlock(props: any) {
   const [marker, setMarker] = useState<{ axis: "col" | "row"; px: number } | null>(null);
 
   const colCount = node.rows[0]?.length || 0;
+  const rowCount = node.rows.length;
 
-  // Grid lines default to visible; either axis can be switched off.
+  // Grid lines default to visible; either axis can be switched off globally, and
+  // individual internal separators can be removed for custom tables.
   const bV = node.borders?.v !== false;
   const bH = node.borders?.h !== false;
   const sideBorder = (on: boolean) => (on ? "1px solid #ccc" : "none");
+  const removedV: string[] = node.removedVBorders ?? [];
+  const removedH: string[] = node.removedHBorders ?? [];
+  const vGone = (r: number, c: number) => removedV.includes(`${r}:${c}`);
+  const hGone = (r: number, c: number) => removedH.includes(`${r}:${c}`);
+  // Per-cell border sides: outer frame follows the global toggles; internal
+  // separators follow the per-edge removed sets (only one of each shared edge is
+  // drawn, so border-collapse stays consistent).
+  const cellBorders = (r: number, c: number) => ({
+    borderLeft: c === 0 ? sideBorder(bV) : "none",
+    borderTop: r === 0 ? sideBorder(bH) : "none",
+    borderRight: c === colCount - 1 ? sideBorder(bV) : sideBorder(bV && !vGone(r, c)),
+    borderBottom: r === rowCount - 1 ? sideBorder(bH) : sideBorder(bH && !hGone(r, c))
+  });
 
   // Whole-row / whole-column emptiness (for backspace-to-remove).
   const isEmpty = (v: any) => String(v ?? "").trim() === "";
@@ -1121,10 +1137,7 @@ function TableBlock(props: any) {
                       : undefined
                   }
                   style={{
-                    borderLeft: sideBorder(bV),
-                    borderRight: sideBorder(bV),
-                    borderTop: sideBorder(bH),
-                    borderBottom: sideBorder(bH),
+                    ...cellBorders(r, c),
                     padding: 0,
                     verticalAlign: "top",
                     position: "relative",
@@ -1216,6 +1229,24 @@ function TableBlock(props: any) {
                         zIndex: 1,
                         pointerEvents: active ? "none" : undefined
                       }}
+                    />
+                  )}
+
+                  {/* border-edit tool: click a separator to remove / re-add it */}
+                  {tool === "borders" && c < colCount - 1 && (
+                    <div
+                      className="tbl-border-edge"
+                      title={vGone(r, c) ? "Add column separator" : "Remove column separator"}
+                      onClick={() => toggleCellBorder(node.id, "v", r, c)}
+                      style={{ position: "absolute", top: 0, bottom: 0, right: -4, width: 9, cursor: "pointer", zIndex: 5 }}
+                    />
+                  )}
+                  {tool === "borders" && r < rowCount - 1 && (
+                    <div
+                      className="tbl-border-edge"
+                      title={hGone(r, c) ? "Add row separator" : "Remove row separator"}
+                      onClick={() => toggleCellBorder(node.id, "h", r, c)}
+                      style={{ position: "absolute", left: 0, right: 0, bottom: -4, height: 9, cursor: "pointer", zIndex: 5 }}
                     />
                   )}
                 </td>
@@ -1328,6 +1359,28 @@ function TableBlock(props: any) {
           }}
         >
           ✕
+        </button>
+
+        <button
+          className="tbl-btn"
+          title="Border editor: click a grid line between cells to remove or re-add it"
+          onClick={() => setTool((t) => (t === "borders" ? "none" : "borders"))}
+          style={{
+            width: 24,
+            height: 24,
+            padding: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: tool === "borders" ? "#e8eefc" : "#eee",
+            border: tool === "borders" ? `2px solid ${DROP_LINE}` : "1px solid #ccc",
+            borderRadius: 4,
+            color: tool === "borders" ? DROP_LINE : "#555",
+            cursor: "pointer",
+            fontSize: 14
+          }}
+        >
+          ⊞
         </button>
 
         {/* grid-line toggles */}

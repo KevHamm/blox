@@ -13,7 +13,8 @@ import {
   updateListItemTree,
   addListItemTree,
   deleteListItemTree,
-  setListStyleTree
+  setListStyleTree,
+  toggleTableCellBorderTree
 } from "../utils/docTree";
 
 const lorem =
@@ -478,6 +479,11 @@ export function useDocument() {
 
   // Toggle a table's vertical (between-column) or horizontal (between-row) grid
   // lines. Defaults to visible; stored as { v, h } on the node.
+  // Toggle a single internal grid separator (custom tables).
+  function toggleCellBorder(tableId: string, axis: "v" | "h", r: number, c: number) {
+    setDoc((prev) => toggleTableCellBorderTree(prev, tableId, axis, r, c));
+  }
+
   function toggleTableBorder(tableId: string, axis: "v" | "h") {
     function update(node: any): any {
       if (node.id === tableId && node.type === "table") {
@@ -648,6 +654,7 @@ export function useDocument() {
     updateTableColors,
     deleteTableColumn,
     toggleTableBorder,
+    toggleCellBorder,
     reorderTableColumn,
     reorderTableRow,
     moveSection,

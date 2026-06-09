@@ -117,7 +117,7 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     deleteNodeById, addTableRow, deleteTableRow, deleteTableRowAt,
     addTableColumn, deleteTableColumnAt, updateTableColWidths,
     updateTableCaption, updateTableColors, deleteTableColumn,
-    toggleTableBorder, reorderTableColumn, reorderTableRow,
+    toggleTableBorder, toggleCellBorder, reorderTableColumn, reorderTableRow,
     moveSection, moveSubsection
   } = useDocument();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -153,7 +153,7 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     addTableColumn, updateTableColWidths, addSectionAfter,
     updateTableCaption, updateTableColors,
     deleteTableRowAt, deleteTableColumnAt,
-    toggleTableBorder, reorderTableColumn, reorderTableRow,
+    toggleTableBorder, toggleCellBorder, reorderTableColumn, reorderTableRow,
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
     deleteFigureImage, updateMathItem, deleteMathItem,
