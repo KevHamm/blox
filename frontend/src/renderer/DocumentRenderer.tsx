@@ -410,8 +410,10 @@ function FootnoteMark({ n }: { n: number }) {
 
 // The normal paragraph: an always-editable, inline rich text region (no popup).
 // Typing edits in place; Enter inserts a line break; footnote markers render as
-// non-editable superscripts. State is committed on blur to avoid caret jumps.
-function EditableParagraph({ node, updateTextById, lineHeight, fontSize, firstChild, footnoteNumbers }: any) {
+// non-editable superscripts. Text commits on every input so pagination stays
+// live (overflow flows to the next page as you type); the DOM is only synced
+// from React while the field is NOT focused, so the caret never jumps.
+function EditableParagraph({ node, updateTextById, onTyping, lineHeight, fontSize, firstChild, footnoteNumbers }: any) {
   const ref = useRef<HTMLParagraphElement>(null);
   const footnotes: any[] = node.footnotes ?? [];
   const html = useMemo(
@@ -437,9 +439,12 @@ function EditableParagraph({ node, updateTextById, lineHeight, fontSize, firstCh
   return (
     <p
       ref={ref}
+      className="blox-editable"
       contentEditable
       suppressContentEditableWarning
-      onBlur={commit}
+      onFocus={() => onTyping?.(node.id)}
+      onInput={() => { commit(); onTyping?.(node.id); }}
+      onBlur={() => { commit(); onTyping?.(null); }}
       onKeyDown={(e) => {
         // Enter = line break (kept simple as a literal "\n" + pre-wrap).
         if (e.key === "Enter") {
@@ -516,9 +521,10 @@ function Paragraph(props: any) {
 function AbstractBlock({ node, editingId, setEditingId, updateTextById, deleteNodeById, fontSize = 13, lineHeight = 1.2 }: any) {
   const isEditing = editingId === node.id;
   return (
-    <div data-leaf-id={node.id} style={{ width: "86%", margin: "0 auto", marginTop: fontSize * 1.6, marginBottom: fontSize * 1.6 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: fontSize * 0.5 }}>
-        <div style={{ fontWeight: 700, fontSize, fontFamily: "var(--sans)", color: "var(--text)" }}>Abstract</div>
+    <div data-leaf-id={node.id} style={{ width: "80%", margin: "0 auto", marginTop: fontSize * 2, marginBottom: fontSize * 1.5 }}>
+      {/* article abstract: \small body, centered \bfseries "Abstract" heading. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: fontSize * 0.4 }}>
+        <div style={{ fontWeight: 700, fontSize: fontSize * 0.9, fontFamily: "var(--sans)", color: "var(--text)" }}>Abstract</div>
         <TrashButton onClick={() => deleteNodeById(node.id)} label="Delete abstract" />
       </div>
       {isEditing ? (
@@ -529,7 +535,7 @@ function AbstractBlock({ node, editingId, setEditingId, updateTextById, deleteNo
           onBlur={() => setEditingId(null)}
           style={{
             width: "100%", minHeight: 90, padding: 8, border: "1px solid #ddd",
-            lineHeight, fontSize: fontSize * 0.95, fontFamily: "var(--sans)", color: "var(--text)"
+            lineHeight, fontSize: fontSize * 0.9, fontFamily: "var(--sans)", color: "var(--text)"
           }}
         />
       ) : (
@@ -538,7 +544,7 @@ function AbstractBlock({ node, editingId, setEditingId, updateTextById, deleteNo
           style={{
             margin: 0, cursor: "pointer", textAlign: "justify",
             hyphens: "auto", WebkitHyphens: "auto",
-            lineHeight, fontSize: fontSize * 0.95
+            lineHeight, fontSize: fontSize * 0.9
           }}
         >
           {node.text}
@@ -1439,9 +1445,9 @@ function Subsection({
   children
 }: any) {
   return (
-    <div style={{ marginTop: showHeader ? fontSize * 1.3 : 0 }}>
+    <div style={{ marginTop: showHeader ? fontSize * 1.4 : 0 }}>
       {showHeader && (
-        <div className="hover-target" data-head-id={node.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: fontSize * 0.5 }}>
+        <div className="hover-target" data-head-id={node.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: fontSize * 0.65 }}>
           <div style={{ display: "flex", gap: "0.4em", flex: 1, minWidth: 0 }}>
             {node.numberLabel && (
               <span style={{ ...headingStyle(fontSize, 1.2), whiteSpace: "nowrap" }}>{node.numberLabel}</span>
@@ -1481,9 +1487,9 @@ function Subsubsection({
   children
 }: any) {
   return (
-    <div style={{ marginTop: showHeader ? fontSize * 1.1 : 0 }}>
+    <div style={{ marginTop: showHeader ? fontSize * 1.4 : 0 }}>
       {showHeader && (
-        <div className="hover-target" data-head-id={node.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: fontSize * 0.4 }}>
+        <div className="hover-target" data-head-id={node.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: fontSize * 0.65 }}>
           <div style={{ display: "flex", gap: "0.4em", flex: 1, minWidth: 0 }}>
             {node.numberLabel && (
               <span style={{ ...headingStyle(fontSize, 1), whiteSpace: "nowrap" }}>{node.numberLabel}</span>
@@ -1518,14 +1524,14 @@ function Section({ node, showHeader = true, ...rest }: any) {
   } = rest;
 
   return (
-    <div style={{ marginTop: showHeader ? fontSize * 1.6 : 0 }}>
+    <div style={{ marginTop: showHeader ? fontSize * 1.5 : 0 }}>
 
       {/* Header row; hidden on continuation columns/pages. */}
       {showHeader && (
         <div
           className="hover-target"
           data-head-id={node.id}
-          style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: fontSize * 0.8 }}
+          style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: fontSize * 1.0 }}
         >
           <div style={{ display: "flex", gap: "0.4em", flex: 1, minWidth: 0 }}>
             {node.sectionNumber != null && (

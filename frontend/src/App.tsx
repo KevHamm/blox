@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { DocumentRenderer, HeadingInput } from "./renderer/DocumentRenderer";
 import { Page } from "./components/Page";
 import { TrashIcon } from "./components/TrashIcon";
@@ -136,6 +136,22 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
   // Id of the Blox block currently being dragged (for the drag overlay).
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
 
+  // The paragraph currently being typed in. Live pagination can re-flow content
+  // onto another page mid-keystroke; if that paragraph re-mounts on a new page we
+  // re-focus it (caret at end) so the cursor "follows" the text to the next page.
+  const typingRef = useRef<string | null>(null);
+  function setTyping(id: string | null) {
+    if (id === null) {
+      // Defer: only really clear once focus has settled outside any editor.
+      requestAnimationFrame(() => {
+        const a = document.activeElement as HTMLElement | null;
+        if (!a || !a.classList.contains("blox-editable")) typingRef.current = null;
+      });
+    } else {
+      typingRef.current = id;
+    }
+  }
+
 
   // article-class defaults: 10pt Computer Modern, 1.2 leading, and a text block
   // that fills exactly between the article margins (≈ 345pt / 66 chars).
@@ -158,6 +174,7 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
     deleteFigureImage, updateMathItem, deleteMathItem,
     updateListItem, addListItem, deleteListItem, setListStyle,
+    onTyping: setTyping,
   };
 
   // ── 2. Derived values ───────────────────────────────────
@@ -178,6 +195,24 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
       layout.columns
     );
   }, [numberedDoc, leafHeights, headerHeights, layout.columns]);
+
+  // After a re-pagination, if the paragraph being typed in re-mounted on another
+  // page (so it lost focus), re-focus it with the caret at the end — the cursor
+  // follows the text to the next page.
+  useLayoutEffect(() => {
+    const id = typingRef.current;
+    if (!id) return;
+    const el = document.querySelector(`[data-leaf-id="${id}"] .blox-editable`) as HTMLElement | null;
+    if (el && document.activeElement !== el) {
+      el.focus();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  }, [pages]);
 
   // The document title lives on the body's first page — i.e. after any leading
   // cover page / table of contents.
@@ -636,7 +671,8 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
                     {/* Title sits on the body's first page (after any cover / TOC).
                         \maketitle: \LARGE (1.728×) Computer Modern, centered. */}
                     {pageIndex === titlePageIndex && (
-                      <div style={{ textAlign: "center", marginTop: layout.fontSize * 1.5, marginBottom: layout.fontSize * 1.8 }}>
+                      /* \maketitle: 2em above the \LARGE title, 1.5em below. */
+                      <div style={{ textAlign: "center", marginTop: layout.fontSize * 2, marginBottom: layout.fontSize * 1.5 }}>
                         <HeadingInput
                           value={documentTitle}
                           onChange={setDocumentTitle}

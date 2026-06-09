@@ -19,7 +19,9 @@ export function Page({ children, pageNumber }: PageProps) {
       style={{
         position: "relative",
         width: PAGE_WIDTH,
-        minHeight: PAGE_HEIGHT,
+        // Fixed height — a page never grows; overflowing content is paginated
+        // onto the next page instead.
+        height: PAGE_HEIGHT,
         background: "white",
         borderRadius: 6,
         boxShadow: "0 12px 40px rgba(20, 20, 50, 0.10), 0 2px 6px rgba(20, 20, 50, 0.06)",
