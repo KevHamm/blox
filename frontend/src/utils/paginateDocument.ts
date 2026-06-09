@@ -13,9 +13,17 @@ export type Chunk = {
   header: boolean;
   isLast: boolean;
   children: Chunk[];
+  // For a paragraph that is split across columns/pages, the character range of
+  // text rendered in this piece. Absent = the whole node.
+  slice?: { start: number; end: number };
 };
 export type Column = Chunk[];
 export type DocPage = Column[];
+
+// Per-paragraph line geometry, measured from the DOM: each line's starting
+// character offset and its cumulative bottom (px) from the paragraph's top.
+export type LineInfo = { offset: number; bottom: number };
+export type LineData = Record<string, LineInfo[]>;
 
 const CONTAINERS = new Set(["section", "subsection", "subsubsection"]);
 export const isContainerType = (t: string) => CONTAINERS.has(t);
@@ -51,6 +59,7 @@ function paginateRun(
   nodes: any[],
   leafHeights:   Record<string, number>,
   headerHeights: Record<string, number>,
+  lineData:      LineData,
   titleReserved: number,
   columnsPerPage: number
 ): DocPage[] {
@@ -96,10 +105,45 @@ function paginateRun(
   };
 
   const placeLeaf = (node: any) => {
-    const h = leafH(node);
-    if (used > 0 && used + h > capacity()) startNewColumn();
-    appendChunk({ node, header: false, isLast: true, children: [] });
-    used += h;
+    // Paragraphs with measured line geometry (and no footnotes) can be split
+    // across columns/pages at line boundaries so they never overflow a page.
+    const lines = node.type === "paragraph" && !node.footnotes?.length
+      ? lineData[node.id]
+      : undefined;
+
+    if (!lines || lines.length <= 1) {
+      const h = leafH(node);
+      if (used > 0 && used + h > capacity()) startNewColumn();
+      appendChunk({ node, header: false, isLast: true, children: [] });
+      used += h;
+      return;
+    }
+
+    const text: string = node.text ?? "";
+    let startLine = 0;
+    while (startLine < lines.length) {
+      const topOffset = startLine === 0 ? 0 : lines[startLine - 1].bottom;
+      const cap = capacity() - used;
+
+      // How many of the remaining lines fit in the space left in this column.
+      let endLine = startLine;
+      while (endLine < lines.length && lines[endLine].bottom - topOffset <= cap) endLine++;
+
+      if (endLine === startLine) {
+        // Not even one more line fits here — move to a fresh column first.
+        if (used > 0) { startNewColumn(); continue; }
+        endLine = startLine + 1; // a single line taller than a column: place it anyway
+      }
+
+      const sStart = startLine === 0 ? 0 : lines[startLine].offset;
+      const sEnd = endLine >= lines.length ? text.length : lines[endLine].offset;
+      const isLastSlice = endLine >= lines.length;
+
+      appendChunk({ node, header: false, isLast: isLastSlice, children: [], slice: { start: sStart, end: sEnd } });
+      used += lines[endLine - 1].bottom - topOffset;
+      startLine = endLine;
+      if (!isLastSlice) startNewColumn();
+    }
   };
 
   const placeContainer = (node: any) => {
@@ -135,6 +179,7 @@ export function paginateColumns(
   doc: any,
   leafHeights:   Record<string, number>,
   headerHeights: Record<string, number>,
+  lineData:      LineData = {},
   titleReserved  = 0,
   columnsPerPage = 1
 ): DocPage[] {
@@ -158,7 +203,7 @@ export function paginateColumns(
   // The document body is always present — at least one page, even when empty —
   // so a cover page always pushes the body to the next page. The body's first
   // page carries the document title, so it reserves room for it.
-  out.push(...paginateRun(content, leafHeights, headerHeights, titleReserved, columnsPerPage));
+  out.push(...paginateRun(content, leafHeights, headerHeights, lineData, titleReserved, columnsPerPage));
 
   for (const node of after) {
     out.push([[fullChunk(node)]]);

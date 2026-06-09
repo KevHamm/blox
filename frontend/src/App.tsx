@@ -104,6 +104,79 @@ function collectPageFootnotes(
   return out.sort((a, b) => a.number - b.number);
 }
 
+// Convert a viewport point to a character offset within a paragraph element.
+function caretOffsetAtPoint(p: HTMLElement, x: number, y: number): number {
+  const d: any = document;
+  let node: Node | null = null, offset = 0;
+  if (d.caretRangeFromPoint) {
+    const r = d.caretRangeFromPoint(x, y);
+    if (r) { node = r.startContainer; offset = r.startOffset; }
+  } else if (d.caretPositionFromPoint) {
+    const pos = d.caretPositionFromPoint(x, y);
+    if (pos) { node = pos.offsetNode; offset = pos.offset; }
+  }
+  if (!node) return 0;
+  const pre = document.createRange();
+  pre.selectNodeContents(p);
+  try { pre.setEnd(node, offset); } catch { return 0; }
+  return pre.toString().length;
+}
+
+// Measure each rendered line of a paragraph: where it starts (char offset) and
+// its cumulative bottom (px) from the element's top.
+function measureParagraphLines(p: HTMLElement): { offset: number; bottom: number }[] {
+  if (!(p.textContent ?? "").length) return [];
+  const pTop = p.getBoundingClientRect().top;
+  const range = document.createRange();
+  range.selectNodeContents(p);
+  const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0 || r.height > 0);
+  const lines: { offset: number; bottom: number }[] = [];
+  let prevTop = Number.NEGATIVE_INFINITY;
+  for (const r of rects) {
+    if (r.top > prevTop + 1) {
+      lines.push({ offset: caretOffsetAtPoint(p, r.left + 1, r.top + r.height / 2), bottom: r.bottom - pTop });
+      prevTop = r.top;
+    } else {
+      lines[lines.length - 1].bottom = Math.max(lines[lines.length - 1].bottom, r.bottom - pTop);
+    }
+  }
+  if (lines.length) lines[0].offset = 0;
+  return lines;
+}
+
+type LineMap = Record<string, { offset: number; bottom: number }[]>;
+function lineDataUnchanged(prev: LineMap, next: LineMap): boolean {
+  const pk = Object.keys(prev), nk = Object.keys(next);
+  if (pk.length !== nk.length) return false;
+  for (const k of nk) {
+    const a = prev[k], b = next[k];
+    if (!a || a.length !== b.length) return false;
+    for (let i = 0; i < b.length; i++) {
+      if (a[i].offset !== b[i].offset || Math.abs(a[i].bottom - b[i].bottom) > 1) return false;
+    }
+  }
+  return true;
+}
+
+// Place the caret at a character offset inside a contentEditable element.
+function placeCaretAt(el: HTMLElement, offset: number) {
+  el.focus();
+  const sel = window.getSelection();
+  if (!sel) return;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let remaining = offset, target: Text | null = null, local = 0, n: Node | null;
+  while ((n = walker.nextNode())) {
+    const len = (n.textContent ?? "").length;
+    if (remaining <= len) { target = n as Text; local = remaining; break; }
+    remaining -= len;
+  }
+  const range = document.createRange();
+  if (target) { range.setStart(target, local); range.collapse(true); }
+  else { range.selectNodeContents(el); range.collapse(false); }
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
   // ── 1. All state first ──────────────────────────────────
   // The document tree + every mutation handler live in this hook.
@@ -128,6 +201,8 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
   // container header (section/subsection/subsubsection).
   const [leafHeights,   setLeafHeights]   = useState<Record<string, number>>({});
   const [headerHeights, setHeaderHeights] = useState<Record<string, number>>({});
+  // Per-paragraph line geometry, so a long paragraph can be split across pages.
+  const [lineData, setLineData] = useState<LineMap>({});
 
   // Images uploaded via the right sidebar (preview gallery).
   const [images, setImages] = useState<{ id: string; src: string; name: string }[]>([]);
@@ -140,16 +215,23 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
   // onto another page mid-keystroke; if that paragraph re-mounts on a new page we
   // re-focus it (caret at end) so the cursor "follows" the text to the next page.
   const typingRef = useRef<string | null>(null);
+  const caretRef = useRef<{ id: string; offset: number } | null>(null);
   function setTyping(id: string | null) {
     if (id === null) {
       // Defer: only really clear once focus has settled outside any editor.
       requestAnimationFrame(() => {
         const a = document.activeElement as HTMLElement | null;
-        if (!a || !a.classList.contains("blox-editable")) typingRef.current = null;
+        if (!a || !a.classList.contains("blox-editable")) { typingRef.current = null; caretRef.current = null; }
       });
     } else {
       typingRef.current = id;
     }
+  }
+  // Records the caret position (as a full-text offset) of the paragraph being
+  // edited, so the cursor can follow its text across a page split.
+  function setCaret(id: string, offset: number) {
+    typingRef.current = id;
+    caretRef.current = { id, offset };
   }
 
 
@@ -174,7 +256,7 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
     deleteFigureImage, updateMathItem, deleteMathItem,
     updateListItem, addListItem, deleteListItem, setListStyle,
-    onTyping: setTyping,
+    onTyping: setTyping, onCaret: setCaret,
   };
 
   // ── 2. Derived values ───────────────────────────────────
@@ -191,27 +273,39 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
       numberedDoc,
       leafHeights,
       headerHeights,
+      lineData,
       TITLE_RESERVED,
       layout.columns
     );
-  }, [numberedDoc, leafHeights, headerHeights, layout.columns]);
+  }, [numberedDoc, leafHeights, headerHeights, lineData, layout.columns]);
 
-  // After a re-pagination, if the paragraph being typed in re-mounted on another
-  // page (so it lost focus), re-focus it with the caret at the end — the cursor
-  // follows the text to the next page.
+  // After a re-pagination, keep the cursor with the text it belongs to: if the
+  // edited paragraph split and the caret's text moved to another page's slice,
+  // focus that slice and restore the caret there (so typing flows to page 2).
   useLayoutEffect(() => {
     const id = typingRef.current;
     if (!id) return;
-    const el = document.querySelector(`[data-leaf-id="${id}"] .blox-editable`) as HTMLElement | null;
-    if (el && document.activeElement !== el) {
-      el.focus();
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      const sel = window.getSelection();
-      sel?.removeAllRanges();
-      sel?.addRange(range);
+    const els = Array.from(document.querySelectorAll<HTMLElement>(`[data-para-id="${id}"]`));
+    if (!els.length) return;
+
+    const c = caretRef.current;
+    const caret = c && c.id === id ? c.offset : null;
+    if (caret == null) {
+      if (document.activeElement !== els[0]) placeCaretAt(els[0], Number.MAX_SAFE_INTEGER);
+      return;
     }
+
+    // Find the slice whose character range contains the caret, then restore the
+    // caret there (the DOM was just re-synced, so this also keeps the cursor put
+    // while typing within one slice, and moves it to the next page on overflow).
+    let target = els[els.length - 1];
+    let local = caret - Number(target.dataset.sliceStart ?? 0);
+    for (const el of els) {
+      const s = Number(el.dataset.sliceStart ?? 0);
+      const e = Number(el.dataset.sliceEnd ?? Number.MAX_SAFE_INTEGER);
+      if (caret >= s && caret <= e) { target = el; local = caret - s; break; }
+    }
+    placeCaretAt(target, local);
   }, [pages]);
 
   // The document title lives on the body's first page — i.e. after any leading
@@ -231,8 +325,31 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     document.querySelectorAll<HTMLElement>("[data-head-id]")
       .forEach(el => { hh[el.dataset.headId!] = el.getBoundingClientRect().height; });
 
+    // Per-paragraph line geometry. A split paragraph renders as several slice
+    // elements (same data-para-id); combine them back into the full geometry.
+    const ld: LineMap = {};
+    const byPara = new Map<string, HTMLElement[]>();
+    document.querySelectorAll<HTMLElement>("[data-para-id]").forEach((p) => {
+      if (p.querySelector("[data-fn]")) return; // footnoted paragraphs aren't split
+      const id = p.dataset.paraId!;
+      (byPara.get(id) ?? byPara.set(id, []).get(id)!).push(p);
+    });
+    byPara.forEach((els, id) => {
+      els.sort((a, b) => Number(a.dataset.sliceStart ?? 0) - Number(b.dataset.sliceStart ?? 0));
+      const full: { offset: number; bottom: number }[] = [];
+      let cum = 0;
+      for (const el of els) {
+        const s = Number(el.dataset.sliceStart ?? 0);
+        const sliceLines = measureParagraphLines(el);
+        for (const ln of sliceLines) full.push({ offset: s + ln.offset, bottom: cum + ln.bottom });
+        if (sliceLines.length) cum += sliceLines[sliceLines.length - 1].bottom;
+      }
+      if (full.length) { full[0].offset = 0; ld[id] = full; }
+    });
+
     setLeafHeights  (prev => heightsUnchanged(prev, lh) ? prev : lh);
     setHeaderHeights(prev => heightsUnchanged(prev, hh) ? prev : hh);
+    setLineData     (prev => lineDataUnchanged(prev, ld) ? prev : ld);
 
   }, [doc, layout.textWidth, layout.fontSize, layout.lineHeight, layout.columns]);
 

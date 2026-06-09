@@ -408,33 +408,63 @@ function FootnoteMark({ n }: { n: number }) {
   );
 }
 
+// The caret's character offset within a contentEditable element.
+function getCaretOffset(el: HTMLElement): number {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return 0;
+  const range = sel.getRangeAt(0);
+  const pre = document.createRange();
+  pre.selectNodeContents(el);
+  try { pre.setEnd(range.endContainer, range.endOffset); } catch { return 0; }
+  return pre.toString().length;
+}
+
 // The normal paragraph: an always-editable, inline rich text region (no popup).
-// Typing edits in place; Enter inserts a line break; footnote markers render as
-// non-editable superscripts. Text commits on every input so pagination stays
-// live (overflow flows to the next page as you type); the DOM is only synced
-// from React while the field is NOT focused, so the caret never jumps.
-function EditableParagraph({ node, updateTextById, onTyping, lineHeight, fontSize, firstChild, footnoteNumbers }: any) {
+// Typing edits in place; Enter inserts a line break. A long paragraph is split
+// across pages into character slices; each slice edits its portion of the full
+// text and commits on every keystroke so pagination stays live (overflowing
+// words flow to the next page). The DOM is always kept in sync with this slice's
+// text and the caret is restored from a recorded full-text offset, so a slice
+// never shows more than its share (which would duplicate it across pages).
+function EditableParagraph({
+  node, updateTextById, onTyping, onCaret,
+  lineHeight, fontSize, firstChild, footnoteNumbers,
+  sliceStart, sliceEnd
+}: any) {
   const ref = useRef<HTMLParagraphElement>(null);
+  const text: string = node.text ?? "";
   const footnotes: any[] = node.footnotes ?? [];
+
+  const start: number = sliceStart ?? 0;
+  const end: number = sliceEnd ?? text.length;
+  const isSlice = start !== 0 || end !== text.length;
+  const sliceText = isSlice ? text.slice(start, end) : text;
+
   const html = useMemo(
-    () => buildParagraphHtml(node.text ?? "", footnotes, footnoteNumbers),
-    [node.text, footnotes, footnoteNumbers]
+    () => (isSlice ? escapeHtml(sliceText) : buildParagraphHtml(text, footnotes, footnoteNumbers)),
+    [text, sliceText, isSlice, footnotes, footnoteNumbers]
   );
 
-  // Push content into the DOM only when it changed externally and we're not
-  // actively editing (so the caret is never reset mid-type).
+  // Always keep the DOM equal to this slice's content. The caret is collapsed by
+  // the assignment but the Editor's restore effect puts it back (and follows the
+  // text onto the next page when a word overflows).
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || document.activeElement === el) return;
+    if (!el) return;
     if (el.innerHTML !== html) el.innerHTML = html;
   }, [html]);
 
-  const commit = () => {
+  const onInput = () => {
     const el = ref.current;
     if (!el) return;
-    const text = readEditableText(el);
-    if (text !== (node.text ?? "")) updateTextById(node.id, text);
+    const domText = readEditableText(el);
+    const full = text.slice(0, start) + domText + text.slice(end);
+    onCaret?.(node.id, start + getCaretOffset(el));
+    onTyping?.(node.id);
+    if (full !== text) updateTextById(node.id, full);
   };
+
+  const indent = firstChild || start > 0 ? 0 : "1.5em";
 
   return (
     <p
@@ -442,9 +472,12 @@ function EditableParagraph({ node, updateTextById, onTyping, lineHeight, fontSiz
       className="blox-editable"
       contentEditable
       suppressContentEditableWarning
+      data-para-id={node.id}
+      data-slice-start={start}
+      data-slice-end={end}
       onFocus={() => onTyping?.(node.id)}
-      onInput={() => { commit(); onTyping?.(node.id); }}
-      onBlur={() => { commit(); onTyping?.(null); }}
+      onInput={onInput}
+      onBlur={() => onTyping?.(null)}
       onKeyDown={(e) => {
         // Enter = line break (kept simple as a literal "\n" + pre-wrap).
         if (e.key === "Enter") {
@@ -460,7 +493,7 @@ function EditableParagraph({ node, updateTextById, onTyping, lineHeight, fontSiz
         hyphens: "auto",
         WebkitHyphens: "auto",
         whiteSpace: "pre-wrap",
-        textIndent: firstChild ? 0 : "1.5em",
+        textIndent: indent,
         lineHeight,
         fontSize,
         color: "var(--text)"
@@ -1790,9 +1823,14 @@ function renderChunk(chunk: Chunk, props: any, firstChild = false): any {
   const node = chunk.node;
 
   if (node.type === "paragraph") {
+    // A split paragraph renders as several slice pieces; only the whole-node
+    // form carries data-leaf-id (split heights come from line geometry instead).
+    const sliceProps = chunk.slice
+      ? { sliceStart: chunk.slice.start, sliceEnd: chunk.slice.end }
+      : {};
     return (
-      <div data-leaf-id={node.id}>
-        <Paragraph node={node} {...props} firstChild={firstChild} />
+      <div {...(chunk.slice ? {} : { "data-leaf-id": node.id })}>
+        <Paragraph node={node} {...props} firstChild={firstChild} {...sliceProps} />
       </div>
     );
   }
