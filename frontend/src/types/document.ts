@@ -22,6 +22,9 @@ export interface DocumentNode {
     | "math";
   title?: string;
   text?: string;
+  // Inline character formatting for paragraph text (bold / italic / underline),
+  // stored as character ranges alongside the plain `text`. See utils/marks.ts.
+  marks?: { start: number; end: number; b?: boolean; i?: boolean; u?: boolean }[];
   latex?: string;
   caption?: string;
   rows?: string[][];

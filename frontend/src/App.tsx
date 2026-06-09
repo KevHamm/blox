@@ -54,7 +54,6 @@ import {
   DraggableImage,
   DroppableDocArea,
   DraggableBlock,
-  Collapsible,
   NumberControl
 } from "./components/editorUi";
 
@@ -184,7 +183,7 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
   // The document tree + every mutation handler live in this hook.
   const {
     doc, setDoc,
-    updateTextById, updateSectionTitle, updateFigureCaption,
+    updateTextById, updateRichText, updateSectionTitle, updateFigureCaption,
     updateMathItem, deleteMathItem, setFootnoteText, removeFootnote,
     updateListItem, addListItem, deleteListItem, setListStyle,
     addSectionAfter, updateFigureWidth,
@@ -196,6 +195,8 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
     moveSection, moveSubsection
   } = useDocument(initialDoc);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Which sidebar tab is showing (Typography controls vs the Blox palette).
+  const [sidebarTab, setSidebarTab] = useState<"typography" | "blox">("typography");
   // While true, the next click on a paragraph word attaches a footnote there.
   const [pendingFootnote, setPendingFootnote] = useState(false);
   const [documentTitle, setDocumentTitle] = useState(template.title);
@@ -258,7 +259,7 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
   const contentHeight = layout.pageHeight - layout.padTop - layout.padBottom;
 
   const rendererProps = {
-    editingId, setEditingId, updateTextById, updateSectionTitle,
+    editingId, setEditingId, updateTextById, updateRichText, updateSectionTitle,
     addSubsection, addSubsubsection, updateTableCell,
     deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
     addTableColumn, updateTableColWidths, addSectionAfter,
@@ -412,6 +413,15 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
   }, [pendingFootnote]);
 
   const hasAbstract = (doc.children ?? []).some((c: any) => c.type === "abstract");
+
+  // Bold / italic / underline the current text selection. The button's pointer
+  // press is prevented from stealing focus, so the selection stays live inside
+  // the contentEditable paragraph and execCommand applies there; the resulting
+  // input event then persists the formatting (as marks) through the paragraph.
+  function applyInlineFormat(cmd: "bold" | "italic" | "underline") {
+    try { document.execCommand("styleWithCSS", false, "false"); } catch { /* ignore */ }
+    document.execCommand(cmd);
+  }
 
   // -----------------------------
   // DND SENSORS
@@ -703,84 +713,150 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
               "transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease"
           }}
         >
-          <Collapsible title="Typography">
-            <NumberControl
-              label="Text Width"
-              value={layout.textWidth}
-              min={Math.min(200, contentWidth)}
-              max={contentWidth}
-              step={1}
-              unit="px"
-              onChange={(v) => setLayout({ ...layout, textWidth: v })}
-            />
+          {/* Tab strip: Typography controls vs the Blox palette. */}
+          <div style={{ display: "flex", gap: 4, background: "rgba(0,0,0,0.05)", borderRadius: 10, padding: 3 }}>
+            {(["typography", "blox"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setSidebarTab(t)}
+                style={{
+                  flex: 1,
+                  padding: "7px 0",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  border: "none",
+                  textTransform: "capitalize",
+                  fontFamily: "var(--ui-font)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: sidebarTab === t ? "var(--text)" : "#8a8a8e",
+                  background: sidebarTab === t ? "#fff" : "transparent",
+                  boxShadow: sidebarTab === t ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                  transition: "background 0.15s ease, color 0.15s ease"
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
 
-            <NumberControl
-              label="Line Spacing"
-              value={layout.lineHeight}
-              min={1}
-              max={2.5}
-              step={0.1}
-              onChange={(v) => setLayout({ ...layout, lineHeight: v })}
-            />
+          {sidebarTab === "typography" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <NumberControl
+                label="Text Width"
+                value={layout.textWidth}
+                min={Math.min(200, contentWidth)}
+                max={contentWidth}
+                step={1}
+                unit="px"
+                onChange={(v) => setLayout({ ...layout, textWidth: v })}
+              />
 
-            <NumberControl
-              label="Font Size"
-              value={layout.fontSize}
-              min={8}
-              max={28}
-              step={1}
-              unit="px"
-              onChange={(v) => setLayout({ ...layout, fontSize: v })}
-            />
+              <NumberControl
+                label="Line Spacing"
+                value={layout.lineHeight}
+                min={1}
+                max={2.5}
+                step={0.1}
+                onChange={(v) => setLayout({ ...layout, lineHeight: v })}
+              />
 
-            <div>
-              <label>Layout</label>
-              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                {[1, 2].map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setLayout({ ...layout, columns: c })}
-                    title={c === 1 ? "One column" : "Two columns"}
-                    style={{
-                      padding: 7,
-                      lineHeight: 0,
-                      cursor: "pointer",
-                      borderRadius: 10,
-                      color: "#444",
-                      transition: "border-color 0.15s ease, background 0.15s ease",
-                      border:
-                        layout.columns === c
-                          ? "2px solid var(--ui-blue)"
-                          : "1px solid rgba(0,0,0,0.12)",
-                      background:
-                        layout.columns === c ? "rgba(0,113,227,0.08)" : "rgba(255,255,255,0.7)"
-                    }}
-                  >
-                    <LayoutIcon columns={c} />
-                  </button>
+              <NumberControl
+                label="Font Size"
+                value={layout.fontSize}
+                min={8}
+                max={28}
+                step={1}
+                unit="px"
+                onChange={(v) => setLayout({ ...layout, fontSize: v })}
+              />
+
+              <div>
+                <label>Layout</label>
+                <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center" }}>
+                  {[1, 2].map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setLayout({ ...layout, columns: c })}
+                      title={c === 1 ? "One column" : "Two columns"}
+                      style={{
+                        padding: 7,
+                        lineHeight: 0,
+                        cursor: "pointer",
+                        borderRadius: 10,
+                        color: "#444",
+                        transition: "border-color 0.15s ease, background 0.15s ease",
+                        border:
+                          layout.columns === c
+                            ? "2px solid var(--ui-blue)"
+                            : "1px solid rgba(0,0,0,0.12)",
+                        background:
+                          layout.columns === c ? "rgba(0,113,227,0.08)" : "rgba(255,255,255,0.7)"
+                      }}
+                    >
+                      <LayoutIcon columns={c} />
+                    </button>
+                  ))}
+
+                  {/* divider before the text-format buttons */}
+                  <span style={{ width: 1, height: 26, background: "rgba(0,0,0,0.12)", margin: "0 2px" }} />
+
+                  {/* Select text in a paragraph, then click to format it. */}
+                  {([
+                    { cmd: "bold" as const, label: "Bold", glyph: "B", css: { fontWeight: 700 } },
+                    { cmd: "italic" as const, label: "Italic", glyph: "I", css: { fontStyle: "italic" } },
+                    { cmd: "underline" as const, label: "Underline", glyph: "U", css: { textDecoration: "underline" } }
+                  ]).map(({ cmd, label, glyph, css }) => (
+                    <button
+                      key={cmd}
+                      title={label}
+                      aria-label={label}
+                      // Keep the paragraph selection alive (don't take focus).
+                      onMouseDown={(e) => { e.preventDefault(); applyInlineFormat(cmd); }}
+                      style={{
+                        width: 34,
+                        height: 34,
+                        padding: 0,
+                        cursor: "pointer",
+                        borderRadius: 10,
+                        border: "1px solid rgba(0,0,0,0.12)",
+                        background: "rgba(255,255,255,0.7)",
+                        color: "#333",
+                        fontFamily: "var(--sans)",
+                        fontSize: 16,
+                        lineHeight: 0,
+                        transition: "border-color 0.15s ease, background 0.15s ease",
+                        ...css
+                      }}
+                    >
+                      {glyph}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {sidebarTab === "blox" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {BLOX_ORDER
+                  .filter((id) => id !== "block::abstract" || !hasAbstract)
+                  .map((id) => (
+                    <DraggableBlock key={id} id={id} />
+                  ))}
+              </div>
+
+              <div style={{ fontWeight: 600, fontSize: 13, marginTop: 4, color: "#555" }}>
+                Pages
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {PAGE_ORDER.map((id) => (
+                  <DraggableBlock key={id} id={id} />
                 ))}
               </div>
             </div>
-          </Collapsible>
-
-          <Collapsible title="Blox">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {BLOX_ORDER
-                .filter((id) => id !== "block::abstract" || !hasAbstract)
-                .map((id) => (
-                  <DraggableBlock key={id} id={id} />
-                ))}
-            </div>
-
-            <div style={{ fontWeight: 600, fontSize: 13, marginTop: 4, color: "#555" }}>
-              Pages
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {PAGE_ORDER.map((id) => (
-                <DraggableBlock key={id} id={id} />
-              ))}
-            </div>
-          </Collapsible>
+          )}
 
           <div style={{ marginTop: "auto" }}>
             <hr style={{ border: "none", borderTop: "1px solid rgba(0,0,0,0.08)", margin: "12px 0" }} />

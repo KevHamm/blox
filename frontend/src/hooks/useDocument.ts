@@ -53,6 +53,21 @@ export function useDocument(initial?: DocumentNode) {
     setDoc((prev) => update(prev));
   }
 
+  // Update a paragraph's text together with its inline formatting marks.
+  function updateRichText(id: string, value: string, marks: any[]) {
+    function update(node: any): any {
+      if (node.id === id && node.type === "paragraph") {
+        const next: any = { ...node, text: value };
+        if (marks && marks.length) next.marks = marks;
+        else delete next.marks;
+        return next;
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
+    setDoc((prev) => update(prev));
+  }
+
   // -----------------------------
   // UPDATE TITLES
   // -----------------------------
@@ -627,6 +642,7 @@ export function useDocument(initial?: DocumentNode) {
     doc,
     setDoc,
     updateTextById,
+    updateRichText,
     updateSectionTitle,
     updateFigureCaption,
     updateMathItem,

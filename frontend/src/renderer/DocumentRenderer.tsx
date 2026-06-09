@@ -1,6 +1,8 @@
 import { Fragment, useRef, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { Chunk } from "../utils/paginateDocument";
 import { isContainerType } from "../utils/paginateDocument";
+import type { Mark, Fmt } from "../utils/marks";
+import { formatAt, sliceMarks, spliceMarks, normalizeMarks, marksEqual } from "../utils/marks";
 import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
 import { TrashIcon } from "../components/TrashIcon";
 import "mathlive";
@@ -360,43 +362,114 @@ function splitTrailingPunct(tok: string): [string, string] {
   return [tok.slice(0, tok.length - punct.length), punct];
 }
 
-// Render the paragraph body as HTML: plain (escaped) text with non-editable
-// superscript footnote markers inserted after their target word (but before any
-// trailing punctuation on that word).
+// Opening / closing tags for a format set. Always nested in the same order so
+// runs can be closed and reopened cleanly at any boundary.
+const fmtOpen = (f: Fmt) => (f.b ? "<b>" : "") + (f.i ? "<i>" : "") + (f.u ? "<u>" : "");
+const fmtClose = (f: Fmt) => (f.u ? "</u>" : "") + (f.i ? "</i>" : "") + (f.b ? "</b>" : "");
+
+// Render the paragraph body as HTML: escaped text wrapped in b/i/u runs from
+// `marks`, with non-editable superscript footnote markers inserted after their
+// target word (but before any trailing punctuation on that word).
 function buildParagraphHtml(
   text: string,
   footnotes: any[],
-  footnoteNumbers: Record<string, number> | undefined
+  footnoteNumbers: Record<string, number> | undefined,
+  marks: Mark[] = []
 ): string {
-  if (!footnotes.length) return escapeHtml(text);
-  const tokens = text.split(/(\s+)/);
-  let wordIdx = -1;
-  let html = "";
-  for (const tok of tokens) {
-    if (tok === "") continue;
-    if (/^\s+$/.test(tok)) { html += escapeHtml(tok); continue; }
-    wordIdx++;
-    const fns = footnotes.filter((f) => f.word === wordIdx);
-    if (!fns.length) { html += escapeHtml(tok); continue; }
-    const [core, punct] = splitTrailingPunct(tok);
-    html += escapeHtml(core);
-    fns.forEach((f) => {
-      html +=
-        `<sup data-fn="${f.id}" contenteditable="false" ` +
-        `style="font-size:0.7em;vertical-align:super;">${footnoteNumbers?.[f.id] ?? 0}</sup>`;
-    });
-    html += escapeHtml(punct);
+  // Footnote markers keyed by the character offset they sit at (end of the
+  // word's core).
+  const fnAt = new Map<number, any[]>();
+  if (footnotes.length) {
+    let pos = 0, wordIdx = -1;
+    for (const tok of text.split(/(\s+)/)) {
+      if (tok === "") continue;
+      if (/^\s+$/.test(tok)) { pos += tok.length; continue; }
+      wordIdx++;
+      const fns = footnotes.filter((f) => f.word === wordIdx);
+      if (fns.length) {
+        const [core] = splitTrailingPunct(tok);
+        const at = pos + core.length;
+        fnAt.set(at, (fnAt.get(at) ?? []).concat(fns));
+      }
+      pos += tok.length;
+    }
   }
+
+  // Nothing to decorate → the original fast path.
+  if (!marks.length && fnAt.size === 0) return escapeHtml(text);
+
+  let html = "";
+  let cur: Fmt = { b: false, i: false, u: false };
+  for (let p = 0; p <= text.length; p++) {
+    const fns = fnAt.get(p);
+    if (fns) {
+      // Footnote markers sit outside any format run.
+      html += fmtClose(cur);
+      cur = { b: false, i: false, u: false };
+      for (const f of fns)
+        html +=
+          `<sup data-fn="${f.id}" contenteditable="false" ` +
+          `style="font-size:0.7em;vertical-align:super;">${footnoteNumbers?.[f.id] ?? 0}</sup>`;
+    }
+    if (p === text.length) break;
+    const f = formatAt(marks, p);
+    if (f.b !== cur.b || f.i !== cur.i || f.u !== cur.u) { html += fmtClose(cur); cur = f; html += fmtOpen(cur); }
+    html += escapeHtml(text[p]);
+  }
+  html += fmtClose(cur);
   return html;
 }
 
-// Read the plain text back out of the contentEditable, dropping footnote
-// markers and turning <br> into newlines.
-function readEditableText(el: HTMLElement): string {
-  const clone = el.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll("[data-fn]").forEach((n) => n.remove());
-  clone.querySelectorAll("br").forEach((br) => br.replaceWith(document.createTextNode("\n")));
-  return clone.textContent ?? "";
+// Read the contentEditable back out as plain text plus formatting marks: footnote
+// markers are dropped, <br> becomes a newline, and each text node's b/i/u state
+// (from its ancestor tags / inline styles) becomes a mark range.
+function readEditableRich(el: HTMLElement): { text: string; marks: Mark[] } {
+  let text = "";
+  const runs: Mark[] = [];
+
+  const fmtOfNode = (node: Node | null): Fmt => {
+    let b = false, i = false, u = false;
+    let n: Node | null = node;
+    while (n && n !== el) {
+      if (n.nodeType === 1) {
+        const e = n as HTMLElement;
+        const tag = e.nodeName;
+        if (tag === "B" || tag === "STRONG") b = true;
+        if (tag === "I" || tag === "EM") i = true;
+        if (tag === "U") u = true;
+        const st = e.style;
+        if (st) {
+          const fw = st.fontWeight;
+          if (fw === "bold" || fw === "bolder" || parseInt(fw, 10) >= 600) b = true;
+          if (st.fontStyle === "italic") i = true;
+          const td = st.textDecoration || (st as any).textDecorationLine || "";
+          if (td.includes("underline")) u = true;
+        }
+      }
+      n = n.parentNode;
+    }
+    return { b, i, u };
+  };
+
+  const walk = (node: Node) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3) {
+        const t = child.textContent ?? "";
+        if (!t) continue;
+        const f = fmtOfNode(child.parentNode);
+        const s = text.length;
+        text += t;
+        runs.push({ start: s, end: text.length, b: f.b, i: f.i, u: f.u });
+      } else if (child.nodeType === 1) {
+        const e = child as HTMLElement;
+        if (e.hasAttribute("data-fn")) continue;          // footnote marker isn't text
+        if (e.nodeName === "BR") { text += "\n"; continue; }
+        walk(e);
+      }
+    }
+  };
+  walk(el);
+  return { text, marks: normalizeMarks(runs) };
 }
 
 // A small superscript footnote marker (used in the footnote word-picker view).
@@ -427,13 +500,14 @@ function getCaretOffset(el: HTMLElement): number {
 // text and the caret is restored from a recorded full-text offset, so a slice
 // never shows more than its share (which would duplicate it across pages).
 function EditableParagraph({
-  node, updateTextById, onTyping, onCaret,
+  node, updateRichText, onTyping, onCaret,
   lineHeight, fontSize, firstChild, footnoteNumbers,
   sliceStart, sliceEnd, blockParagraphs
 }: any) {
   const ref = useRef<HTMLParagraphElement>(null);
   const text: string = node.text ?? "";
   const footnotes: any[] = node.footnotes ?? [];
+  const marks: Mark[] = node.marks ?? [];
 
   const start: number = sliceStart ?? 0;
   const end: number = sliceEnd ?? text.length;
@@ -441,8 +515,10 @@ function EditableParagraph({
   const sliceText = isSlice ? text.slice(start, end) : text;
 
   const html = useMemo(
-    () => (isSlice ? escapeHtml(sliceText) : buildParagraphHtml(text, footnotes, footnoteNumbers)),
-    [text, sliceText, isSlice, footnotes, footnoteNumbers]
+    () => (isSlice
+      ? buildParagraphHtml(sliceText, [], footnoteNumbers, sliceMarks(marks, start, end))
+      : buildParagraphHtml(text, footnotes, footnoteNumbers, marks)),
+    [text, sliceText, isSlice, footnotes, footnoteNumbers, marks, start, end]
   );
 
   // Always keep the DOM equal to this slice's content. The caret is collapsed by
@@ -457,11 +533,15 @@ function EditableParagraph({
   const onInput = () => {
     const el = ref.current;
     if (!el) return;
-    const domText = readEditableText(el);
+    // Reconstruct this slice's plain text and its formatting, then splice both
+    // back into the whole node (so b/i/u applied to a selection persists, and a
+    // page-split paragraph keeps its formatting too).
+    const { text: domText, marks: sliceRuns } = readEditableRich(el);
     const full = text.slice(0, start) + domText + text.slice(end);
+    const nextMarks = spliceMarks(marks, start, end, sliceRuns, domText.length);
     onCaret?.(node.id, start + getCaretOffset(el));
     onTyping?.(node.id);
-    if (full !== text) updateTextById(node.id, full);
+    if (full !== text || !marksEqual(marks, nextMarks)) updateRichText(node.id, full, nextMarks);
   };
 
   // LaTeX letter class is block-style: no first-line indent. Other classes
