@@ -257,6 +257,21 @@ math-field::part(menu-toggle) {
   opacity: 1;
 }
 
+/* Controls (move / delete) that only appear while their block is hovered. */
+.hover-tools {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.hover-target:hover .hover-tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Don't double-fade the buttons inside — visibility is gated by the wrapper. */
+.hover-tools button {
+  opacity: 1;
+}
+
 /* Faint placeholder for empty section / title fields, so an unnamed heading
    stays visible. */
 .heading-input::placeholder {

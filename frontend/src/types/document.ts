@@ -15,6 +15,7 @@ export interface DocumentNode {
     | "subsubsection"
     | "paragraph"
     | "abstract"
+    | "list"
     | "table"
     | "figure"
     | "math";
@@ -32,5 +33,7 @@ export interface DocumentNode {
   sectionNumber?: number;
   numberLabel?: string;
   footnotes?: { id: string; word: number; text: string }[];
+  listStyle?: "dash" | "dot" | "number";
+  items?: { id: string; text?: string; latex?: string }[];
   children?: DocumentNode[];
 }

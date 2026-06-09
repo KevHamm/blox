@@ -149,6 +149,54 @@ export const newAbstract = (): DocumentNode => ({
   text: "Write a short summary of the document here."
 });
 
+// A list (LaTeX itemize / enumerate). `listStyle` picks the marker.
+export const newList = (): DocumentNode => ({
+  id: crypto.randomUUID(),
+  type: "list" as any,
+  listStyle: "dot",
+  items: [
+    { id: crypto.randomUUID(), text: "First item" },
+    { id: crypto.randomUUID(), text: "Second item" }
+  ]
+});
+
+/* ---- list edits ---- */
+export function updateListItemTree(node: any, listId: string, itemId: string, text: string): any {
+  if (node.type === "list" && node.id === listId) {
+    return { ...node, items: (node.items ?? []).map((it: any) => (it.id === itemId ? { ...it, text } : it)) };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => updateListItemTree(c, listId, itemId, text)) };
+}
+
+// Insert a new empty item after `afterId` (or at the end when null).
+export function addListItemTree(node: any, listId: string, afterId: string | null, newId: string): any {
+  if (node.type === "list" && node.id === listId) {
+    const items = [...(node.items ?? [])];
+    const idx = afterId ? items.findIndex((it: any) => it.id === afterId) : items.length - 1;
+    items.splice(idx + 1, 0, { id: newId, text: "" });
+    return { ...node, items };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => addListItemTree(c, listId, afterId, newId)) };
+}
+
+// Remove an item; a list always keeps at least one.
+export function deleteListItemTree(node: any, listId: string, itemId: string): any {
+  if (node.type === "list" && node.id === listId) {
+    const items = (node.items ?? []).filter((it: any) => it.id !== itemId);
+    return { ...node, items: items.length ? items : node.items };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => deleteListItemTree(c, listId, itemId)) };
+}
+
+export function setListStyleTree(node: any, listId: string, style: "dash" | "dot" | "number"): any {
+  if (node.type === "list" && node.id === listId) return { ...node, listStyle: style };
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => setListStyleTree(c, listId, style)) };
+}
+
 // Document ordering: cover page → table of contents → abstract → sections →
 // bibliography.
 export const pageRank = (node: any): number => {

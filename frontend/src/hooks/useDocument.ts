@@ -9,7 +9,11 @@ import {
   updateMathItemTree,
   deleteMathItemTree,
   updateFootnoteText,
-  deleteFootnote
+  deleteFootnote,
+  updateListItemTree,
+  addListItemTree,
+  deleteListItemTree,
+  setListStyleTree
 } from "../utils/docTree";
 
 const lorem =
@@ -106,6 +110,20 @@ export function useDocument() {
   }
   function removeFootnote(paragraphId: string, footnoteId: string) {
     setDoc((prev) => deleteFootnote(prev, paragraphId, footnoteId));
+  }
+
+  // List item edits.
+  function updateListItem(listId: string, itemId: string, text: string) {
+    setDoc((prev) => updateListItemTree(prev, listId, itemId, text));
+  }
+  function addListItem(listId: string, afterId: string | null, newId: string) {
+    setDoc((prev) => addListItemTree(prev, listId, afterId, newId));
+  }
+  function deleteListItem(listId: string, itemId: string) {
+    setDoc((prev) => deleteListItemTree(prev, listId, itemId));
+  }
+  function setListStyle(listId: string, style: "dash" | "dot" | "number") {
+    setDoc((prev) => setListStyleTree(prev, listId, style));
   }
 
   // -----------------------------
@@ -609,6 +627,10 @@ export function useDocument() {
     deleteMathItem,
     setFootnoteText,
     removeFootnote,
+    updateListItem,
+    addListItem,
+    deleteListItem,
+    setListStyle,
     addSectionAfter,
     updateFigureWidth,
     deleteFigureImage,

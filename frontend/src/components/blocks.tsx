@@ -7,6 +7,7 @@ import {
   newSubsubsection,
   newPage,
   newAbstract,
+  newList,
   mathNode,
   MATH_TEMPLATES
 } from "../utils/docTree";
@@ -122,6 +123,20 @@ export function AbstractGlyph() {
   );
 }
 
+// A bulleted-list glyph.
+export function ListGlyph() {
+  return (
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <circle cx="5" cy="7" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="17" r="1.3" fill="currentColor" stroke="none" />
+      <line x1="9" y1="7" x2="20" y2="7" />
+      <line x1="9" y1="12" x2="20" y2="12" />
+      <line x1="9" y1="17" x2="20" y2="17" />
+    </svg>
+  );
+}
+
 // A footnote glyph: a text line with a superscript marker and a rule + note.
 export function FootnoteGlyph() {
   return (
@@ -147,6 +162,7 @@ export const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: 
   "block::subsubsection": { label: "Subsubsection", icon: () => <HeadingGlyph level={3} />, make: () => newSubsubsection() },
   "block::abstract":      { label: "Abstract",      icon: () => <AbstractGlyph />,          make: () => newAbstract() },
   "block::footnote":      { label: "Footnote",      icon: () => <FootnoteGlyph />,          make: () => null },
+  "block::list":          { label: "List",          icon: () => <ListGlyph />,              make: () => newList() },
   "block::table": {
     label: "Table",
     icon: () => <TableGlyph />,
@@ -183,6 +199,7 @@ export const BLOX_ORDER = [
   "block::subsubsection",
   "block::abstract",
   "block::footnote",
+  "block::list",
   "block::table",
   "block::math::integral",
   "block::math::sum",

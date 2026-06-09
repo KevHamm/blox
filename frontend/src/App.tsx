@@ -111,6 +111,7 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     doc, setDoc,
     updateTextById, updateSectionTitle, updateFigureCaption,
     updateMathItem, deleteMathItem, setFootnoteText, removeFootnote,
+    updateListItem, addListItem, deleteListItem, setListStyle,
     addSectionAfter, updateFigureWidth,
     deleteFigureImage, addSubsection, addSubsubsection, updateTableCell,
     deleteNodeById, addTableRow, deleteTableRow, deleteTableRowAt,
@@ -136,9 +137,10 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
 
 
-  // article-class defaults: 10pt Computer Modern, 1.2 leading, ~66-char measure.
+  // article-class defaults: 10pt Computer Modern, 1.2 leading, and a text block
+  // that fills exactly between the article margins (≈ 345pt / 66 chars).
   const [layout, setLayout] = useState({
-    textWidth: 460,
+    textWidth: CONTENT_WIDTH,
     lineHeight: 1.2,
     columns: 1,
     fontSize: 13
@@ -155,6 +157,7 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
     deleteFigureImage, updateMathItem, deleteMathItem,
+    updateListItem, addListItem, deleteListItem, setListStyle,
   };
 
   // ── 2. Derived values ───────────────────────────────────
