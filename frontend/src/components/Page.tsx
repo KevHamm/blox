@@ -10,26 +10,42 @@ import {
 interface PageProps {
   children: React.ReactNode;
   pageNumber: number;
+  // Page geometry (defaults to the article / US-Letter constants).
+  width?: number;
+  height?: number;
+  padTop?: number;
+  padBottom?: number;
+  padLeft?: number;
+  padRight?: number;
 }
 
-export function Page({ children, pageNumber }: PageProps) {
+export function Page({
+  children,
+  pageNumber,
+  width = PAGE_WIDTH,
+  height = PAGE_HEIGHT,
+  padTop = PAGE_PADDING_TOP,
+  padBottom = PAGE_PADDING_BOTTOM,
+  padLeft = PAGE_PADDING_LEFT,
+  padRight = PAGE_PADDING_RIGHT
+}: PageProps) {
   return (
     <div
       className="blox-page"
       style={{
         position: "relative",
-        width: PAGE_WIDTH,
+        width,
         // Fixed height — a page never grows; overflowing content is paginated
         // onto the next page instead.
-        height: PAGE_HEIGHT,
+        height,
         background: "white",
         borderRadius: 6,
         boxShadow: "0 12px 40px rgba(20, 20, 50, 0.10), 0 2px 6px rgba(20, 20, 50, 0.06)",
         marginBottom: 44,
-        paddingTop: PAGE_PADDING_TOP,
-        paddingBottom: PAGE_PADDING_BOTTOM,
-        paddingLeft: PAGE_PADDING_LEFT,
-        paddingRight: PAGE_PADDING_RIGHT,
+        paddingTop: padTop,
+        paddingBottom: padBottom,
+        paddingLeft: padLeft,
+        paddingRight: padRight,
         boxSizing: "border-box",
         textAlign: "left",
         color: "var(--text)",
@@ -42,7 +58,7 @@ export function Page({ children, pageNumber }: PageProps) {
       <div
         style={{
           position: "absolute",
-          bottom: 48,
+          bottom: Math.max(16, padBottom - 72),
           left: 0,
           right: 0,
           textAlign: "center",

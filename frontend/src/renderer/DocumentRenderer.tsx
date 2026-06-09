@@ -429,7 +429,7 @@ function getCaretOffset(el: HTMLElement): number {
 function EditableParagraph({
   node, updateTextById, onTyping, onCaret,
   lineHeight, fontSize, firstChild, footnoteNumbers,
-  sliceStart, sliceEnd
+  sliceStart, sliceEnd, blockParagraphs
 }: any) {
   const ref = useRef<HTMLParagraphElement>(null);
   const text: string = node.text ?? "";
@@ -464,7 +464,9 @@ function EditableParagraph({
     if (full !== text) updateTextById(node.id, full);
   };
 
-  const indent = firstChild || start > 0 ? 0 : "1.5em";
+  // LaTeX letter class is block-style: no first-line indent. Other classes
+  // indent every paragraph except the first (or a split continuation).
+  const indent = blockParagraphs ? 0 : firstChild || start > 0 ? 0 : "1.5em";
 
   return (
     <p
@@ -503,7 +505,7 @@ function EditableParagraph({
 }
 
 function Paragraph(props: any) {
-  const { node, lineHeight, fontSize, firstChild = false, pendingFootnote = false, onWordClick, footnoteNumbers } = props;
+  const { node, lineHeight, fontSize, firstChild = false, pendingFootnote = false, onWordClick, footnoteNumbers, blockParagraphs = false } = props;
 
   // Footnote "pick a word" mode: a read-only view where each word is clickable.
   if (pendingFootnote) {
@@ -535,7 +537,7 @@ function Paragraph(props: any) {
           hyphens: "auto",
           WebkitHyphens: "auto",
           whiteSpace: "pre-wrap",
-          textIndent: firstChild ? 0 : "1.5em",
+          textIndent: blockParagraphs ? 0 : firstChild ? 0 : "1.5em",
           lineHeight,
           fontSize
         }}
@@ -1819,8 +1821,73 @@ function ListBlock({
   );
 }
 
+/* -----------------------------
+   FRAME (beamer slide) — one frame == one page. The page padding already
+   supplies the slide's content margins; the frame fills that area and never
+   spills onto the next slide.
+----------------------------- */
+const BEAMER_BLUE = "#3b4ba0";
+
+function FrameBlock({
+  node, updateSectionTitle, deleteNodeById, moveSection,
+  fontSize = 21, children
+}: any) {
+  // The title slide: everything centered in the middle of the slide.
+  if (node.frameVariant === "title") {
+    return (
+      <div className="hover-target" style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: fontSize }}>
+        <div className="hover-tools" style={{ position: "absolute", top: 0, right: 0, display: "flex", gap: 4 }}>
+          <TrashButton onClick={() => deleteNodeById(node.id)} label="Delete slide" />
+        </div>
+        <div style={{ width: "100%" }}>
+          <HeadingInput
+            value={node.title}
+            onChange={(v: string) => updateSectionTitle(node.id, v)}
+            style={{ ...headingStyle(fontSize, 1.7), color: BEAMER_BLUE, textAlign: "center" }}
+            ariaLabel="Presentation title"
+            placeholder="Presentation Title"
+          />
+        </div>
+        <div style={{ width: "80%" }}>{children}</div>
+      </div>
+    );
+  }
+
+  // A normal slide: a coloured frametitle and a rule, then the body.
+  return (
+    <div className="hover-target" style={{ position: "relative", height: "100%" }}>
+      <div data-head-id={node.id} style={{ marginBottom: fontSize * 0.7 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <HeadingInput
+            value={node.title}
+            onChange={(v: string) => updateSectionTitle(node.id, v)}
+            style={{ ...headingStyle(fontSize, 1.3), color: BEAMER_BLUE }}
+            ariaLabel="Frame title"
+            placeholder="Frame title"
+          />
+          <div className="hover-tools" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <ChevronButton dir={-1} title="Move slide up" onClick={() => moveSection(node.id, -1)} />
+            <ChevronButton dir={1} title="Move slide down" onClick={() => moveSection(node.id, 1)} />
+            <TrashButton onClick={() => deleteNodeById(node.id)} label="Delete slide" />
+          </div>
+        </div>
+        <div style={{ height: 2, background: BEAMER_BLUE, opacity: 0.3, marginTop: fontSize * 0.25 }} />
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function renderChunk(chunk: Chunk, props: any, firstChild = false): any {
   const node = chunk.node;
+
+  if (node.type === "frame") {
+    return (
+      <FrameBlock node={node} {...props}>
+        {containerInner(chunk, props)}
+      </FrameBlock>
+    );
+  }
 
   if (node.type === "paragraph") {
     // A split paragraph renders as several slice pieces; only the whole-node
@@ -1828,8 +1895,14 @@ function renderChunk(chunk: Chunk, props: any, firstChild = false): any {
     const sliceProps = chunk.slice
       ? { sliceStart: chunk.slice.start, sliceEnd: chunk.slice.end }
       : {};
+    // Block-style (letter) paragraphs are separated by vertical space instead of
+    // an indent. The gap lives on the wrapper. It leads every paragraph except
+    // the first; a split continuation (slice starting mid-paragraph) gets none.
+    const atParaStart = !chunk.slice || chunk.slice.start === 0;
+    const blockGap =
+      props.blockParagraphs && !firstChild && atParaStart ? (props.fontSize ?? 13) * 0.9 : 0;
     return (
-      <div {...(chunk.slice ? {} : { "data-leaf-id": node.id })}>
+      <div {...(chunk.slice ? {} : { "data-leaf-id": node.id })} style={blockGap ? { paddingTop: blockGap } : undefined}>
         <Paragraph node={node} {...props} firstChild={firstChild} {...sliceProps} />
       </div>
     );
@@ -1907,7 +1980,7 @@ export function DocumentRenderer(props: any) {
     <div ref={setNodeRef}>
       {column.map((chunk, i) => (
         <Fragment key={`${chunk.node.id}-${i}`}>
-          {renderChunk(chunk, props)}
+          {renderChunk(chunk, props, i === 0)}
         </Fragment>
       ))}
     </div>

@@ -13,6 +13,7 @@ export interface DocumentNode {
     | "section"
     | "subsection"
     | "subsubsection"
+    | "frame"
     | "paragraph"
     | "abstract"
     | "list"
@@ -39,5 +40,8 @@ export interface DocumentNode {
   footnotes?: { id: string; word: number; text: string }[];
   listStyle?: "dash" | "dot" | "number";
   items?: { id: string; text?: string; latex?: string }[];
+  // beamer slide (frame). "title" renders the centered title slide; otherwise a
+  // normal frame with a frametitle bar.
+  frameVariant?: "title" | "content";
   children?: DocumentNode[];
 }

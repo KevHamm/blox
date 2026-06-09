@@ -27,6 +27,9 @@ export type LineData = Record<string, LineInfo[]>;
 
 const CONTAINERS = new Set(["section", "subsection", "subsubsection"]);
 export const isContainerType = (t: string) => CONTAINERS.has(t);
+// A beamer frame holds children like a container, but it is never split: each
+// frame is laid out as exactly one page (one slide).
+export const isFrameType = (t: string) => t === "frame";
 
 function heightsUnchanged(
   prev: Record<string, number>,
@@ -44,7 +47,7 @@ export function fullChunk(node: any): Chunk {
     node,
     header: true,
     isLast: true,
-    children: isContainerType(node.type)
+    children: isContainerType(node.type) || isFrameType(node.type)
       ? (node.children ?? []).map(fullChunk)
       : []
   };
@@ -60,6 +63,7 @@ function paginateRun(
   leafHeights:   Record<string, number>,
   headerHeights: Record<string, number>,
   lineData:      LineData,
+  contentHeight: number,
   titleReserved: number,
   columnsPerPage: number
 ): DocPage[] {
@@ -69,7 +73,7 @@ function paginateRun(
   let stack: Chunk[] = [];   // open container chunks (root → deepest) in this column
 
   const capacityOf = (idx: number) =>
-    CONTENT_HEIGHT - (idx < columnsPerPage ? titleReserved : 0);
+    contentHeight - (idx < columnsPerPage ? titleReserved : 0);
   const capacity = () => capacityOf(columns.length - 1);
 
   const headerH = (node: any) => headerHeights[node.id] ?? 40;
@@ -180,6 +184,7 @@ export function paginateColumns(
   leafHeights:   Record<string, number>,
   headerHeights: Record<string, number>,
   lineData:      LineData = {},
+  contentHeight  = CONTENT_HEIGHT,
   titleReserved  = 0,
   columnsPerPage = 1
 ): DocPage[] {
@@ -203,7 +208,26 @@ export function paginateColumns(
   // The document body is always present — at least one page, even when empty —
   // so a cover page always pushes the body to the next page. The body's first
   // page carries the document title, so it reserves room for it.
-  out.push(...paginateRun(content, leafHeights, headerHeights, lineData, titleReserved, columnsPerPage));
+  //
+  // Beamer frames each occupy their own page (one slide), so they never split
+  // and never spill onto the next slide. Any non-frame content between frames
+  // still flows normally.
+  if (content.some((c: any) => isFrameType(c.type))) {
+    let run: any[] = [];
+    const flush = () => {
+      if (run.length) {
+        out.push(...paginateRun(run, leafHeights, headerHeights, lineData, contentHeight, titleReserved, columnsPerPage));
+        run = [];
+      }
+    };
+    for (const node of content) {
+      if (isFrameType(node.type)) { flush(); out.push([[fullChunk(node)]]); }
+      else run.push(node);
+    }
+    flush();
+  } else {
+    out.push(...paginateRun(content, leafHeights, headerHeights, lineData, contentHeight, titleReserved, columnsPerPage));
+  }
 
   for (const node of after) {
     out.push([[fullChunk(node)]]);

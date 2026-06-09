@@ -31,8 +31,8 @@ const lorem_full = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed
  * `doc` to render plus a stable set of editing handlers; drag-and-drop logic
  * that needs raw `setDoc` access still gets it back too.
  */
-export function useDocument() {
-  const [doc, setDoc] = useState<DocumentNode>(sampleDocument);
+export function useDocument(initial?: DocumentNode) {
+  const [doc, setDoc] = useState<DocumentNode>(() => initial ?? sampleDocument);
 
   // -----------------------------
   // UPDATE TEXT
@@ -60,7 +60,7 @@ export function useDocument() {
     function update(node: any): any {
       if (
         node.id === id &&
-        (node.type === "section" || node.type === "subsection")
+        (node.type === "section" || node.type === "subsection" || node.type === "frame")
       ) {
         return { ...node, title: value };
       }

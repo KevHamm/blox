@@ -20,11 +20,11 @@ import {
 import { getEventCoordinates } from "@dnd-kit/utilities";
 
 import {
-  CONTENT_WIDTH,
   COLUMN_GAP,
   PAGE_WIDTH,
   PAGE_HEIGHT
 } from "./utils/pageConfig";
+import { templateFor, templateDoc, type TemplateLayout } from "./utils/templates";
 import {
   findFigureNode,
   findDocImageSrc,
@@ -177,8 +177,10 @@ function placeCaretAt(el: HTMLElement, offset: number) {
   sel.addRange(range);
 }
 
-function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
+function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; template: TemplateLayout }) {
   // ── 1. All state first ──────────────────────────────────
+  // Starting content for the chosen class (article / report / letter / …).
+  const initialDoc = useMemo(() => templateDoc(template.cls), [template.cls]);
   // The document tree + every mutation handler live in this hook.
   const {
     doc, setDoc,
@@ -192,11 +194,11 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     updateTableCaption, updateTableColors, deleteTableColumn,
     toggleTableBorder, toggleCellBorder, reorderTableColumn, reorderTableRow,
     moveSection, moveSubsection
-  } = useDocument();
+  } = useDocument(initialDoc);
   const [editingId, setEditingId] = useState<string | null>(null);
   // While true, the next click on a paragraph word attaches a footnote there.
   const [pendingFootnote, setPendingFootnote] = useState(false);
-  const [documentTitle, setDocumentTitle] = useState("Untitled Document");
+  const [documentTitle, setDocumentTitle] = useState(template.title);
   // Measured heights: every flow leaf (paragraph/table/figure) and every
   // container header (section/subsection/subsubsection).
   const [leafHeights,   setLeafHeights]   = useState<Record<string, number>>({});
@@ -235,14 +237,25 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
   }
 
 
-  // article-class defaults: 10pt Computer Modern, 1.2 leading, and a text block
-  // that fills exactly between the article margins (≈ 345pt / 66 chars).
-  const [layout, setLayout] = useState({
-    textWidth: CONTENT_WIDTH,
-    lineHeight: 1.2,
-    columns: 1,
-    fontSize: 13
-  });
+  // Page layout, seeded from the chosen template (article / report / letter /
+  // beamer / book). Page geometry stays fixed; the typography controls edit the
+  // text settings.
+  const [layout, setLayout] = useState(() => ({
+    pageWidth: template.pageWidth,
+    pageHeight: template.pageHeight,
+    padTop: template.padTop,
+    padBottom: template.padBottom,
+    padLeft: template.padLeft,
+    padRight: template.padRight,
+    textWidth: template.textWidth,
+    lineHeight: template.lineHeight,
+    columns: template.columns,
+    fontSize: template.fontSize
+  }));
+
+  // Usable width/height between the page margins (derived from the layout).
+  const contentWidth = layout.pageWidth - layout.padLeft - layout.padRight;
+  const contentHeight = layout.pageHeight - layout.padTop - layout.padBottom;
 
   const rendererProps = {
     editingId, setEditingId, updateTextById, updateSectionTitle,
@@ -257,6 +270,8 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
     deleteFigureImage, updateMathItem, deleteMathItem,
     updateListItem, addListItem, deleteListItem, setListStyle,
     onTyping: setTyping, onCaret: setCaret,
+    // LaTeX letters are block-style: no first-line paragraph indent.
+    blockParagraphs: template.cls === "letter",
   };
 
   // ── 2. Derived values ───────────────────────────────────
@@ -274,10 +289,11 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
       leafHeights,
       headerHeights,
       lineData,
+      contentHeight,
       TITLE_RESERVED,
       layout.columns
     );
-  }, [numberedDoc, leafHeights, headerHeights, lineData, layout.columns]);
+  }, [numberedDoc, leafHeights, headerHeights, lineData, contentHeight, layout.columns]);
 
   // After a re-pagination, keep the cursor with the text it belongs to: if the
   // edited paragraph split and the caret's text moved to another page's slice,
@@ -691,8 +707,8 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
             <NumberControl
               label="Text Width"
               value={layout.textWidth}
-              min={300}
-              max={CONTENT_WIDTH}
+              min={Math.min(200, contentWidth)}
+              max={contentWidth}
               step={1}
               unit="px"
               onChange={(v) => setLayout({ ...layout, textWidth: v })}
@@ -783,11 +799,22 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
         {/* DOCUMENT */}
         <DroppableDocArea visible={sidebarsIn}>
                 {pages.map((cols: any[], pageIndex: number) => (
-                  <Page key={pageIndex} pageNumber={pageIndex + 1}>
+                  <Page
+                    key={pageIndex}
+                    pageNumber={pageIndex + 1}
+                    width={layout.pageWidth}
+                    height={layout.pageHeight}
+                    padTop={layout.padTop}
+                    padBottom={layout.padBottom}
+                    padLeft={layout.padLeft}
+                    padRight={layout.padRight}
+                  >
 
                     {/* Title sits on the body's first page (after any cover / TOC).
-                        \maketitle: \LARGE (1.728×) Computer Modern, centered. */}
-                    {pageIndex === titlePageIndex && (
+                        \maketitle: \LARGE (1.728×) Computer Modern, centered.
+                        Beamer slides carry their own frametitles, so the floating
+                        document title is suppressed there. */}
+                    {pageIndex === titlePageIndex && template.cls !== "beamer" && (
                       /* \maketitle: 2em above the \LARGE title, 1.5em below. */
                       <div style={{ textAlign: "center", marginTop: layout.fontSize * 2, marginBottom: layout.fontSize * 1.5 }}>
                         <HeadingInput
@@ -808,7 +835,7 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
                       // it further (widening the margins, LaTeX-style). Every page
                       // holds `layout.columns` equal-width columns; content has
                       // already been flowed left → right → next page.
-                      const blockWidth = Math.min(layout.textWidth, CONTENT_WIDTH);
+                      const blockWidth = Math.min(layout.textWidth, contentWidth);
 
                       return (
                         <div style={{ display: "flex", gap: COLUMN_GAP,
@@ -836,7 +863,7 @@ function Editor({ sidebarsIn = true }: { sidebarsIn?: boolean }) {
                       const fns = collectPageFootnotes(cols, footnoteNumbers);
                       if (!fns.length) return null;
                       return (
-                        <div style={{ marginTop: 20, width: Math.min(layout.textWidth, CONTENT_WIDTH), marginLeft: "auto", marginRight: "auto" }}>
+                        <div style={{ marginTop: 20, width: Math.min(layout.textWidth, contentWidth), marginLeft: "auto", marginRight: "auto" }}>
                           <div style={{ borderTop: "1px solid #999", width: 160, marginBottom: 6 }} />
                           {fns.map(({ paragraphId, fn, number }) => (
                             <div key={fn.id} style={{ display: "flex", alignItems: "flex-start", gap: 4, marginBottom: 2 }}>
@@ -933,8 +960,11 @@ export default function App() {
   const [target, setTarget] = useState<MorphRect | null>(null);
   const [grown, setGrown] = useState(false);
   const [overlayOn, setOverlayOn] = useState(false);
+  // The page layout for the selected template (article / report / letter / …).
+  const [template, setTemplate] = useState<TemplateLayout>(templateFor("article"));
 
-  function start(_preset?: string, rect?: DOMRect) {
+  function start(preset?: string, rect?: DOMRect) {
+    setTemplate(templateFor(preset));
     if (!rect) {
       setPhase("editor");
       return;
@@ -973,21 +1003,15 @@ export default function App() {
 
   const showEditor = phase === "morph" || phase === "editor";
 
-  // Map the (full-size) page box back onto the clicked card, so we can animate a
-  // single GPU-composited `transform` from card → page instead of janky
-  // width/height/top/left reflows.
-  let morphTransform = "none";
-  if (origin && target && !grown) {
-    const sx = origin.width / target.width;
-    const sy = origin.height / target.height;
-    const tx = origin.left - target.left;
-    const ty = origin.top - target.top;
-    morphTransform = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`;
-  }
+  // Animate the box geometry from the clicked card to the page. Doing this
+  // directly (rather than a non-uniform transform scale) keeps the corners round
+  // and the morph clean even when the aspect ratio changes (e.g. a portrait card
+  // growing into a landscape Beamer slide).
+  const cur = grown && target ? target : origin;
 
   return (
     <>
-      {showEditor && <Editor sidebarsIn={phase === "editor"} />}
+      {showEditor && <Editor sidebarsIn={phase === "editor"} template={template} />}
 
       {phase !== "editor" && (
         <div
@@ -1004,23 +1028,21 @@ export default function App() {
         </div>
       )}
 
-      {origin && target && (
+      {origin && target && cur && (
         <div
           style={{
             position: "fixed",
-            left: target.left,
-            top: target.top,
-            width: target.width,
-            height: target.height,
+            left: cur.left,
+            top: cur.top,
+            width: cur.width,
+            height: cur.height,
             background: "#ffffff",
             borderRadius: 8,
             boxShadow:
               "0 12px 40px rgba(20, 20, 50, 0.18), 0 2px 6px rgba(20, 20, 50, 0.06)",
-            transformOrigin: "0 0",
-            transform: morphTransform,
             opacity: overlayOn ? 1 : 0,
-            transition: `transform 0.55s ${MORPH_EASE}, opacity 0.3s ease`,
-            willChange: "transform, opacity",
+            transition: `left 0.55s ${MORPH_EASE}, top 0.55s ${MORPH_EASE}, width 0.55s ${MORPH_EASE}, height 0.55s ${MORPH_EASE}, opacity 0.3s ease`,
+            willChange: "left, top, width, height, opacity",
             zIndex: 60,
             pointerEvents: "none"
           }}
