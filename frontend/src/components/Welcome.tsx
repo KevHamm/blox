@@ -52,7 +52,8 @@ const PRESETS = [
   { id: "report",  label: "Report",  desc: "A longer document with a title page, chapters and sections." },
   { id: "letter",  label: "Letter",  desc: "Formal correspondence with sender, recipient and a signature." },
   { id: "beamer",  label: "Beamer",  desc: "A slide deck built from individual frames." },
-  { id: "book",    label: "Book",    desc: "A multi-chapter book with front- and back-matter." }
+  { id: "book",    label: "Book",    desc: "A multi-chapter book with front- and back-matter." },
+  { id: "wip",     label: "WIP",     desc: "A ~50-page stress-test document for developing pagination & the outline." }
 ];
 
 // The three intro buttons live in the middle slots (1, 2, 3). Clicking
@@ -179,9 +180,13 @@ export function Welcome({ onStart }: WelcomeProps) {
           }}
         >
           {PRESETS.map((p, i) => {
-            const isEnd = i === 0 || i === 4;
-            const collapsed = !picking && isEnd; // the ends are hidden until the fan-out
             const intro = INTRO[i];
+            // Slots 1-3 are the intro buttons; every other card (the two ends and
+            // any extra presets like WIP) stays hidden until "Start new project"
+            // fans them in.
+            const isExtra = !intro;
+            const isEnd = i === 0 || i === PRESETS.length - 1;
+            const collapsed = !picking && isExtra;
             const interactive = picking || (intro?.enabled ?? false);
             const disabled = !interactive;
 
@@ -201,7 +206,7 @@ export function Welcome({ onStart }: WelcomeProps) {
                   flex: "0 0 auto",
                   width: collapsed ? 0 : CARD_W,
                   marginLeft: collapsed ? 0 : i === 0 ? 0 : GAP / 2,
-                  marginRight: collapsed ? 0 : i === 4 ? 0 : GAP / 2,
+                  marginRight: collapsed ? 0 : i === PRESETS.length - 1 ? 0 : GAP / 2,
                   opacity: collapsed ? 0 : 1,
                   transform: collapsed ? "scale(0.92)" : "scale(1)",
                   transition: `width 0.5s ${EASE}, margin 0.5s ${EASE}, opacity 0.45s ease, transform 0.45s ease`,

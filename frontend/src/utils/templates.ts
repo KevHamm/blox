@@ -64,6 +64,15 @@ export const TEMPLATES: Record<string, TemplateLayout> = {
     padTop: 135, padBottom: 160, padLeft: 179, padRight: 179,
     textWidth: 458, columns: 1, fontSize: 13, lineHeight: 1.2,
     title: "Book Title"
+  },
+  // A development stress-test: a long (~50 page) article-geometry document used
+  // to exercise pagination and the document outline. Exports as an article.
+  wip: {
+    cls: "wip",
+    pageWidth: LW, pageHeight: LH,
+    padTop: 135, padBottom: 145, padLeft: 179, padRight: 179,
+    textWidth: 458, columns: 1, fontSize: 13, lineHeight: 1.2,
+    title: "Work In Progress"
   }
 };
 
@@ -79,6 +88,8 @@ const sect = (title: string, children: DocumentNode[]): DocumentNode =>
   ({ id: uid(), type: "section", title, children });
 const subsect = (title: string, children: DocumentNode[]): DocumentNode =>
   ({ id: uid(), type: "subsection", title, children });
+const subsubsect = (title: string, children: DocumentNode[]): DocumentNode =>
+  ({ id: uid(), type: "subsubsection", title, children });
 const abstract = (text: string): DocumentNode => ({ id: uid(), type: "abstract", text });
 const bullets = (style: "dot" | "dash" | "number", items: string[]): DocumentNode =>
   ({ id: uid(), type: "list", listStyle: style, items: items.map((t) => ({ id: uid(), text: t })) });
@@ -88,8 +99,65 @@ const frame = (title: string, children: DocumentNode[], variant?: "title"): Docu
 const specialPage = (type: any, title: string): DocumentNode => ({ id: uid(), type, title });
 const docTree = (children: DocumentNode[]): DocumentNode => ({ id: uid(), type: "document", children });
 
+// A long, deterministic "lorem ipsum" stress-test document: a cover page, table
+// of contents, many numbered sections (each with subsections / subsubsections
+// interlaced with paragraphs of varying length), and a bibliography — sized to
+// run to roughly fifty pages so pagination and the outline can be exercised.
+function wipDoc(): DocumentNode {
+  const LOREM =
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod " +
+    "tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, " +
+    "quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo " +
+    "consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse " +
+    "cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat " +
+    "non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+
+  // Deterministic pseudo-random so the document is the same every time.
+  let seed = 1337;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const between = (lo: number, hi: number) => lo + Math.floor(rnd() * (hi - lo + 1));
+  const body = (n: number) => para(Array.from({ length: n }, () => LOREM).join(" "));
+
+  const WORDS = [
+    "Foundations", "Methods", "Analysis", "Architecture", "Evaluation", "Background",
+    "Approach", "Results", "Discussion", "Implementation", "Theory", "Experiments",
+    "Design", "Observations", "Framework", "Model", "Systems", "Overview",
+    "Principles", "Mechanisms", "Strategy", "Notation", "Limitations", "Outlook"
+  ];
+  const phrase = () => `${WORDS[between(0, WORDS.length - 1)]} of ${WORDS[between(0, WORDS.length - 1)]}`;
+
+  const children: DocumentNode[] = [
+    specialPage("coverpage", "Cover Page"),
+    specialPage("toc", "Table of Contents")
+  ];
+
+  const SECTIONS = 15;
+  for (let s = 0; s < SECTIONS; s++) {
+    const secChildren: DocumentNode[] = [body(between(2, 4))];
+    const subCount = between(3, 4);
+    for (let ss = 0; ss < subCount; ss++) {
+      const subChildren: DocumentNode[] = [body(between(2, 4))];
+      if (rnd() > 0.4) {
+        const sssCount = between(1, 2);
+        for (let k = 0; k < sssCount; k++) {
+          subChildren.push(subsubsect(phrase(), [body(between(2, 3))]));
+        }
+        subChildren.push(body(between(1, 2)));
+      }
+      secChildren.push(subsect(phrase(), subChildren));
+    }
+    children.push(sect(phrase(), secChildren));
+  }
+
+  children.push(specialPage("bibliography", "Bibliography"));
+  return docTree(children);
+}
+
 export function templateDoc(cls: string): DocumentNode {
   switch (cls) {
+    case "wip":
+      return wipDoc();
+
     case "report":
       return docTree([
         specialPage("coverpage", "Cover Page"),

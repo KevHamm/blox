@@ -437,6 +437,41 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
     );
   }, [numberedDoc, leafHeights, headerHeights, lineData, contentHeight, layout.columns]);
 
+  // ── Document outline for the top-bar preview ──
+  // Each top-level structural node (cover page, table of contents, every numbered
+  // section, frame, bibliography) becomes a "group" with the range of page
+  // indices it occupies, plus a human label. Sections that span several pages
+  // carry all of them so the preview can stack / spread them.
+  const outline = useMemo(() => {
+    const OUTLINE_TYPES = new Set(["coverpage", "toc", "bibliography", "section", "frame"]);
+    // node.id → sorted unique page indices where a top-level chunk for it appears.
+    const nodePages = new Map<string, number[]>();
+    pages.forEach((cols: any[], pi: number) => {
+      cols.forEach((col: any[]) =>
+        col.forEach((chunk: any) => {
+          const id = chunk.node.id;
+          const arr = nodePages.get(id);
+          if (!arr) nodePages.set(id, [pi]);
+          else if (arr[arr.length - 1] !== pi) arr.push(pi);
+        })
+      );
+    });
+    const out: { key: string; type: string; label: string; pages: number[]; first: number }[] = [];
+    for (const node of (numberedDoc.children ?? []) as any[]) {
+      if (!OUTLINE_TYPES.has(node.type)) continue;
+      const pgs = nodePages.get(node.id);
+      if (!pgs || !pgs.length) continue;
+      const label =
+        node.type === "coverpage" ? "Cover"
+        : node.type === "toc" ? "Table of Contents"
+        : node.type === "bibliography" ? "Bibliography"
+        : node.type === "section" ? `${node.sectionNumber ?? ""} ${node.title ?? ""}`.trim() || "Section"
+        : (node.title ?? "Slide");
+      out.push({ key: node.id, type: node.type, label, pages: pgs, first: pgs[0] });
+    }
+    return out;
+  }, [pages, numberedDoc]);
+
   // After a re-pagination, keep the cursor with the text it belongs to: if the
   // edited paragraph split and the caret's text moved to another page's slice,
   // focus that slice and restore the caret there (so typing flows to page 2).
@@ -869,7 +904,12 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
       <div
         style={{
           flex: "0 0 auto",
+          // minHeight:0 defeats the flex item's automatic min-size, and the
+          // matching maxHeight caps it, so the explicit collapsed height (56) is
+          // honoured instead of snapping back to the TopBar's content height.
+          minHeight: 0,
           height: topOpen ? TOPBAR_HEIGHT : TOPBAR_COLLAPSED_HEIGHT,
+          maxHeight: topOpen ? TOPBAR_HEIGHT : TOPBAR_COLLAPSED_HEIGHT,
           overflow: "hidden",
           transition: "height 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
           zIndex: 5
@@ -885,6 +925,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
           visible={sidebarsIn}
           collapsed={!topOpen}
           pages={pages}
+          outline={outline}
           layout={layout}
         />
       </div>
