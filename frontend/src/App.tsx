@@ -957,16 +957,23 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
           {sidebarTab === "blox" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {([
-                { title: "Document", ids: DOCUMENT_ORDER },
-                { title: "Math", ids: MATH_ORDER },
-                { title: "Math symbols", ids: MATH_SYMBOL_ORDER }
-              ] as const).map(({ title, ids }) => (
+                { title: "Document", ids: DOCUMENT_ORDER, symbols: false },
+                { title: "Math", ids: MATH_ORDER, symbols: false },
+                { title: "Math symbols", ids: MATH_SYMBOL_ORDER, symbols: true }
+              ] as const).map(({ title, ids, symbols }) => (
                 <Collapsible key={title} title={title}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      // Math symbols are compact, label-less glyphs in 3 columns.
+                      gridTemplateColumns: symbols ? "1fr 1fr 1fr" : "1fr 1fr",
+                      gap: 8
+                    }}
+                  >
                     {ids
                       .filter((id) => id !== "block::abstract" || !hasAbstract)
                       .map((id) => (
-                        <DraggableBlock key={id} id={id} />
+                        <DraggableBlock key={id} id={id} compact={symbols} />
                       ))}
                   </div>
                 </Collapsible>

@@ -109,8 +109,8 @@ export function DroppableDocArea({ children, visible = true }: any) {
   );
 }
 
-/* A draggable Blox item. */
-export function DraggableBlock({ id }: { id: string }) {
+/* A draggable Blox item. `compact` shows just the glyph (math-symbol grid). */
+export function DraggableBlock({ id, compact }: { id: string; compact?: boolean }) {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id });
   return (
     <div
@@ -119,7 +119,7 @@ export function DraggableBlock({ id }: { id: string }) {
       {...attributes}
       style={{ cursor: "grab", opacity: isDragging ? 0.4 : 1 }}
     >
-      <BlockBox id={id} />
+      <BlockBox id={id} compact={compact} />
     </div>
   );
 }

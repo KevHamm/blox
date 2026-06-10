@@ -3,7 +3,7 @@ import type { Chunk } from "../utils/paginateDocument";
 import { isContainerType } from "../utils/paginateDocument";
 import type { Mark, Fmt } from "../utils/marks";
 import { formatAt, sliceMarks, spliceMarks, normalizeMarks, marksEqual } from "../utils/marks";
-import { greekFor, wordAround } from "../utils/greek";
+import { symbolFor, wordAround } from "../utils/greek";
 import { arrowAutocorrect } from "../utils/arrows";
 
 // A DOM Range spanning characters [a, b) of a contentEditable element, walking
@@ -530,9 +530,9 @@ function EditableParagraph({
   const isSlice = start !== 0 || end !== text.length;
   const sliceText = isSlice ? text.slice(start, end) : text;
 
-  // Greek-letter suggestion: when the caret sits on a word that spells a Greek
-  // letter, a small clickable glyph hovers as a superscript of its last letter.
-  // Offsets are slice-local; `x`/`y` are viewport coords for the fixed menu.
+  // Symbol suggestion: when the caret sits on a word that spells a Greek letter
+  // or a math symbol command, a small clickable glyph hovers as a superscript of
+  // its last letter. Offsets are slice-local; `x`/`y` are viewport coords.
   const [greek, setGreek] = useState<
     { symbol: string; ls: number; le: number; x: number; y: number } | null
   >(null);
@@ -543,7 +543,7 @@ function EditableParagraph({
     const localText = readEditableRich(el).text;
     const caret = getCaretOffset(el);
     const w = wordAround(localText, caret);
-    const sym = w && greekFor(w.word);
+    const sym = w && symbolFor(w.word);
     if (!w || !sym) { setGreek(null); return; }
     const r = rangeForChars(el, w.end - 1, w.end);
     if (!r) { setGreek(null); return; }
@@ -646,10 +646,12 @@ function EditableParagraph({
         onMouseUp={detectGreek}
         onKeyDown={(e) => {
           if (e.key === "Escape") { setGreek(null); return; }
-          // Enter = line break (kept simple as a literal "\n" + pre-wrap).
           if (e.key === "Enter") {
             e.preventDefault();
-            document.execCommand("insertText", false, "\n");
+            // While a symbol suggestion is showing, Enter inserts that symbol;
+            // otherwise Enter is a line break.
+            if (greek) insertGreek();
+            else document.execCommand("insertText", false, "\n");
           }
         }}
         style={{

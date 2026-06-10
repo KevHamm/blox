@@ -47,6 +47,20 @@ _ARROW_NAMES = {
 }
 ARROWS = {ch: f"$\\{name}$" for ch, name in _ARROW_NAMES.items()}
 
+# Math symbol glyphs (typed in text via the symbol menu) → math-mode command.
+# Kept in sync with the editor's MATH_SYMBOLS map (frontend/src/utils/greek.ts).
+_MATH_SYM_NAMES = {
+    "∞": "infty", "∀": "forall", "ℜ": "Re", "ℑ": "Im", "∇": "nabla",
+    "∃": "exists", "∂": "partial", "∄": "nexists", "∅": "emptyset",
+    "⌀": "varnothing", "℘": "wp", "∁": "complement", "¬": "neg", "⋯": "cdots",
+    "□": "square", "■": "blacksquare", "△": "triangle",
+    "×": "times", "⋅": "cdot", "÷": "div", "∩": "cap", "∪": "cup", "≠": "neq",
+    "≤": "leq", "≥": "geq", "∈": "in", "⊥": "perp", "∉": "notin", "⊂": "subset",
+    "≃": "simeq", "≈": "approx", "∧": "wedge", "∨": "vee", "⊕": "oplus",
+    "⊗": "otimes", "⊠": "boxtimes", "≡": "equiv", "≅": "cong",
+}
+MATH_SYMS = {ch: f"$\\{name}$" for ch, name in _MATH_SYM_NAMES.items()}
+
 # LaTeX special characters that must be escaped in ordinary text.
 _SPECIAL = {
     "\\": r"\textbackslash{}",
@@ -74,6 +88,8 @@ def _esc_char(ch: str) -> str:
         return GREEK[ch]
     if ch in ARROWS:
         return ARROWS[ch]
+    if ch in MATH_SYMS:
+        return MATH_SYMS[ch]
     return _SPECIAL.get(ch, ch)
 
 

@@ -327,6 +327,14 @@ export const SYMBOL_COMMANDS = [
   "neg", "cdots", "square", "sqrt", "blacksquare", "triangle"
 ];
 
+// Binary operators / relations.
+export const BINOP_COMMANDS = [
+  "times", "cdot", "div", "cap", "cup", "neq",
+  "leq", "geq", "in", "perp", "notin", "subset",
+  "simeq", "approx", "wedge", "vee", "oplus", "otimes",
+  "Box", "boxtimes", "equiv", "cong"
+];
+
 // Default LaTeX for each math Blox block.
 export const MATH_TEMPLATES: Record<string, string> = {
   "block::math::integral": "\\int_{a}^{b} f(x)\\,dx",
@@ -339,6 +347,7 @@ export const MATH_TEMPLATES: Record<string, string> = {
 for (const c of ARROW_COMMANDS) MATH_TEMPLATES[`block::math::${c}`] = `\\${c}`;
 // \sqrt takes an argument; the rest are bare commands.
 for (const c of SYMBOL_COMMANDS) MATH_TEMPLATES[`block::math::${c}`] = c === "sqrt" ? "\\sqrt{}" : `\\${c}`;
+for (const c of BINOP_COMMANDS) MATH_TEMPLATES[`block::math::${c}`] = `\\${c}`;
 
 // Path of nodes from the document root down to (and including) the node with id.
 export function pathTo(node: any, id: string, acc: any[] = []): any[] | null {

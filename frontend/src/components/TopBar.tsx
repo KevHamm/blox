@@ -107,6 +107,16 @@ function IconButton({ onClick, disabled, title, children }: any) {
   );
 }
 
+// A group of controls on the same translucent strip as a sidebar, so the bar
+// reads as one continuous panel with the sidebars below it.
+function ControlGroup({ children }: any) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, zIndex: 2 }}>
+      {children}
+    </div>
+  );
+}
+
 export function TopBar({
   onBack, onUndo, onRedo, onExport, canUndo, canRedo, visible,
   pages, layout
@@ -119,6 +129,10 @@ export function TopBar({
         flex: "0 0 auto",
         height: TOPBAR_HEIGHT,
         borderBottom: "1px solid rgba(0,0,0,0.08)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 20px",
         opacity: visible ? 1 : 0,
         transition: "opacity 0.4s ease",
         zIndex: 5,
@@ -130,29 +144,29 @@ export function TopBar({
         <MiniPreview pages={pages} layout={layout} />
       </div>
 
-      {/* Top-left: back, logo, undo/redo. */}
-      <div style={{ position: "absolute", left: 18, top: 14, display: "flex", alignItems: "center", gap: 10, zIndex: 2 }}>
+      {/* Left: logo, back, undo/redo. */}
+      <ControlGroup>
+        <div
+          style={{
+            fontFamily: "var(--ui-font)",
+            fontWeight: 700,
+            fontSize: 22,
+            letterSpacing: "-0.02em",
+            color: "var(--ui-text)",
+            userSelect: "none",
+            marginRight: 4
+          }}
+        >
+          BL<span style={{ color: "var(--ui-blue)" }}>o</span>X
+        </div>
+
         <IconButton onClick={onBack} title="Back to templates">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </IconButton>
 
-        <div
-          style={{
-            fontFamily: "var(--ui-font)",
-            fontWeight: 700,
-            fontSize: 24,
-            letterSpacing: "-0.02em",
-            color: "var(--ui-text)",
-            userSelect: "none",
-            padding: "0 2px"
-          }}
-        >
-          BL<span style={{ color: "var(--ui-blue)" }}>o</span>X
-        </div>
-
-        <span style={{ width: 1, height: 24, background: "rgba(0,0,0,0.12)", margin: "0 2px" }} />
+        <span style={{ width: 1, height: 24, background: "rgba(0,0,0,0.1)", margin: "0 2px" }} />
 
         <IconButton onClick={onUndo} disabled={!canUndo} title="Undo">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -166,12 +180,12 @@ export function TopBar({
             <path d="M20 9H9a5 5 0 0 0-5 5v0a5 5 0 0 0 5 5h6" />
           </svg>
         </IconButton>
-      </div>
+      </ControlGroup>
 
-      {/* Top-right: export. */}
-      <div style={{ position: "absolute", right: 18, top: 14, zIndex: 2 }}>
+      {/* Right: export. */}
+      <ControlGroup>
         <button className="ui-btn primary" onClick={onExport}>Export LaTeX</button>
-      </div>
+      </ControlGroup>
     </div>
   );
 }

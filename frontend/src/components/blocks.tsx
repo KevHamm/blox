@@ -12,7 +12,8 @@ import {
   mathNode,
   MATH_TEMPLATES,
   ARROW_COMMANDS,
-  SYMBOL_COMMANDS
+  SYMBOL_COMMANDS,
+  BINOP_COMMANDS
 } from "../utils/docTree";
 
 /* A KaTeX-rendered glyph for the Blox palette icons. */
@@ -193,15 +194,18 @@ export const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: 
   "block::page::bibliography": { label: "Bibliography",       icon: () => <PageGlyph kind="bibliography" />, make: () => newPage("bibliography") }
 };
 
-// Arrow / harpoon symbols: each renders its glyph as the icon and inserts a math
-// node containing the command.
+// Math-symbol Blox render their glyph as the icon (shown label-less and larger
+// in the sidebar). Each inserts a math node containing the command.
+const SYMBOL_ICON_SIZE = 24;
 for (const c of ARROW_COMMANDS) {
-  BLOCK_DEFS[`block::math::${c}`] = mathBlock(`block::math::${c}`, c, `\\${c}`, 18);
+  BLOCK_DEFS[`block::math::${c}`] = mathBlock(`block::math::${c}`, c, `\\${c}`, SYMBOL_ICON_SIZE);
 }
-// Misc math symbols (√ shows an example radicand in its icon).
 for (const c of SYMBOL_COMMANDS) {
   const iconTex = c === "sqrt" ? "\\sqrt{x}" : `\\${c}`;
-  BLOCK_DEFS[`block::math::${c}`] = mathBlock(`block::math::${c}`, c, iconTex, 18);
+  BLOCK_DEFS[`block::math::${c}`] = mathBlock(`block::math::${c}`, c, iconTex, SYMBOL_ICON_SIZE);
+}
+for (const c of BINOP_COMMANDS) {
+  BLOCK_DEFS[`block::math::${c}`] = mathBlock(`block::math::${c}`, c, `\\${c}`, SYMBOL_ICON_SIZE);
 }
 
 // Structural blocks land at the correct hierarchy level, not literally at the
@@ -236,14 +240,39 @@ export const MATH_ORDER = [
   "block::math::matrix"
 ];
 
-export const MATH_SYMBOL_ORDER = [...ARROW_COMMANDS, ...SYMBOL_COMMANDS].map(
+export const MATH_SYMBOL_ORDER = [...ARROW_COMMANDS, ...SYMBOL_COMMANDS, ...BINOP_COMMANDS].map(
   (c) => `block::math::${c}`
 );
 
-/* The visual box for a Blox item: an icon with a label below it. */
-export function BlockBox({ id, shadow }: { id: string; shadow?: boolean }) {
+/* The visual box for a Blox item: an icon with a label below it. In `compact`
+   mode (used for the math-symbol grid) the label is dropped and the box is a
+   square showing just the glyph. */
+export function BlockBox({ id, shadow, compact }: { id: string; shadow?: boolean; compact?: boolean }) {
   const def = BLOCK_DEFS[id];
   if (!def) return null;
+  if (compact) {
+    return (
+      <div
+        title={def.label}
+        style={{
+          border: "1px solid #ccc",
+          borderRadius: 8,
+          background: "#fafafa",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          aspectRatio: "1 / 1",
+          width: "100%",
+          boxSizing: "border-box",
+          color: "#333",
+          overflow: "hidden",
+          boxShadow: shadow ? "0 4px 12px rgba(0,0,0,0.25)" : undefined
+        }}
+      >
+        {def.icon()}
+      </div>
+    );
+  }
   return (
     <div
       style={{
