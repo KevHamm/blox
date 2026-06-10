@@ -117,6 +117,30 @@ function ControlGroup({ children }: any) {
   );
 }
 
+// One flipping letter of the logo: shows `front` normally, `back` on hover.
+function FlipLetter({ front, back, delay, frontBlue, backBlue }: any) {
+  const blue = { color: "var(--ui-blue)" };
+  return (
+    <span className="logo-flip" style={{ transitionDelay: delay }}>
+      <span className="logo-face logo-front" style={frontBlue ? blue : undefined}>{front}</span>
+      <span className="logo-face logo-back" style={backBlue ? blue : undefined}>{back}</span>
+    </span>
+  );
+}
+
+// The logo doubles as the back button: hovering rotates "LoX" → "aCK" so it
+// reads "BaCK", and clicking it returns to the template chooser.
+function Logo({ onBack }: any) {
+  return (
+    <div className="blox-logo" onClick={onBack} title="Back to templates">
+      <span>B</span>
+      <FlipLetter front="L" back="a" delay="0s" backBlue />
+      <FlipLetter front="o" back="C" delay="0.05s" frontBlue />
+      <FlipLetter front="X" back="K" delay="0.1s" />
+    </div>
+  );
+}
+
 export function TopBar({
   onBack, onUndo, onRedo, onExport, canUndo, canRedo, visible,
   pages, layout
@@ -144,29 +168,11 @@ export function TopBar({
         <MiniPreview pages={pages} layout={layout} />
       </div>
 
-      {/* Left: logo, back, undo/redo. */}
+      {/* Left: logo (doubles as back), undo/redo. */}
       <ControlGroup>
-        <div
-          style={{
-            fontFamily: "var(--ui-font)",
-            fontWeight: 700,
-            fontSize: 22,
-            letterSpacing: "-0.02em",
-            color: "var(--ui-text)",
-            userSelect: "none",
-            marginRight: 4
-          }}
-        >
-          BL<span style={{ color: "var(--ui-blue)" }}>o</span>X
-        </div>
+        <Logo onBack={onBack} />
 
-        <IconButton onClick={onBack} title="Back to templates">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </IconButton>
-
-        <span style={{ width: 1, height: 24, background: "rgba(0,0,0,0.1)", margin: "0 2px" }} />
+        <span style={{ width: 1, height: 24, background: "rgba(0,0,0,0.1)", margin: "0 6px 0 2px" }} />
 
         <IconButton onClick={onUndo} disabled={!canUndo} title="Undo">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

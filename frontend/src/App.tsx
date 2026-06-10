@@ -737,7 +737,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
       onDragCancel={() => { setActiveDragSrc(null); setActiveBlockId(null); }}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
-     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+     <div className="editor-shell" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
       {/* Full-width top bar above the sidebars: logo, back, undo/redo and a
           live mini preview of the whole document. */}
       <TopBar

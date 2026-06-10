@@ -172,22 +172,28 @@ math-field::part(menu-toggle) {
   transition-duration: 0.1s;
 }
 
-/* Editor canvas — soft tint + faint dot grid behind the document pages. */
-.editor-canvas {
+/* Editor shell — the soft tint + faint dot grid sits on the outer shell (behind
+   the top bar AND the sidebars) so both frost over the same backdrop. */
+.editor-shell {
   background-color: #eceef5;
   background-image:
-    radial-gradient(120% 65% at 50% -12%, rgba(120, 130, 215, 0.13), transparent 60%),
-    radial-gradient(100% 70% at 100% 110%, rgba(110, 200, 195, 0.10), transparent 55%),
+    radial-gradient(120% 45% at 50% -8%, rgba(120, 130, 215, 0.14), transparent 60%),
+    radial-gradient(100% 60% at 100% 110%, rgba(110, 200, 195, 0.10), transparent 55%),
     radial-gradient(rgba(48, 52, 100, 0.06) 1px, transparent 1.6px);
   background-size: 100% 100%, 100% 100%, 23px 23px;
+}
+.editor-canvas {
+  background: transparent;
 }
 
 /* Editor chrome — Apple-style sidebars & controls ------------------------- */
 .ui-panel {
   font-family: var(--ui-font);
-  background: rgba(251, 251, 253, 0.72);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  /* Frosted glass: translucent so the tinted shell shows through, with a strong
+     blur. The top bar and both sidebars share this exact treatment. */
+  background: rgba(250, 250, 252, 0.6);
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
   color: var(--ui-text);
 }
 .ui-panel h3 {
@@ -314,4 +320,43 @@ math-field::part(menu-toggle) {
 }
 .greek-suggest:hover {
   opacity: 1;
+}
+
+/* Logo flip: hovering "BLoX" rotates the "LoX" letters out and "aCK" in, so the
+   logo reads "BaCK" (clicking it returns to the welcome screen). */
+.blox-logo {
+  display: inline-flex;
+  align-items: baseline;
+  cursor: pointer;
+  user-select: none;
+  perspective: 600px;
+  font-family: var(--ui-font);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--ui-text);
+}
+/* Override the generic ".ui-panel span" grey so logo letters stay dark. */
+.blox-logo span {
+  color: inherit;
+}
+.logo-flip {
+  display: inline-block;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+.blox-logo:hover .logo-flip {
+  transform: rotateX(180deg);
+}
+.logo-face {
+  display: inline-block;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.logo-back {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: rotateX(180deg);
 }
