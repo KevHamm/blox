@@ -38,6 +38,14 @@ export function Page({
         // Fixed height — a page never grows; overflowing content is paginated
         // onto the next page instead.
         height,
+        // The page is a direct child of the flex-column .doc-area. Without this,
+        // flex-shrink (default 1) squashes every page vertically to fit the
+        // scroll viewport, so pages render shorter than US-Letter and their
+        // content spills past the bottom / behind the next page.
+        flex: "none",
+        // Clip any content that does overflow so it can never bleed visibly past
+        // the page edge (behind the following page) before re-pagination lands.
+        overflow: "hidden",
         background: "white",
         borderRadius: 6,
         boxShadow: "0 12px 40px rgba(20, 20, 50, 0.10), 0 2px 6px rgba(20, 20, 50, 0.06)",

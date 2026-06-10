@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { DocumentRenderer, HeadingInput } from "./renderer/DocumentRenderer";
 import { Page } from "./components/Page";
-import { TopBar } from "./components/TopBar";
+import { TopBar, TOPBAR_HEIGHT } from "./components/TopBar";
 import { TrashIcon } from "./components/TrashIcon";
 import { Welcome } from "./components/Welcome";
 import { useDocument } from "./hooks/useDocument";
@@ -108,44 +108,98 @@ function collectPageFootnotes(
   return out.sort((a, b) => a.number - b.number);
 }
 
-// Convert a viewport point to a character offset within a paragraph element.
-function caretOffsetAtPoint(p: HTMLElement, x: number, y: number): number {
-  const d: any = document;
-  let node: Node | null = null, offset = 0;
-  if (d.caretRangeFromPoint) {
-    const r = d.caretRangeFromPoint(x, y);
-    if (r) { node = r.startContainer; offset = r.startOffset; }
-  } else if (d.caretPositionFromPoint) {
-    const pos = d.caretPositionFromPoint(x, y);
-    if (pos) { node = pos.offsetNode; offset = pos.offset; }
-  }
-  if (!node) return 0;
-  const pre = document.createRange();
-  pre.selectNodeContents(p);
-  try { pre.setEnd(node, offset); } catch { return 0; }
-  return pre.toString().length;
-}
-
 // Measure each rendered line of a paragraph: where it starts (char offset) and
 // its cumulative bottom (px) from the element's top.
+//
+// Line geometry comes from Range.getClientRects() (one rect per wrapped line),
+// which is layout-derived and therefore correct even for lines scrolled out of
+// view or clipped by an overflow:hidden page. The per-line *start offset* is then
+// found by binary-searching character positions with getBoundingClientRect —
+// deliberately NOT caretRangeFromPoint, which returns null for any point outside
+// the viewport and so silently collapsed every off-screen line to offset 0,
+// breaking the split of long (multi-page) paragraphs.
 function measureParagraphLines(p: HTMLElement): { offset: number; bottom: number }[] {
-  if (!(p.textContent ?? "").length) return [];
+  const total = (p.textContent ?? "").length;
+  if (!total) return [];
   const pTop = p.getBoundingClientRect().top;
+
+  // Merge the raw client rects into one entry per visual line (by top).
   const range = document.createRange();
   range.selectNodeContents(p);
   const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0 || r.height > 0);
-  const lines: { offset: number; bottom: number }[] = [];
+  const lineRects: { top: number; bottom: number }[] = [];
   let prevTop = Number.NEGATIVE_INFINITY;
   for (const r of rects) {
-    if (r.top > prevTop + 1) {
-      lines.push({ offset: caretOffsetAtPoint(p, r.left + 1, r.top + r.height / 2), bottom: r.bottom - pTop });
-      prevTop = r.top;
-    } else {
-      lines[lines.length - 1].bottom = Math.max(lines[lines.length - 1].bottom, r.bottom - pTop);
-    }
+    if (r.top > prevTop + 1) { lineRects.push({ top: r.top, bottom: r.bottom }); prevTop = r.top; }
+    else { const L = lineRects[lineRects.length - 1]; L.bottom = Math.max(L.bottom, r.bottom); }
   }
-  if (lines.length) lines[0].offset = 0;
-  return lines;
+  if (!lineRects.length) return [];
+
+  // Contiguous text-node segments, so a global char offset can be turned into a
+  // Range (footnote markers and other non-text nodes are skipped).
+  const segs: { node: Node; start: number; end: number }[] = [];
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  let acc = 0, n: Node | null;
+  while ((n = walker.nextNode())) {
+    const len = (n.textContent ?? "").length;
+    segs.push({ node: n, start: acc, end: acc + len });
+    acc += len;
+  }
+  const charRange = (a: number, b: number): Range | null => {
+    let sN: Node | null = null, sO = 0, eN: Node | null = null, eO = 0;
+    for (const s of segs) {
+      if (sN === null && a < s.end) { sN = s.node; sO = a - s.start; }
+      if (b <= s.end) { eN = s.node; eO = b - s.start; break; }
+    }
+    if (!sN || !eN) return null;
+    const r = document.createRange();
+    try { r.setStart(sN, sO); r.setEnd(eN, eO); } catch { return null; }
+    return r;
+  };
+  // Top (viewport y) of the single character starting at global offset `o`.
+  const topOfChar = (o: number): number | null => {
+    const r = charRange(o, o + 1);
+    if (!r) return null;
+    const cr = r.getBoundingClientRect();
+    return cr.height ? cr.top : null;
+  };
+
+  // First line always starts at 0; each later line's start is the first char
+  // whose rect sits on (or below) that line's top.
+  const out: { offset: number; bottom: number }[] = [{ offset: 0, bottom: lineRects[0].bottom - pTop }];
+  for (let i = 1; i < lineRects.length; i++) {
+    const targetTop = lineRects[i].top;
+    let lo = out[i - 1].offset + 1, hi = total - 1, ans = total;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const t = topOfChar(mid);
+      if (t != null && t >= targetTop - 1) { ans = mid; hi = mid - 1; }
+      else lo = mid + 1;
+    }
+    out.push({ offset: ans, bottom: lineRects[i].bottom - pTop });
+  }
+  return out;
+}
+
+// Vertical space a flow element really occupies, including its own vertical
+// margins AND any child margin that collapses *through* it (a wrapper with no
+// padding/border on that side does not contain the child's margin, so
+// getBoundingClientRect misses it). LaTeX adds these spaces rather than
+// collapsing them, so counting the full footprint keeps pagination from
+// overfilling a page — the measured height now matches what is actually drawn.
+function flowHeight(el: HTMLElement): number {
+  const cs = getComputedStyle(el);
+  const num = (v: string) => parseFloat(v || "0") || 0;
+  let h = el.getBoundingClientRect().height + num(cs.marginTop) + num(cs.marginBottom);
+  if (num(cs.paddingTop) === 0 && num(cs.borderTopWidth) === 0) {
+    const fc = el.firstElementChild as HTMLElement | null;
+    if (fc) h += Math.max(0, num(getComputedStyle(fc).marginTop));
+  }
+  if (num(cs.paddingBottom) === 0 && num(cs.borderBottomWidth) === 0) {
+    const lc = el.lastElementChild as HTMLElement | null;
+    if (lc) h += Math.max(0, num(getComputedStyle(lc).marginBottom));
+  }
+  return h;
 }
 
 type LineMap = Record<string, { offset: number; bottom: number }[]>;
@@ -195,6 +249,64 @@ const DELETE_LABELS: Record<string, string> = {
   frame: "slide"
 };
 
+// A small pinned button that rides the inner edge of a sidebar / the top bar.
+// Clicking it slides that panel out of the way; when the panel is hidden the
+// button stays at the screen edge so it can be slid back into view.
+function EdgeToggle({
+  edge, open, size, onToggle
+}: { edge: "left" | "right" | "top"; open: boolean; size: number; onToggle: () => void }) {
+  const vertical = edge === "top";
+  const ease = "cubic-bezier(0.16, 1, 0.3, 1)";
+  // Anchor the panel-edge side flush (so the button is never clipped off-screen
+  // when the panel is hidden) and only center on the long axis.
+  const pos: React.CSSProperties = { position: "fixed", zIndex: 55 };
+  if (edge === "left") {
+    pos.left = open ? size : 0; pos.top = "50%";
+    pos.transform = "translateY(-50%)"; pos.transition = `left 0.45s ${ease}`;
+  } else if (edge === "right") {
+    pos.right = open ? size : 0; pos.top = "50%";
+    pos.transform = "translateY(-50%)"; pos.transition = `right 0.45s ${ease}`;
+  } else {
+    pos.top = open ? size : 0; pos.left = "50%";
+    pos.transform = "translateX(-50%)"; pos.transition = `top 0.45s ${ease}`;
+  }
+  // Chevron points "in" (hide) when open, "out" (show) when closed.
+  const dir =
+    edge === "left" ? (open ? "left" : "right")
+    : edge === "right" ? (open ? "right" : "left")
+    : (open ? "up" : "down");
+  return (
+    <button
+      onClick={onToggle}
+      title={open ? "Hide panel" : "Show panel"}
+      aria-label={open ? "Hide panel" : "Show panel"}
+      style={{
+        ...pos,
+        width: vertical ? 42 : 20,
+        height: vertical ? 20 : 42,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#fff",
+        border: "1px solid rgba(0,0,0,0.12)",
+        borderRadius: 7,
+        boxShadow: "0 2px 8px rgba(20,20,50,0.16)",
+        color: "#666",
+        cursor: "pointer",
+        padding: 0
+      }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        {dir === "left" && <polyline points="15 18 9 12 15 6" />}
+        {dir === "right" && <polyline points="9 18 15 12 9 6" />}
+        {dir === "up" && <polyline points="18 15 12 9 6 15" />}
+        {dir === "down" && <polyline points="6 9 12 15 18 9" />}
+      </svg>
+    </button>
+  );
+}
+
 function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean; template: TemplateLayout; onBack?: () => void }) {
   // ── 1. All state first ──────────────────────────────────
   // Starting content for the chosen class (article / report / letter / …).
@@ -217,6 +329,10 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
   const [editingId, setEditingId] = useState<string | null>(null);
   // Which sidebar tab is showing (Typography controls vs the Blox palette).
   const [sidebarTab, setSidebarTab] = useState<"typography" | "blox">("typography");
+  // Whether each surrounding panel is shown; the edge toggles slide them away.
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+  const [topOpen, setTopOpen] = useState(true);
   // While true, the next click on a paragraph word attaches a footnote there.
   const [pendingFootnote, setPendingFootnote] = useState(false);
   const [documentTitle, setDocumentTitle] = useState(template.title);
@@ -357,10 +473,17 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
     const hh: Record<string, number> = {};
 
     document.querySelectorAll<HTMLElement>("[data-leaf-id]")
-      .forEach(el => { lh[el.dataset.leafId!] = el.getBoundingClientRect().height; });
+      .forEach(el => { lh[el.dataset.leafId!] = flowHeight(el); });
 
     document.querySelectorAll<HTMLElement>("[data-head-id]")
-      .forEach(el => { hh[el.dataset.headId!] = el.getBoundingClientRect().height; });
+      .forEach(el => {
+        // A heading's footprint also includes the top margin of its section /
+        // subsection wrapper (the LaTeX space *before* the heading).
+        let h = flowHeight(el);
+        const parent = el.parentElement;
+        if (parent) h += Math.max(0, parseFloat(getComputedStyle(parent).marginTop || "0") || 0);
+        hh[el.dataset.headId!] = h;
+      });
 
     // Per-paragraph line geometry. A split paragraph renders as several slice
     // elements (same data-para-id); combine them back into the full geometry.
@@ -739,18 +862,29 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
     >
      <div className="editor-shell" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
       {/* Full-width top bar above the sidebars: logo, back, undo/redo and a
-          live mini preview of the whole document. */}
-      <TopBar
-        onBack={onBack}
-        onUndo={undo}
-        onRedo={redo}
-        onExport={() => exportLatex(numberedDoc)}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        visible={sidebarsIn}
-        pages={pages}
-        layout={layout}
-      />
+          live mini preview of the whole document. Wrapped so the edge toggle can
+          collapse its height to slide it out of view. */}
+      <div
+        style={{
+          flex: "0 0 auto",
+          height: topOpen ? TOPBAR_HEIGHT : 0,
+          overflow: "hidden",
+          transition: "height 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
+          zIndex: 5
+        }}
+      >
+        <TopBar
+          onBack={onBack}
+          onUndo={undo}
+          onRedo={redo}
+          onExport={() => exportLatex(numberedDoc)}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          visible={sidebarsIn}
+          pages={pages}
+          layout={layout}
+        />
+      </div>
       <div
         className="editor-canvas"
         style={{
@@ -784,11 +918,21 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
           </div>
         )}
 
-        {/* SIDEBAR */}
+        {/* SIDEBAR — wrapper collapses its width to slide the panel away. */}
+        <div
+          style={{
+            flex: "0 0 auto",
+            width: leftOpen ? 280 : 0,
+            height: "100%",
+            overflow: "hidden",
+            transition: "width 0.45s cubic-bezier(0.16, 1, 0.3, 1)"
+          }}
+        >
         <div
           className="ui-panel"
           style={{
             width: 280,
+            boxSizing: "border-box",
             padding: 20,
             borderRight: "1px solid rgba(0,0,0,0.08)",
             display: "flex",
@@ -796,6 +940,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
             gap: 12,
             height: "100%",
             overflowY: "auto",
+            overflowX: "hidden",
             overscrollBehavior: "contain",
             transform: sidebarsIn ? "translateX(0)" : "translateX(-100%)",
             opacity: sidebarsIn ? 1 : 0,
@@ -982,6 +1127,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
           )}
 
         </div>
+        </div>
 
 
         {/* DOCUMENT */}
@@ -1092,11 +1238,21 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
                 ))}
         </DroppableDocArea>
 
-        {/* RIGHT SIDEBAR — IMAGES */}
+        {/* RIGHT SIDEBAR — IMAGES (wrapper collapses width to slide away) */}
+        <div
+          style={{
+            flex: "0 0 auto",
+            width: rightOpen ? 260 : 0,
+            height: "100%",
+            overflow: "hidden",
+            transition: "width 0.45s cubic-bezier(0.16, 1, 0.3, 1)"
+          }}
+        >
         <div
           className="ui-panel"
           style={{
             width: 260,
+            boxSizing: "border-box",
             padding: 20,
             borderLeft: "1px solid rgba(0,0,0,0.08)",
             display: "flex",
@@ -1104,6 +1260,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
             gap: 12,
             height: "100%",
             overflowY: "auto",
+            overflowX: "hidden",
             overscrollBehavior: "contain",
             transform: sidebarsIn ? "translateX(0)" : "translateX(100%)",
             opacity: sidebarsIn ? 1 : 0,
@@ -1121,7 +1278,17 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
             <DraggableImage key={img.id} img={img} onDelete={deleteImageUpload} />
           ))}
         </div>
+        </div>
       </div>
+
+      {/* Edge toggles to hide / show each panel (only once the editor is in). */}
+      {sidebarsIn && (
+        <>
+          <EdgeToggle edge="left"  open={leftOpen}  size={280}           onToggle={() => setLeftOpen((v) => !v)} />
+          <EdgeToggle edge="right" open={rightOpen} size={260}           onToggle={() => setRightOpen((v) => !v)} />
+          <EdgeToggle edge="top"   open={topOpen}   size={TOPBAR_HEIGHT} onToggle={() => setTopOpen((v) => !v)} />
+        </>
+      )}
      </div>
 
       {/* Floating preview of whatever is being dragged, centered on the cursor. */}

@@ -405,8 +405,15 @@ function buildParagraphHtml(
     fnAt.set(at, (fnAt.get(at) ?? []).concat(f));
   }
 
+  // A block with white-space:pre-wrap does not render its final newline (the
+  // empty last line has no content to give it height), so a single trailing
+  // Enter looks like nothing happened until a second one is pressed. Append a
+  // "bogus" <br> to give that empty line height. It carries data-bogus so
+  // readEditableRich drops it again and it never round-trips into the text.
+  const trailingBr = text.endsWith("\n") ? '<br data-bogus="1">' : "";
+
   // Nothing to decorate → the original fast path.
-  if (!marks.length && fnAt.size === 0) return escapeHtml(text);
+  if (!marks.length && fnAt.size === 0) return escapeHtml(text) + trailingBr;
 
   let html = "";
   let cur: Fmt = { b: false, i: false, u: false };
@@ -427,7 +434,7 @@ function buildParagraphHtml(
     html += escapeHtml(text[p]);
   }
   html += fmtClose(cur);
-  return html;
+  return html + trailingBr;
 }
 
 // Read the contentEditable back out as plain text plus formatting marks: footnote
@@ -479,7 +486,9 @@ function readEditableRich(el: HTMLElement): { text: string; marks: Mark[]; fnMar
           fnMarkers.push({ id: e.getAttribute("data-fn")!, offset: text.length });
           continue;
         }
-        if (e.nodeName === "BR") { text += "\n"; continue; }
+        // The rendered trailing "bogus" <br> (see buildParagraphHtml) only
+        // gives the empty last line height; it isn't part of the text.
+        if (e.nodeName === "BR") { if (!e.hasAttribute("data-bogus")) text += "\n"; continue; }
         walk(e);
       }
     }
@@ -648,10 +657,26 @@ function EditableParagraph({
           if (e.key === "Escape") { setGreek(null); return; }
           if (e.key === "Enter") {
             e.preventDefault();
-            // While a symbol suggestion is showing, Enter inserts that symbol;
-            // otherwise Enter is a line break.
-            if (greek) insertGreek();
-            else document.execCommand("insertText", false, "\n");
+            // While a symbol suggestion is showing, Enter inserts that symbol.
+            if (greek) { insertGreek(); return; }
+            // Otherwise insert a newline deterministically into the model (not
+            // via execCommand, whose contentEditable behaviour is inconsistent
+            // and left the caret on the previous line). The caret is recorded
+            // just after the new "\n" so the restore effect drops it onto the
+            // fresh line — so one Enter = one new line with the cursor in it.
+            const el = ref.current;
+            if (!el) return;
+            const fullCaret = start + getCaretOffset(el);
+            const newFull = text.slice(0, fullCaret) + "\n" + text.slice(fullCaret);
+            const nextMarks = spliceMarks(marks, fullCaret, fullCaret, [], 1);
+            const nextFootnotes = footnotes.map((f: any) =>
+              !f.unconnected && f.offset != null && f.offset >= fullCaret
+                ? { ...f, offset: f.offset + 1 }
+                : f
+            );
+            onCaret?.(node.id, fullCaret + 1);
+            onTyping?.(node.id);
+            updateRichText(node.id, newFull, nextMarks, nextFootnotes);
           }
         }}
         style={{
