@@ -2,6 +2,9 @@ import { useLayoutEffect, useRef } from "react";
 
 // Tall enough to hold the mini page preview — roughly half a sidebar's width.
 export const TOPBAR_HEIGHT = 140;
+// Collapsed height: just tall enough for the logo / undo-redo / export controls.
+// Hiding the bar shrinks it to this (only the document preview disappears).
+export const TOPBAR_COLLAPSED_HEIGHT = 56;
 
 type Layout = {
   pageWidth: number;
@@ -142,7 +145,7 @@ function Logo({ onBack }: any) {
 }
 
 export function TopBar({
-  onBack, onUndo, onRedo, onExport, canUndo, canRedo, visible,
+  onBack, onUndo, onRedo, onExport, canUndo, canRedo, visible, collapsed,
   pages, layout
 }: any) {
   return (
@@ -151,7 +154,7 @@ export function TopBar({
       style={{
         position: "relative",
         flex: "0 0 auto",
-        height: TOPBAR_HEIGHT,
+        height: "100%",
         borderBottom: "1px solid rgba(0,0,0,0.08)",
         display: "flex",
         alignItems: "center",
@@ -163,9 +166,18 @@ export function TopBar({
         overflow: "hidden"
       }}
     >
-      {/* Centered, live mini preview of the whole document. */}
-      <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", zIndex: 1 }}>
-        <MiniPreview pages={pages} layout={layout} />
+      {/* Centered, live mini preview of the whole document — hidden when the bar
+          is collapsed (only the controls stay visible). */}
+      <div
+        style={{
+          position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
+          zIndex: 1,
+          opacity: collapsed ? 0 : 1,
+          pointerEvents: collapsed ? "none" : "auto",
+          transition: "opacity 0.25s ease"
+        }}
+      >
+        {!collapsed && <MiniPreview pages={pages} layout={layout} />}
       </div>
 
       {/* Left: logo (doubles as back), undo/redo. */}

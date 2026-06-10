@@ -203,6 +203,46 @@ math-field::part(menu-toggle) {
   letter-spacing: -0.015em;
   color: var(--ui-text);
 }
+
+/* Custom scrollbars for the editor side panels & document, matching the
+   frosted Apple-style chrome: a slim, rounded, inset pill that tints blue on
+   hover and stays out of the way otherwise. */
+.ui-panel,
+.doc-area {
+  scrollbar-width: thin;                       /* Firefox */
+  scrollbar-color: rgba(60, 60, 67, 0.28) transparent;
+}
+.ui-panel::-webkit-scrollbar,
+.doc-area::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+.ui-panel::-webkit-scrollbar-track,
+.doc-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ui-panel::-webkit-scrollbar-thumb,
+.doc-area::-webkit-scrollbar-thumb {
+  background: rgba(60, 60, 67, 0.28);
+  border-radius: 999px;
+  border: 3px solid transparent;               /* inset the pill from the edge */
+  background-clip: padding-box;
+  transition: background 0.15s ease;
+}
+.ui-panel:hover::-webkit-scrollbar-thumb,
+.doc-area:hover::-webkit-scrollbar-thumb {
+  background: rgba(60, 60, 67, 0.42);
+  background-clip: padding-box;
+}
+.ui-panel::-webkit-scrollbar-thumb:hover,
+.doc-area::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-blue);
+  background-clip: padding-box;
+}
+.ui-panel::-webkit-scrollbar-corner,
+.doc-area::-webkit-scrollbar-corner {
+  background: transparent;
+}
 .ui-panel h4 {
   font-family: var(--ui-font);
 }

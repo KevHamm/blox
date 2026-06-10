@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { DocumentRenderer, HeadingInput } from "./renderer/DocumentRenderer";
 import { Page } from "./components/Page";
-import { TopBar, TOPBAR_HEIGHT } from "./components/TopBar";
+import { TopBar, TOPBAR_HEIGHT, TOPBAR_COLLAPSED_HEIGHT } from "./components/TopBar";
 import { TrashIcon } from "./components/TrashIcon";
 import { Welcome } from "./components/Welcome";
 import { useDocument } from "./hooks/useDocument";
@@ -253,21 +253,24 @@ const DELETE_LABELS: Record<string, string> = {
 // Clicking it slides that panel out of the way; when the panel is hidden the
 // button stays at the screen edge so it can be slid back into view.
 function EdgeToggle({
-  edge, open, size, onToggle
-}: { edge: "left" | "right" | "top"; open: boolean; size: number; onToggle: () => void }) {
+  edge, open, size, collapsedSize = 0, onToggle
+}: { edge: "left" | "right" | "top"; open: boolean; size: number; collapsedSize?: number; onToggle: () => void }) {
   const vertical = edge === "top";
   const ease = "cubic-bezier(0.16, 1, 0.3, 1)";
+  // The panel-edge offset: full size when open, the collapsed remnant when hidden
+  // (0 for the sidebars, the short control-bar height for the top bar).
+  const off = open ? size : collapsedSize;
   // Anchor the panel-edge side flush (so the button is never clipped off-screen
   // when the panel is hidden) and only center on the long axis.
   const pos: React.CSSProperties = { position: "fixed", zIndex: 55 };
   if (edge === "left") {
-    pos.left = open ? size : 0; pos.top = "50%";
+    pos.left = off; pos.top = "50%";
     pos.transform = "translateY(-50%)"; pos.transition = `left 0.45s ${ease}`;
   } else if (edge === "right") {
-    pos.right = open ? size : 0; pos.top = "50%";
+    pos.right = off; pos.top = "50%";
     pos.transform = "translateY(-50%)"; pos.transition = `right 0.45s ${ease}`;
   } else {
-    pos.top = open ? size : 0; pos.left = "50%";
+    pos.top = off; pos.left = "50%";
     pos.transform = "translateX(-50%)"; pos.transition = `top 0.45s ${ease}`;
   }
   // Chevron points "in" (hide) when open, "out" (show) when closed.
@@ -345,6 +348,8 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
 
   // Images uploaded via the right sidebar (preview gallery).
   const [images, setImages] = useState<{ id: string; src: string; name: string }[]>([]);
+  // True while OS files are being dragged over the right sidebar (drop to upload).
+  const [imageDropActive, setImageDropActive] = useState(false);
   // Source of the image currently being dragged (for the drag overlay preview).
   const [activeDragSrc, setActiveDragSrc] = useState<string | null>(null);
   // Id of the Blox block currently being dragged (for the drag overlay).
@@ -637,31 +642,28 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
   // -----------------------------
   // IMAGE UPLOAD (right sidebar gallery)
   // -----------------------------
-  function uploadImage() {
-    const input = document.createElement("input");
-
-    input.type = "file";
-    input.accept = "image/*";
-
-    input.onchange = (e: any) => {
-      const file = e.target.files[0];
-
-      if (!file) return;
-
+  // Read one or more image files into the gallery (shared by the upload button
+  // and by dropping files onto the sidebar).
+  function addImageFiles(files: FileList | File[]) {
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith("image/")) return;
       const reader = new FileReader();
-
       reader.onload = () => {
         const url = reader.result as string;
-
-        setImages((prev) => [
-          ...prev,
-          { id: crypto.randomUUID(), src: url, name: file.name }
-        ]);
+        setImages((prev) => [...prev, { id: crypto.randomUUID(), src: url, name: file.name }]);
       };
-
       reader.readAsDataURL(file);
-    };
+    });
+  }
 
+  function uploadImage() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.multiple = true;
+    input.onchange = (e: any) => {
+      if (e.target.files?.length) addImageFiles(e.target.files);
+    };
     input.click();
   }
 
@@ -867,7 +869,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
       <div
         style={{
           flex: "0 0 auto",
-          height: topOpen ? TOPBAR_HEIGHT : 0,
+          height: topOpen ? TOPBAR_HEIGHT : TOPBAR_COLLAPSED_HEIGHT,
           overflow: "hidden",
           transition: "height 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
           zIndex: 5
@@ -881,6 +883,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
           canUndo={canUndo}
           canRedo={canRedo}
           visible={sidebarsIn}
+          collapsed={!topOpen}
           pages={pages}
           layout={layout}
         />
@@ -1250,7 +1253,30 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
         >
         <div
           className="ui-panel"
+          // OS drag-and-drop image upload: dropping image files anywhere on this
+          // sidebar adds them to the gallery. dragenter/over must preventDefault
+          // for the drop to fire; a counter avoids flicker as the pointer crosses
+          // child elements.
+          onDragOver={(e) => {
+            if (Array.from(e.dataTransfer.types).includes("Files")) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+              if (!imageDropActive) setImageDropActive(true);
+            }
+          }}
+          onDragLeave={(e) => {
+            // Only clear when the pointer actually leaves the panel.
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setImageDropActive(false);
+          }}
+          onDrop={(e) => {
+            if (e.dataTransfer.files?.length) {
+              e.preventDefault();
+              addImageFiles(e.dataTransfer.files);
+            }
+            setImageDropActive(false);
+          }}
           style={{
+            position: "relative",
             width: 260,
             boxSizing: "border-box",
             padding: 20,
@@ -1262,10 +1288,11 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
             overflowY: "auto",
             overflowX: "hidden",
             overscrollBehavior: "contain",
+            boxShadow: imageDropActive ? "inset 0 0 0 2px var(--ui-blue)" : "none",
             transform: sidebarsIn ? "translateX(0)" : "translateX(100%)",
             opacity: sidebarsIn ? 1 : 0,
             transition:
-              "transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease"
+              "transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease, box-shadow 0.15s ease"
           }}
         >
           <h3>Images</h3>
@@ -1273,6 +1300,24 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
           <button className="ui-btn" style={{ width: "100%" }} onClick={uploadImage}>
             Upload image
           </button>
+
+          <div
+            style={{
+              border: `2px dashed ${imageDropActive ? "var(--ui-blue)" : "rgba(0,0,0,0.18)"}`,
+              borderRadius: 10,
+              padding: "14px 10px",
+              textAlign: "center",
+              fontFamily: "var(--ui-font)",
+              fontSize: 12,
+              lineHeight: 1.4,
+              color: imageDropActive ? "var(--ui-blue)" : "var(--ui-2nd)",
+              background: imageDropActive ? "rgba(0,113,227,0.08)" : "transparent",
+              transition: "border-color 0.15s ease, background 0.15s ease, color 0.15s ease",
+              pointerEvents: "none"
+            }}
+          >
+            {imageDropActive ? "Drop images to upload" : "or drag & drop images here"}
+          </div>
 
           {images.map((img) => (
             <DraggableImage key={img.id} img={img} onDelete={deleteImageUpload} />
@@ -1286,7 +1331,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
         <>
           <EdgeToggle edge="left"  open={leftOpen}  size={280}           onToggle={() => setLeftOpen((v) => !v)} />
           <EdgeToggle edge="right" open={rightOpen} size={260}           onToggle={() => setRightOpen((v) => !v)} />
-          <EdgeToggle edge="top"   open={topOpen}   size={TOPBAR_HEIGHT} onToggle={() => setTopOpen((v) => !v)} />
+          <EdgeToggle edge="top"   open={topOpen}   size={TOPBAR_HEIGHT} collapsedSize={TOPBAR_COLLAPSED_HEIGHT} onToggle={() => setTopOpen((v) => !v)} />
         </>
       )}
      </div>
