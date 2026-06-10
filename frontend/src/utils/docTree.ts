@@ -320,6 +320,13 @@ export const ARROW_COMMANDS = [
   "leftharpoondown", "rightharpoondown"
 ];
 
+// Miscellaneous math symbols offered as Blox (command name = id suffix = glyph).
+export const SYMBOL_COMMANDS = [
+  "infty", "forall", "Re", "Im", "nabla", "exists",
+  "partial", "nexists", "emptyset", "varnothing", "wp", "complement",
+  "neg", "cdots", "square", "sqrt", "blacksquare", "triangle"
+];
+
 // Default LaTeX for each math Blox block.
 export const MATH_TEMPLATES: Record<string, string> = {
   "block::math::integral": "\\int_{a}^{b} f(x)\\,dx",
@@ -330,6 +337,8 @@ export const MATH_TEMPLATES: Record<string, string> = {
 };
 // Each arrow symbol is just its command.
 for (const c of ARROW_COMMANDS) MATH_TEMPLATES[`block::math::${c}`] = `\\${c}`;
+// \sqrt takes an argument; the rest are bare commands.
+for (const c of SYMBOL_COMMANDS) MATH_TEMPLATES[`block::math::${c}`] = c === "sqrt" ? "\\sqrt{}" : `\\${c}`;
 
 // Path of nodes from the document root down to (and including) the node with id.
 export function pathTo(node: any, id: string, acc: any[] = []): any[] | null {

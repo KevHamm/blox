@@ -32,7 +32,44 @@ const lorem_full = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed
  * that needs raw `setDoc` access still gets it back too.
  */
 export function useDocument(initial?: DocumentNode) {
-  const [doc, setDoc] = useState<DocumentNode>(() => initial ?? sampleDocument);
+  // Undo/redo history. Every committed change pushes the previous document onto
+  // `past`; undo/redo move the present between the two stacks. Unbounded for now.
+  const [hist, setHist] = useState<{
+    past: DocumentNode[];
+    present: DocumentNode;
+    future: DocumentNode[];
+  }>(() => ({ past: [], present: initial ?? sampleDocument, future: [] }));
+
+  const doc = hist.present;
+
+  // Drop-in replacement for a useState setter: supports a value or an updater,
+  // records history, and clears the redo stack on a real change.
+  function setDoc(updater: DocumentNode | ((prev: DocumentNode) => DocumentNode)) {
+    setHist((h) => {
+      const next = typeof updater === "function"
+        ? (updater as (p: DocumentNode) => DocumentNode)(h.present)
+        : updater;
+      if (next === h.present) return h;
+      return { past: [...h.past, h.present], present: next, future: [] };
+    });
+  }
+
+  function undo() {
+    setHist((h) =>
+      h.past.length
+        ? { past: h.past.slice(0, -1), present: h.past[h.past.length - 1], future: [h.present, ...h.future] }
+        : h
+    );
+  }
+  function redo() {
+    setHist((h) =>
+      h.future.length
+        ? { past: [...h.past, h.present], present: h.future[0], future: h.future.slice(1) }
+        : h
+    );
+  }
+  const canUndo = hist.past.length > 0;
+  const canRedo = hist.future.length > 0;
 
   // -----------------------------
   // UPDATE TEXT
@@ -68,13 +105,23 @@ export function useDocument(initial?: DocumentNode) {
     setDoc((prev) => update(prev));
   }
 
-  // Update a paragraph's text together with its inline formatting marks.
+  // Update a paragraph's text together with its inline formatting marks. If the
+  // edit deletes the word a footnote was attached to (its word index no longer
+  // exists), the footnote is flagged: painted red and prefixed with a warning.
   function updateRichText(id: string, value: string, marks: any[]) {
     function update(node: any): any {
       if (node.id === id && node.type === "paragraph") {
         const next: any = { ...node, text: value };
         if (marks && marks.length) next.marks = marks;
         else delete next.marks;
+        if (next.footnotes?.length) {
+          const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
+          next.footnotes = next.footnotes.map((f: any) =>
+            !f.unconnected && f.word >= wordCount
+              ? { ...f, unconnected: true, text: `UNCONNECTED FOOTNOTE ${f.text ?? ""}` }
+              : f
+          );
+        }
         return next;
       }
       if (node.children) return { ...node, children: node.children.map(update) };
@@ -656,6 +703,10 @@ export function useDocument(initial?: DocumentNode) {
   return {
     doc,
     setDoc,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
     updateTextById,
     updateRichText,
     toggleParagraphAlign,

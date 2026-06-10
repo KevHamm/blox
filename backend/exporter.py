@@ -299,6 +299,7 @@ def document_to_latex(doc) -> str:
         "\\documentclass{beamer}" if is_beamer else "\\documentclass{article}",
         "\\usepackage[utf8]{inputenc}",
         "\\usepackage{amsmath}",
+        "\\usepackage{amssymb}",
         "\\usepackage{graphicx}",
     ]
 

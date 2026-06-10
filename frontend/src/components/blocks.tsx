@@ -11,7 +11,8 @@ import {
   newEquation,
   mathNode,
   MATH_TEMPLATES,
-  ARROW_COMMANDS
+  ARROW_COMMANDS,
+  SYMBOL_COMMANDS
 } from "../utils/docTree";
 
 /* A KaTeX-rendered glyph for the Blox palette icons. */
@@ -197,6 +198,11 @@ export const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: 
 for (const c of ARROW_COMMANDS) {
   BLOCK_DEFS[`block::math::${c}`] = mathBlock(`block::math::${c}`, c, `\\${c}`, 18);
 }
+// Misc math symbols (√ shows an example radicand in its icon).
+for (const c of SYMBOL_COMMANDS) {
+  const iconTex = c === "sqrt" ? "\\sqrt{x}" : `\\${c}`;
+  BLOCK_DEFS[`block::math::${c}`] = mathBlock(`block::math::${c}`, c, iconTex, 18);
+}
 
 // Structural blocks land at the correct hierarchy level, not literally at the
 // drop index.
@@ -230,7 +236,9 @@ export const MATH_ORDER = [
   "block::math::matrix"
 ];
 
-export const MATH_SYMBOL_ORDER = ARROW_COMMANDS.map((c) => `block::math::${c}`);
+export const MATH_SYMBOL_ORDER = [...ARROW_COMMANDS, ...SYMBOL_COMMANDS].map(
+  (c) => `block::math::${c}`
+);
 
 /* The visual box for a Blox item: an icon with a label below it. */
 export function BlockBox({ id, shadow }: { id: string; shadow?: boolean }) {

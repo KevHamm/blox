@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { DocumentRenderer, HeadingInput } from "./renderer/DocumentRenderer";
 import { Page } from "./components/Page";
+import { TopBar } from "./components/TopBar";
 import { TrashIcon } from "./components/TrashIcon";
 import { Welcome } from "./components/Welcome";
 import { useDocument } from "./hooks/useDocument";
@@ -194,13 +195,14 @@ const DELETE_LABELS: Record<string, string> = {
   frame: "slide"
 };
 
-function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; template: TemplateLayout }) {
+function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean; template: TemplateLayout; onBack?: () => void }) {
   // ── 1. All state first ──────────────────────────────────
   // Starting content for the chosen class (article / report / letter / …).
   const initialDoc = useMemo(() => templateDoc(template.cls), [template.cls]);
   // The document tree + every mutation handler live in this hook.
   const {
     doc, setDoc,
+    undo, redo, canUndo, canRedo,
     updateTextById, updateRichText, toggleParagraphAlign, updateSectionTitle, updateFigureCaption,
     updateMathItem, deleteMathItem, setFootnoteText, removeFootnote,
     updateListItem, addListItem, deleteListItem, setListStyle,
@@ -441,6 +443,25 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [pendingFootnote]);
+
+  // Undo / redo keyboard shortcuts. We intercept Ctrl/Cmd+Z so the document
+  // model is the single source of truth (the browser's native contentEditable
+  // undo would desync it).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      } else if (key === "y") {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   const hasAbstract = (doc.children ?? []).some((c: any) => c.type === "abstract");
 
@@ -716,11 +737,27 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
       onDragCancel={() => { setActiveDragSrc(null); setActiveBlockId(null); }}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
+     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      {/* Full-width top bar above the sidebars: logo, back, undo/redo and a
+          live mini preview of the whole document. */}
+      <TopBar
+        onBack={onBack}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        visible={sidebarsIn}
+        pages={pages}
+        layout={layout}
+        leafHeights={leafHeights}
+        headerHeights={headerHeights}
+      />
       <div
         className="editor-canvas"
         style={{
           display: "flex",
-          minHeight: "100vh",
+          flex: 1,
+          minHeight: 0,
           overflowX: "hidden"
         }}
       >
@@ -758,7 +795,7 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
             display: "flex",
             flexDirection: "column",
             gap: 12,
-            height: "100vh",
+            height: "100%",
             overflowY: "auto",
             transform: sidebarsIn ? "translateX(0)" : "translateX(-100%)",
             opacity: sidebarsIn ? 1 : 0,
@@ -1021,16 +1058,20 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
                       return (
                         <div style={{ marginTop: 20, width: Math.min(layout.textWidth, contentWidth), marginLeft: "auto", marginRight: "auto" }}>
                           <div style={{ borderTop: "1px solid #999", width: 160, marginBottom: 6 }} />
-                          {fns.map(({ paragraphId, fn, number }) => (
+                          {fns.map(({ paragraphId, fn, number }) => {
+                            // A footnote whose target word was deleted is shown in red.
+                            const fnColor = fn.unconnected ? "#c0392b" : "var(--text)";
+                            return (
                             <div key={fn.id} style={{ display: "flex", alignItems: "flex-start", gap: 4, marginBottom: 2 }}>
-                              <sup style={{ fontSize: layout.fontSize * 0.7, fontFamily: "var(--sans)", color: "var(--text)", lineHeight: 1.6 }}>{number}</sup>
+                              <sup style={{ fontSize: layout.fontSize * 0.7, fontFamily: "var(--sans)", color: fnColor, lineHeight: 1.6 }}>{number}</sup>
                               <input
                                 value={fn.text}
                                 placeholder="Footnote text…"
                                 onChange={(e) => setFootnoteText(paragraphId, fn.id, e.target.value)}
                                 style={{
                                   flex: 1, border: "none", outline: "none", background: "transparent",
-                                  fontFamily: "var(--sans)", color: "var(--text)",
+                                  fontFamily: "var(--sans)", color: fnColor,
+                                  fontWeight: fn.unconnected ? 600 : 400,
                                   fontSize: layout.fontSize * 0.8
                                 }}
                               />
@@ -1045,7 +1086,8 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
                                 <TrashIcon size={13} />
                               </button>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       );
                     })()}
@@ -1064,7 +1106,7 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
             display: "flex",
             flexDirection: "column",
             gap: 12,
-            height: "100vh",
+            height: "100%",
             overflowY: "auto",
             transform: sidebarsIn ? "translateX(0)" : "translateX(100%)",
             opacity: sidebarsIn ? 1 : 0,
@@ -1083,6 +1125,7 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
           ))}
         </div>
       </div>
+     </div>
 
       {/* Floating preview of whatever is being dragged, centered on the cursor. */}
       <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
@@ -1162,6 +1205,16 @@ export default function App() {
 
   const showEditor = phase === "morph" || phase === "editor";
 
+  // Return to the template chooser (welcome screen). The editor unmounts, so its
+  // document resets — picking a template starts a fresh project.
+  function goBack() {
+    setPhase("welcome");
+    setOrigin(null);
+    setTarget(null);
+    setGrown(false);
+    setOverlayOn(false);
+  }
+
   // Animate the box geometry from the clicked card to the page. Doing this
   // directly (rather than a non-uniform transform scale) keeps the corners round
   // and the morph clean even when the aspect ratio changes (e.g. a portrait card
@@ -1170,7 +1223,7 @@ export default function App() {
 
   return (
     <>
-      {showEditor && <Editor sidebarsIn={phase === "editor"} template={template} />}
+      {showEditor && <Editor sidebarsIn={phase === "editor"} template={template} onBack={goBack} />}
 
       {phase !== "editor" && (
         <div

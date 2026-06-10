@@ -40,7 +40,8 @@ export interface DocumentNode {
   images?: { id: string; src: string }[];
   sectionNumber?: number;
   numberLabel?: string;
-  footnotes?: { id: string; word: number; text: string }[];
+  // `unconnected` marks a footnote whose target word was deleted from the text.
+  footnotes?: { id: string; word: number; text: string; unconnected?: boolean }[];
   listStyle?: "dash" | "dot" | "number";
   items?: { id: string; text?: string; latex?: string }[];
   // A math node rendered as a numbered display equation (\begin{equation}).
