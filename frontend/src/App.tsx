@@ -47,8 +47,9 @@ import {
 import {
   BLOCK_DEFS,
   STRUCTURAL,
-  BLOX_ORDER,
-  PAGE_ORDER,
+  DOCUMENT_ORDER,
+  MATH_ORDER,
+  MATH_SYMBOL_ORDER,
   BlockBox,
   LayoutIcon
 } from "./components/blocks";
@@ -56,6 +57,7 @@ import {
   DraggableImage,
   DroppableDocArea,
   DraggableBlock,
+  Collapsible,
   NumberControl
 } from "./components/editorUi";
 
@@ -916,23 +918,22 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
           )}
 
           {sidebarTab === "blox" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {BLOX_ORDER
-                  .filter((id) => id !== "block::abstract" || !hasAbstract)
-                  .map((id) => (
-                    <DraggableBlock key={id} id={id} />
-                  ))}
-              </div>
-
-              <div style={{ fontWeight: 600, fontSize: 13, marginTop: 4, color: "#555" }}>
-                Pages
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {PAGE_ORDER.map((id) => (
-                  <DraggableBlock key={id} id={id} />
-                ))}
-              </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {([
+                { title: "Document", ids: DOCUMENT_ORDER },
+                { title: "Math", ids: MATH_ORDER },
+                { title: "Math symbols", ids: MATH_SYMBOL_ORDER }
+              ] as const).map(({ title, ids }) => (
+                <Collapsible key={title} title={title}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {ids
+                      .filter((id) => id !== "block::abstract" || !hasAbstract)
+                      .map((id) => (
+                        <DraggableBlock key={id} id={id} />
+                      ))}
+                  </div>
+                </Collapsible>
+              ))}
             </div>
           )}
 

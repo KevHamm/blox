@@ -10,7 +10,8 @@ import {
   newList,
   newEquation,
   mathNode,
-  MATH_TEMPLATES
+  MATH_TEMPLATES,
+  ARROW_COMMANDS
 } from "../utils/docTree";
 
 /* A KaTeX-rendered glyph for the Blox palette icons. */
@@ -191,6 +192,12 @@ export const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: 
   "block::page::bibliography": { label: "Bibliography",       icon: () => <PageGlyph kind="bibliography" />, make: () => newPage("bibliography") }
 };
 
+// Arrow / harpoon symbols: each renders its glyph as the icon and inserts a math
+// node containing the command.
+for (const c of ARROW_COMMANDS) {
+  BLOCK_DEFS[`block::math::${c}`] = mathBlock(`block::math::${c}`, c, `\\${c}`, 18);
+}
+
 // Structural blocks land at the correct hierarchy level, not literally at the
 // drop index.
 export const STRUCTURAL: Record<string, "section" | "subsection" | "subsubsection"> = {
@@ -199,7 +206,9 @@ export const STRUCTURAL: Record<string, "section" | "subsection" | "subsubsectio
   "block::subsubsection": "subsubsection"
 };
 
-export const BLOX_ORDER = [
+// The Blox palette, grouped into the three collapsible categories shown in the
+// sidebar.
+export const DOCUMENT_ORDER = [
   "block::section",
   "block::subsection",
   "block::subsubsection",
@@ -207,6 +216,12 @@ export const BLOX_ORDER = [
   "block::footnote",
   "block::list",
   "block::table",
+  "block::page::cover",
+  "block::page::toc",
+  "block::page::bibliography"
+];
+
+export const MATH_ORDER = [
   "block::equation",
   "block::math::integral",
   "block::math::sum",
@@ -215,11 +230,7 @@ export const BLOX_ORDER = [
   "block::math::matrix"
 ];
 
-export const PAGE_ORDER = [
-  "block::page::cover",
-  "block::page::toc",
-  "block::page::bibliography"
-];
+export const MATH_SYMBOL_ORDER = ARROW_COMMANDS.map((c) => `block::math::${c}`);
 
 /* The visual box for a Blox item: an icon with a label below it. */
 export function BlockBox({ id, shadow }: { id: string; shadow?: boolean }) {

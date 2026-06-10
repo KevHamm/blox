@@ -35,6 +35,18 @@ for _name, _lc, _uc in zip(_GREEK_LOWER_NAMES, _GREEK_LOWER_CHARS, _GREEK_UPPER_
     cap = _name.capitalize()
     GREEK[_uc] = _UPPER_AS_LATIN[cap] if cap in _UPPER_AS_LATIN else f"$\\{cap}$"
 
+# Arrow / harpoon glyphs (typed via autocorrect or the Math-symbols palette) →
+# their math-mode LaTeX command.
+_ARROW_NAMES = {
+    "→": "rightarrow", "←": "leftarrow", "⇒": "Rightarrow", "⇐": "Leftarrow",
+    "↔": "leftrightarrow", "⇔": "Leftrightarrow", "↦": "mapsto", "⟼": "longmapsto",
+    "⇌": "rightleftharpoons", "↑": "uparrow", "↓": "downarrow", "⇑": "Uparrow",
+    "⇓": "Downarrow", "⇕": "Updownarrow", "↕": "updownarrow", "↗": "nearrow",
+    "↘": "searrow", "↙": "swarrow", "↖": "nwarrow", "↼": "leftharpoonup",
+    "⇀": "rightharpoonup", "↽": "leftharpoondown", "⇁": "rightharpoondown",
+}
+ARROWS = {ch: f"$\\{name}$" for ch, name in _ARROW_NAMES.items()}
+
 # LaTeX special characters that must be escaped in ordinary text.
 _SPECIAL = {
     "\\": r"\textbackslash{}",
@@ -60,6 +72,8 @@ def strip_prefix(title: str) -> str:
 def _esc_char(ch: str) -> str:
     if ch in GREEK:
         return GREEK[ch]
+    if ch in ARROWS:
+        return ARROWS[ch]
     return _SPECIAL.get(ch, ch)
 
 

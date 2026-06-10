@@ -309,6 +309,17 @@ export const mathNode = (latex: string) => ({
   items: [{ id: crypto.randomUUID(), latex }]
 });
 
+// Arrow / harpoon symbols offered as math Blox (the command name is also the id
+// suffix and the rendered glyph). Case-sensitive: "Leftarrow" ≠ "leftarrow".
+export const ARROW_COMMANDS = [
+  "leftarrow", "Leftarrow", "rightarrow", "Rightarrow",
+  "leftrightarrow", "rightleftharpoons", "uparrow", "downarrow",
+  "Uparrow", "Downarrow", "Leftrightarrow", "Updownarrow",
+  "mapsto", "longmapsto", "nearrow", "searrow",
+  "swarrow", "nwarrow", "leftharpoonup", "rightharpoonup",
+  "leftharpoondown", "rightharpoondown"
+];
+
 // Default LaTeX for each math Blox block.
 export const MATH_TEMPLATES: Record<string, string> = {
   "block::math::integral": "\\int_{a}^{b} f(x)\\,dx",
@@ -317,6 +328,8 @@ export const MATH_TEMPLATES: Record<string, string> = {
   "block::math::fraction": "\\frac{a}{b}",
   "block::math::matrix": "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"
 };
+// Each arrow symbol is just its command.
+for (const c of ARROW_COMMANDS) MATH_TEMPLATES[`block::math::${c}`] = `\\${c}`;
 
 // Path of nodes from the document root down to (and including) the node with id.
 export function pathTo(node: any, id: string, acc: any[] = []): any[] | null {

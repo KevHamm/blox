@@ -4,6 +4,7 @@ import { isContainerType } from "../utils/paginateDocument";
 import type { Mark, Fmt } from "../utils/marks";
 import { formatAt, sliceMarks, spliceMarks, normalizeMarks, marksEqual } from "../utils/marks";
 import { greekFor, wordAround } from "../utils/greek";
+import { arrowAutocorrect } from "../utils/arrows";
 
 // A DOM Range spanning characters [a, b) of a contentEditable element, walking
 // its text nodes (skipping non-text like footnote markers).
@@ -577,9 +578,20 @@ function EditableParagraph({
     // back into the whole node (so b/i/u applied to a selection persists, and a
     // page-split paragraph keeps its formatting too).
     const { text: domText, marks: sliceRuns } = readEditableRich(el);
-    const full = text.slice(0, start) + domText + text.slice(end);
-    const nextMarks = spliceMarks(marks, start, end, sliceRuns, domText.length);
-    onCaret?.(node.id, start + getCaretOffset(el));
+    const localCaret = getCaretOffset(el);
+
+    // ASCII arrow autocorrect (-> ← => <= <-> <=> |-> |-->) within this slice.
+    let outText = domText, outRuns = sliceRuns, outCaret = localCaret;
+    const conv = arrowAutocorrect(domText, localCaret);
+    if (conv) {
+      outText = domText.slice(0, conv.from) + conv.symbol + domText.slice(conv.to);
+      outRuns = spliceMarks(sliceRuns, conv.from, conv.to, [], conv.symbol.length);
+      outCaret = conv.from + conv.symbol.length + (localCaret - conv.to);
+    }
+
+    const full = text.slice(0, start) + outText + text.slice(end);
+    const nextMarks = spliceMarks(marks, start, end, outRuns, outText.length);
+    onCaret?.(node.id, start + outCaret);
     onTyping?.(node.id);
     if (full !== text || !marksEqual(marks, nextMarks)) updateRichText(node.id, full, nextMarks);
     detectGreek();
