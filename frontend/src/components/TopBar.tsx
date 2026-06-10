@@ -1,76 +1,84 @@
-import type { CSSProperties } from "react";
-import { isContainerType } from "../utils/paginateDocument";
-import { COLUMN_GAP } from "../utils/pageConfig";
+import { useLayoutEffect, useRef } from "react";
 
 // Tall enough to hold the mini page preview — roughly half a sidebar's width.
 export const TOPBAR_HEIGHT = 140;
 
-type Heights = Record<string, number>;
-type Bar = { kind: string; h: number };
+type Layout = {
+  pageWidth: number;
+  pageHeight: number;
+};
 
-// Flatten one column's chunks into stacked wireframe bars (height from the
-// measured layout, so the preview is roughly to scale).
-function columnBars(col: any[], leafH: Heights, headerH: Heights): Bar[] {
-  const out: Bar[] = [];
-  const walk = (chunk: any) => {
-    const id = chunk.node.id;
-    const t = chunk.node.type;
-    if (isContainerType(t) || t === "frame") {
-      if (chunk.header) out.push({ kind: "head", h: headerH[id] ?? 22 });
-      (chunk.children ?? []).forEach(walk);
-    } else {
-      out.push({ kind: t, h: leafH[id] ?? (chunk.slice ? 48 : 70) });
-    }
+// A live, scaled-down preview of the real document pages. Each page is a clone
+// of the rendered `.blox-page`, so it shows the actual content; clicking a page
+// scrolls the document to it.
+function MiniPreview({ pages, layout }: { pages: any[]; layout: Layout }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const miniH = TOPBAR_HEIGHT - 48;
+  const scale = miniH / layout.pageHeight;
+  const slotW = layout.pageWidth * scale;
+  const slotH = layout.pageHeight * scale;
+
+  // Re-clone the real pages whenever the document (and therefore pagination)
+  // changes. Clones are stripped of editing hooks so they can't interfere with
+  // the editor's measurement / caret logic.
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const real = document.querySelectorAll<HTMLElement>(".doc-area .blox-page");
+    const slots = container.querySelectorAll<HTMLElement>(".mini-slot-inner");
+    slots.forEach((slot, i) => {
+      slot.innerHTML = "";
+      const page = real[i];
+      if (!page) return;
+      const clone = page.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll("[contenteditable]").forEach((e) => e.setAttribute("contenteditable", "false"));
+      clone.querySelectorAll("[data-para-id],[data-leaf-id],[data-head-id]").forEach((e) => {
+        e.removeAttribute("data-para-id");
+        e.removeAttribute("data-leaf-id");
+        e.removeAttribute("data-head-id");
+      });
+      clone.style.margin = "0";
+      clone.style.transform = `scale(${scale})`;
+      clone.style.transformOrigin = "top left";
+      clone.style.pointerEvents = "none";
+      slot.appendChild(clone);
+    });
+  }, [pages, scale]);
+
+  const jump = (i: number) => {
+    const docArea = document.querySelector<HTMLElement>(".doc-area");
+    if (!docArea) return;
+    const page = docArea.querySelectorAll<HTMLElement>(".blox-page")[i];
+    if (!page) return;
+    const top =
+      docArea.scrollTop + (page.getBoundingClientRect().top - docArea.getBoundingClientRect().top) - 24;
+    docArea.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
   };
-  col.forEach(walk);
-  return out;
-}
 
-function barStyle(kind: string, h: number): CSSProperties {
-  const height = Math.max(h, 2);
-  if (kind === "head") return { height, background: "#9097a6", borderRadius: 1, flex: "0 0 auto" };
-  if (kind === "table" || kind === "figure" || kind === "math")
-    return { height, background: "#cdd2db", border: "0.5px solid #b7bdc8", borderRadius: 1, flex: "0 0 auto" };
-  return { height, background: "#dfe3ea", borderRadius: 1, flex: "0 0 auto" };
-}
-
-function MiniPage({ cols, layout, leafH, headerH, scale }: any) {
-  const pageW = layout.pageWidth * scale;
-  const pageH = layout.pageHeight * scale;
-  const blockW =
-    Math.min(layout.textWidth, layout.pageWidth - layout.padLeft - layout.padRight) * scale;
   return (
-    <div
-      style={{
-        width: pageW,
-        height: pageH,
-        flex: "0 0 auto",
-        background: "#fff",
-        borderRadius: 2,
-        boxShadow: "0 1px 4px rgba(20,20,50,0.18)",
-        position: "relative",
-        overflow: "hidden"
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: layout.padTop * scale,
-          bottom: layout.padBottom * scale,
-          left: (pageW - blockW) / 2,
-          width: blockW,
-          display: "flex",
-          gap: COLUMN_GAP * scale
-        }}
-      >
-        {cols.map((col: any[], ci: number) => (
-          <div key={ci} style={{ flex: 1, display: "flex", flexDirection: "column", gap: Math.max(1, scale) }}>
-            {columnBars(col, leafH, headerH).map((b, i) => (
-              <div key={i} style={barStyle(b.kind, b.h * scale)} />
-            ))}
-          </div>
-        ))}
-      </div>
+    <div ref={containerRef} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      {pages.map((_, i) => (
+        <div
+          key={i}
+          onClick={() => jump(i)}
+          title={`Go to page ${i + 1}`}
+          style={{
+            width: slotW,
+            height: slotH,
+            flex: "0 0 auto",
+            borderRadius: 3,
+            overflow: "hidden",
+            cursor: "pointer",
+            background: "#fff",
+            boxShadow: "0 1px 5px rgba(20,20,50,0.22)",
+            transition: "box-shadow 0.15s ease, transform 0.1s ease"
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,113,227,0.5)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 1px 5px rgba(20,20,50,0.22)"; }}
+        >
+          <div className="mini-slot-inner" style={{ width: slotW, height: slotH }} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -78,22 +86,20 @@ function MiniPage({ cols, layout, leafH, headerH, scale }: any) {
 function IconButton({ onClick, disabled, title, children }: any) {
   return (
     <button
+      className="ui-btn"
       onClick={onClick}
       disabled={disabled}
       title={title}
       aria-label={title}
       style={{
-        width: 34,
-        height: 34,
+        width: 36,
+        height: 36,
+        padding: 0,
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        borderRadius: 9,
-        border: "1px solid rgba(0,0,0,0.12)",
-        background: "rgba(255,255,255,0.7)",
-        color: disabled ? "#c0c0c6" : "#333",
-        cursor: disabled ? "default" : "pointer",
-        transition: "background 0.15s ease, border-color 0.15s ease"
+        color: disabled ? "#bdbdc4" : "var(--ui-text)",
+        cursor: disabled ? "default" : "pointer"
       }}
     >
       {children}
@@ -102,12 +108,9 @@ function IconButton({ onClick, disabled, title, children }: any) {
 }
 
 export function TopBar({
-  onBack, onUndo, onRedo, canUndo, canRedo, visible,
-  pages, layout, leafHeights, headerHeights
+  onBack, onUndo, onRedo, onExport, canUndo, canRedo, visible,
+  pages, layout
 }: any) {
-  const miniH = TOPBAR_HEIGHT - 44;
-  const scale = miniH / layout.pageHeight;
-
   return (
     <div
       className="ui-panel"
@@ -116,48 +119,19 @@ export function TopBar({
         flex: "0 0 auto",
         height: TOPBAR_HEIGHT,
         borderBottom: "1px solid rgba(0,0,0,0.08)",
-        display: "flex",
-        alignItems: "center",
-        padding: "0 18px",
         opacity: visible ? 1 : 0,
         transition: "opacity 0.4s ease",
         zIndex: 5,
         overflow: "hidden"
       }}
     >
-      {/* Centered mini preview of the whole document; grows outward both ways. */}
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          zIndex: 1,
-          pointerEvents: "none"
-        }}
-      >
-        {pages.map((cols: any[], i: number) => (
-          <MiniPage key={i} cols={cols} layout={layout} leafH={leafHeights} headerH={headerHeights} scale={scale} />
-        ))}
+      {/* Centered, live mini preview of the whole document. */}
+      <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", zIndex: 1 }}>
+        <MiniPreview pages={pages} layout={layout} />
       </div>
 
-      {/* Left controls, on a solid strip so the preview never shows through. */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 2,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          height: "100%",
-          paddingRight: 24,
-          background:
-            "linear-gradient(to right, rgba(251,251,253,0.95) 78%, rgba(251,251,253,0))"
-        }}
-      >
+      {/* Top-left: back, logo, undo/redo. */}
+      <div style={{ position: "absolute", left: 18, top: 14, display: "flex", alignItems: "center", gap: 10, zIndex: 2 }}>
         <IconButton onClick={onBack} title="Back to templates">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
@@ -171,13 +145,14 @@ export function TopBar({
             fontSize: 24,
             letterSpacing: "-0.02em",
             color: "var(--ui-text)",
-            userSelect: "none"
+            userSelect: "none",
+            padding: "0 2px"
           }}
         >
           BL<span style={{ color: "var(--ui-blue)" }}>o</span>X
         </div>
 
-        <span style={{ width: 1, height: 26, background: "rgba(0,0,0,0.12)", margin: "0 2px" }} />
+        <span style={{ width: 1, height: 24, background: "rgba(0,0,0,0.12)", margin: "0 2px" }} />
 
         <IconButton onClick={onUndo} disabled={!canUndo} title="Undo">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -191,6 +166,11 @@ export function TopBar({
             <path d="M20 9H9a5 5 0 0 0-5 5v0a5 5 0 0 0 5 5h6" />
           </svg>
         </IconButton>
+      </div>
+
+      {/* Top-right: export. */}
+      <div style={{ position: "absolute", right: 18, top: 14, zIndex: 2 }}>
+        <button className="ui-btn primary" onClick={onExport}>Export LaTeX</button>
       </div>
     </div>
   );

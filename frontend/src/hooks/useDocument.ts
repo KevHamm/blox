@@ -105,22 +105,18 @@ export function useDocument(initial?: DocumentNode) {
     setDoc((prev) => update(prev));
   }
 
-  // Update a paragraph's text together with its inline formatting marks. If the
-  // edit deletes the word a footnote was attached to (its word index no longer
-  // exists), the footnote is flagged: painted red and prefixed with a warning.
-  function updateRichText(id: string, value: string, marks: any[]) {
+  // Update a paragraph's text, inline formatting marks, and (when provided) its
+  // reconciled footnotes. The footnote reconciliation — which marker survived
+  // the edit, which became unconnected — is computed in the editor from the DOM.
+  function updateRichText(id: string, value: string, marks: any[], footnotes?: any[]) {
     function update(node: any): any {
       if (node.id === id && node.type === "paragraph") {
         const next: any = { ...node, text: value };
         if (marks && marks.length) next.marks = marks;
         else delete next.marks;
-        if (next.footnotes?.length) {
-          const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
-          next.footnotes = next.footnotes.map((f: any) =>
-            !f.unconnected && f.word >= wordCount
-              ? { ...f, unconnected: true, text: `UNCONNECTED FOOTNOTE ${f.text ?? ""}` }
-              : f
-          );
+        if (footnotes !== undefined) {
+          if (footnotes.length) next.footnotes = footnotes;
+          else delete next.footnotes;
         }
         return next;
       }

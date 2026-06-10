@@ -396,23 +396,13 @@ function buildParagraphHtml(
   footnoteNumbers: Record<string, number> | undefined,
   marks: Mark[] = []
 ): string {
-  // Footnote markers keyed by the character offset they sit at (end of the
-  // word's core).
+  // Footnote markers keyed by their anchor character offset. Unconnected
+  // footnotes (their word was deleted) have no marker.
   const fnAt = new Map<number, any[]>();
-  if (footnotes.length) {
-    let pos = 0, wordIdx = -1;
-    for (const tok of text.split(/(\s+)/)) {
-      if (tok === "") continue;
-      if (/^\s+$/.test(tok)) { pos += tok.length; continue; }
-      wordIdx++;
-      const fns = footnotes.filter((f) => f.word === wordIdx);
-      if (fns.length) {
-        const [core] = splitTrailingPunct(tok);
-        const at = pos + core.length;
-        fnAt.set(at, (fnAt.get(at) ?? []).concat(fns));
-      }
-      pos += tok.length;
-    }
+  for (const f of footnotes) {
+    if (f.unconnected || f.offset == null) continue;
+    const at = Math.min(Math.max(f.offset, 0), text.length);
+    fnAt.set(at, (fnAt.get(at) ?? []).concat(f));
   }
 
   // Nothing to decorate → the original fast path.
@@ -443,9 +433,10 @@ function buildParagraphHtml(
 // Read the contentEditable back out as plain text plus formatting marks: footnote
 // markers are dropped, <br> becomes a newline, and each text node's b/i/u state
 // (from its ancestor tags / inline styles) becomes a mark range.
-function readEditableRich(el: HTMLElement): { text: string; marks: Mark[] } {
+function readEditableRich(el: HTMLElement): { text: string; marks: Mark[]; fnMarkers: { id: string; offset: number }[] } {
   let text = "";
   const runs: Mark[] = [];
+  const fnMarkers: { id: string; offset: number }[] = [];
 
   const fmtOfNode = (node: Node | null): Fmt => {
     let b = false, i = false, u = false;
@@ -482,14 +473,19 @@ function readEditableRich(el: HTMLElement): { text: string; marks: Mark[] } {
         runs.push({ start: s, end: text.length, b: f.b, i: f.i, u: f.u });
       } else if (child.nodeType === 1) {
         const e = child as HTMLElement;
-        if (e.hasAttribute("data-fn")) continue;          // footnote marker isn't text
+        if (e.hasAttribute("data-fn")) {
+          // The marker isn't text; record where it currently sits so the
+          // footnote's anchor can follow the edit.
+          fnMarkers.push({ id: e.getAttribute("data-fn")!, offset: text.length });
+          continue;
+        }
         if (e.nodeName === "BR") { text += "\n"; continue; }
         walk(e);
       }
     }
   };
   walk(el);
-  return { text, marks: normalizeMarks(runs) };
+  return { text, marks: normalizeMarks(runs), fnMarkers };
 }
 
 // A small superscript footnote marker (used in the footnote word-picker view).
@@ -577,7 +573,7 @@ function EditableParagraph({
     // Reconstruct this slice's plain text and its formatting, then splice both
     // back into the whole node (so b/i/u applied to a selection persists, and a
     // page-split paragraph keeps its formatting too).
-    const { text: domText, marks: sliceRuns } = readEditableRich(el);
+    const { text: domText, marks: sliceRuns, fnMarkers } = readEditableRich(el);
     const localCaret = getCaretOffset(el);
 
     // ASCII arrow autocorrect (-> ← => <= <-> <=> |-> |-->) within this slice.
@@ -589,11 +585,27 @@ function EditableParagraph({
       outCaret = conv.from + conv.symbol.length + (localCaret - conv.to);
     }
 
+    // Reconcile footnotes against the markers still present in the DOM. A marker
+    // that survived keeps the footnote connected (its anchor offset follows the
+    // edit); a marker the user deleted along with its word disconnects it.
+    let nextFootnotes = footnotes;
+    if (footnotes.length) {
+      const present = new Map(fnMarkers.map((m) => [m.id, m.offset]));
+      nextFootnotes = footnotes.map((f: any) =>
+        present.has(f.id)
+          ? { ...f, offset: start + (present.get(f.id) as number), unconnected: false }
+          : f.unconnected
+            ? f
+            : { ...f, unconnected: true, text: `UNCONNECTED FOOTNOTE ${f.text ?? ""}` }
+      );
+    }
+
     const full = text.slice(0, start) + outText + text.slice(end);
     const nextMarks = spliceMarks(marks, start, end, outRuns, outText.length);
     onCaret?.(node.id, start + outCaret);
     onTyping?.(node.id);
-    if (full !== text || !marksEqual(marks, nextMarks)) updateRichText(node.id, full, nextMarks);
+    if (full !== text || !marksEqual(marks, nextMarks) || nextFootnotes !== footnotes)
+      updateRichText(node.id, full, nextMarks, nextFootnotes);
     detectGreek();
   };
 
@@ -692,15 +704,18 @@ function Paragraph(props: any) {
   // Footnote "pick a word" mode: a read-only view where each word is clickable.
   if (pendingFootnote) {
     const footnotes: any[] = node.footnotes ?? [];
-    const tokens = (node.text ?? "").split(/(\s+)/);
-    let wordIdx = -1;
+    const text: string = node.text ?? "";
+    const tokens = text.split(/(\s+)/);
+    let wordIdx = -1, pos = 0;
     const out: any[] = [];
     tokens.forEach((tok: string, i: number) => {
       if (tok === "") return;
-      if (/^\s+$/.test(tok)) { out.push(tok); return; }
+      if (/^\s+$/.test(tok)) { out.push(tok); pos += tok.length; return; }
       wordIdx++;
       const w = wordIdx;
-      const wordFns = footnotes.filter((f) => f.word === w);
+      // Existing footnotes anchored at this word's marker position.
+      const coreEnd = pos + tok.replace(TRAILING_PUNCT, "").length;
+      const wordFns = footnotes.filter((f) => !f.unconnected && f.offset === coreEnd);
       const [core, punct] = wordFns.length ? splitTrailingPunct(tok) : [tok, ""];
       out.push(
         <span key={i} className="fn-word" onClick={() => onWordClick?.(node.id, w)}>
@@ -709,6 +724,7 @@ function Paragraph(props: any) {
       );
       wordFns.forEach((f) => out.push(<FootnoteMark key={`${i}-${f.id}`} n={footnoteNumbers?.[f.id] ?? 0} />));
       if (punct) out.push(<Fragment key={`${i}-p`}>{punct}</Fragment>);
+      pos += tok.length;
     });
     return (
       <p

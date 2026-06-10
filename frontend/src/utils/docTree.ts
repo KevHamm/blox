@@ -405,11 +405,28 @@ export function updateMathItemTree(node: any, mathId: string, itemId: string, la
   return { ...node, children: node.children.map((c: any) => updateMathItemTree(c, mathId, itemId, latex)) };
 }
 
-/* ---- footnotes (attached to a word inside a paragraph) ---- */
-// Attach a new footnote to the given word index of a paragraph.
+/* ---- footnotes (anchored to a character offset inside a paragraph) ---- */
+const FN_TRAILING_PUNCT = /[.,;:!?)\]}'"»]+$/;
+
+// The character offset where a footnote marker sits for word index `word`:
+// the end of the word's core (before any trailing punctuation).
+export function wordCoreEndOffset(text: string, word: number): number {
+  let pos = 0, wordIdx = -1;
+  for (const tok of text.split(/(\s+)/)) {
+    if (tok === "") continue;
+    if (/^\s+$/.test(tok)) { pos += tok.length; continue; }
+    wordIdx++;
+    if (wordIdx === word) return pos + tok.replace(FN_TRAILING_PUNCT, "").length;
+    pos += tok.length;
+  }
+  return text.length;
+}
+
+// Attach a new footnote anchored at the clicked word's marker position.
 export function addFootnoteToWord(node: any, paragraphId: string, word: number, id: string): any {
   if (node.type === "paragraph" && node.id === paragraphId) {
-    const footnotes = [...(node.footnotes ?? []), { id, word, text: "" }];
+    const offset = wordCoreEndOffset(node.text ?? "", word);
+    const footnotes = [...(node.footnotes ?? []), { id, offset, text: "" }];
     return { ...node, footnotes };
   }
   if (!node.children) return node;
@@ -436,14 +453,14 @@ export function deleteFootnote(node: any, paragraphId: string, footnoteId: strin
 }
 
 // A map of footnote id → global number, assigned in document reading order
-// (paragraph order, then by word index within a paragraph).
+// (paragraph order, then by character offset within a paragraph).
 export function footnoteNumbering(doc: any): Record<string, number> {
   const map: Record<string, number> = {};
   let n = 0;
   const walk = (node: any) => {
     if (node.type === "paragraph" && node.footnotes?.length) {
       [...node.footnotes]
-        .sort((a: any, b: any) => a.word - b.word)
+        .sort((a: any, b: any) => (a.offset ?? 0) - (b.offset ?? 0))
         .forEach((f: any) => { map[f.id] = ++n; });
     }
     (node.children ?? []).forEach(walk);

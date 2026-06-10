@@ -40,8 +40,12 @@ export interface DocumentNode {
   images?: { id: string; src: string }[];
   sectionNumber?: number;
   numberLabel?: string;
-  // `unconnected` marks a footnote whose target word was deleted from the text.
-  footnotes?: { id: string; word: number; text: string; unconnected?: boolean }[];
+  // Footnotes anchor to a character `offset` in the text (where the superscript
+  // marker sits). The marker lives inline in the contentEditable, so it moves
+  // with edits; when it is deleted along with its word, the footnote becomes
+  // `unconnected` (painted red, prefixed with a warning) and is never reassigned
+  // to a different word.
+  footnotes?: { id: string; offset: number; text: string; unconnected?: boolean }[];
   listStyle?: "dash" | "dot" | "number";
   items?: { id: string; text?: string; latex?: string }[];
   // A math node rendered as a numbered display equation (\begin{equation}).

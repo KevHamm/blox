@@ -737,20 +737,19 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
       onDragCancel={() => { setActiveDragSrc(null); setActiveBlockId(null); }}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
-     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
       {/* Full-width top bar above the sidebars: logo, back, undo/redo and a
           live mini preview of the whole document. */}
       <TopBar
         onBack={onBack}
         onUndo={undo}
         onRedo={redo}
+        onExport={() => exportLatex(numberedDoc)}
         canUndo={canUndo}
         canRedo={canRedo}
         visible={sidebarsIn}
         pages={pages}
         layout={layout}
-        leafHeights={leafHeights}
-        headerHeights={headerHeights}
       />
       <div
         className="editor-canvas"
@@ -758,7 +757,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
           display: "flex",
           flex: 1,
           minHeight: 0,
-          overflowX: "hidden"
+          overflow: "hidden"
         }}
       >
         {/* Footnote "pick a word" instruction banner. */}
@@ -797,6 +796,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
             gap: 12,
             height: "100%",
             overflowY: "auto",
+            overscrollBehavior: "contain",
             transform: sidebarsIn ? "translateX(0)" : "translateX(-100%)",
             opacity: sidebarsIn ? 1 : 0,
             transition:
@@ -974,17 +974,6 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
             </div>
           )}
 
-          <div style={{ marginTop: "auto" }}>
-            <hr style={{ border: "none", borderTop: "1px solid rgba(0,0,0,0.08)", margin: "12px 0" }} />
-            <button
-              className="ui-btn primary"
-              style={{ width: "100%" }}
-              onClick={() => exportLatex(numberedDoc)}
-            >
-              Export LaTeX
-            </button>
-          </div>
-
         </div>
 
 
@@ -1108,6 +1097,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
             gap: 12,
             height: "100%",
             overflowY: "auto",
+            overscrollBehavior: "contain",
             transform: sidebarsIn ? "translateX(0)" : "translateX(100%)",
             opacity: sidebarsIn ? 1 : 0,
             transition:

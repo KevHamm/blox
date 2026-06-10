@@ -97,6 +97,7 @@ export function DroppableDocArea({ children, visible = true }: any) {
         alignItems: "center",
         padding: 40,
         overflowY: "auto",
+        overscrollBehavior: "contain",
         // Hidden (but still laid out, so the morph overlay can measure the
         // page) until the editor is revealed.
         opacity: visible ? 1 : 0,
