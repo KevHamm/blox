@@ -53,6 +53,21 @@ export function useDocument(initial?: DocumentNode) {
     setDoc((prev) => update(prev));
   }
 
+  // Toggle a paragraph between centered and the default (justified) alignment.
+  function toggleParagraphAlign(id: string) {
+    function update(node: any): any {
+      if (node.id === id && node.type === "paragraph") {
+        const next = { ...node };
+        if (next.align === "center") delete next.align;
+        else next.align = "center";
+        return next;
+      }
+      if (node.children) return { ...node, children: node.children.map(update) };
+      return node;
+    }
+    setDoc((prev) => update(prev));
+  }
+
   // Update a paragraph's text together with its inline formatting marks.
   function updateRichText(id: string, value: string, marks: any[]) {
     function update(node: any): any {
@@ -643,6 +658,7 @@ export function useDocument(initial?: DocumentNode) {
     setDoc,
     updateTextById,
     updateRichText,
+    toggleParagraphAlign,
     updateSectionTitle,
     updateFigureCaption,
     updateMathItem,

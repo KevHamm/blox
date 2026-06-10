@@ -544,9 +544,11 @@ function EditableParagraph({
     if (full !== text || !marksEqual(marks, nextMarks)) updateRichText(node.id, full, nextMarks);
   };
 
-  // LaTeX letter class is block-style: no first-line indent. Other classes
-  // indent every paragraph except the first (or a split continuation).
-  const indent = blockParagraphs ? 0 : firstChild || start > 0 ? 0 : "1.5em";
+  // Centered paragraphs have no first-line indent; otherwise the letter class is
+  // block-style (no indent) and other classes indent all but the first paragraph
+  // (or a split continuation).
+  const centered = node.align === "center";
+  const indent = centered ? 0 : blockParagraphs ? 0 : firstChild || start > 0 ? 0 : "1.5em";
 
   return (
     <p
@@ -571,7 +573,7 @@ function EditableParagraph({
         margin: 0,
         cursor: "text",
         outline: "none",
-        textAlign: "justify",
+        textAlign: centered ? "center" : "justify",
         hyphens: "auto",
         WebkitHyphens: "auto",
         whiteSpace: "pre-wrap",
@@ -613,11 +615,11 @@ function Paragraph(props: any) {
         style={{
           margin: 0,
           cursor: "default",
-          textAlign: "justify",
           hyphens: "auto",
           WebkitHyphens: "auto",
           whiteSpace: "pre-wrap",
-          textIndent: blockParagraphs ? 0 : firstChild ? 0 : "1.5em",
+          textAlign: node.align === "center" ? "center" : "justify",
+          textIndent: node.align === "center" || blockParagraphs ? 0 : firstChild ? 0 : "1.5em",
           lineHeight,
           fontSize
         }}
@@ -762,13 +764,17 @@ function MathSlot({ id }: any) {
   );
 }
 
-function MathBlock({ node, updateMathItem, deleteMathItem }: any) {
+function MathBlock({ node, updateMathItem, deleteMathItem, deleteNodeById, equationNumber }: any) {
   // Support the container model (and any legacy single-latex node).
   const items: any[] =
     node.items ?? (node.latex != null ? [{ id: `${node.id}-0`, latex: node.latex }] : []);
+  // A generic \begin{equation} block is numbered and is removed only via its
+  // delete button, so clearing its last part leaves an empty equation rather
+  // than deleting the whole block.
+  const display = !!node.display;
 
   return (
-    <div style={{ margin: "12px 0" }}>
+    <div className="hover-target" style={{ margin: "12px 0", position: "relative" }}>
       {/* parts sit flush so it reads as one equation; slots between them open
           up while dragging a math block so you can insert anywhere. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -777,15 +783,33 @@ function MathBlock({ node, updateMathItem, deleteMathItem }: any) {
           <Fragment key={it.id}>
             <MathField
               value={it.latex}
-              onChange={(v: string) =>
-                v.trim() === ""
-                  ? deleteMathItem(node.id, it.id)   // cleared → remove this part
-                  : updateMathItem(node.id, it.id, v)
-              }
+              onChange={(v: string) => {
+                if (v.trim() === "") {
+                  if (display && items.length <= 1) updateMathItem(node.id, it.id, "");
+                  else deleteMathItem(node.id, it.id);   // cleared → remove this part
+                } else updateMathItem(node.id, it.id, v);
+              }}
             />
             <MathSlot id={`mathdz::${node.id}::${i + 1}`} />
           </Fragment>
         ))}
+      </div>
+
+      {/* Equation number, LaTeX-style, at the right margin. */}
+      {display && equationNumber != null && (
+        <span
+          style={{
+            position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+            fontFamily: "var(--sans)", color: "var(--text)", fontSize: 15
+          }}
+        >
+          ({equationNumber})
+        </span>
+      )}
+
+      {/* Delete the whole math block (e.g. a standalone matrix) — on hover. */}
+      <div className="hover-tools" style={{ position: "absolute", top: -2, right: display ? 40 : 0 }}>
+        <TrashButton onClick={() => deleteNodeById(node.id)} label="Delete equation" />
       </div>
     </div>
   );
@@ -816,7 +840,7 @@ function DocImage({ figureId, image, deleteFigureImage }: any) {
     >
       {/* per-image trash; stops the pointer from starting a drag */}
       <button
-        onClick={() => deleteFigureImage(figureId, image.id)}
+        onClick={() => { if (window.confirm("Delete this image?")) deleteFigureImage(figureId, image.id); }}
         onPointerDown={(e) => e.stopPropagation()}
         title="Delete image"
         style={{
@@ -2003,7 +2027,7 @@ function renderChunk(chunk: Chunk, props: any, firstChild = false): any {
   if (node.type === "math") {
     return (
       <div data-leaf-id={node.id}>
-        <MathBlock node={node} {...props} />
+        <MathBlock node={node} {...props} equationNumber={props.equationNumbers?.[node.id]} />
       </div>
     );
   }

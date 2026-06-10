@@ -149,6 +149,51 @@ export const newAbstract = (): DocumentNode => ({
   text: "Write a short summary of the document here."
 });
 
+// A generic displayed equation (LaTeX \begin{equation}…\end{equation}): a
+// numbered math container you can type into and drop math blox inside. It starts
+// with one empty part and is removed only via its delete button (not by being
+// emptied), unlike a bare math node created by dropping a single symbol.
+export const newEquation = (): DocumentNode => ({
+  id: crypto.randomUUID(),
+  type: "math" as any,
+  display: true,
+  items: [{ id: crypto.randomUUID(), latex: "" }]
+});
+
+// Find a node anywhere in the tree by id.
+export function findNodeById(node: any, id: string): any | null {
+  if (node?.id === id) return node;
+  for (const c of node?.children ?? []) {
+    const f = findNodeById(c, id);
+    if (f) return f;
+  }
+  return null;
+}
+
+// Whether a node holds user content worth confirming before deletion.
+export function nodeHasContent(node: any): boolean {
+  switch (node?.type) {
+    case "paragraph":
+    case "abstract":
+      return !!(node.text && node.text.trim());
+    case "list":
+      return (node.items ?? []).some((it: any) => (it.text ?? "").trim());
+    case "math":
+      return (node.items ?? []).some((it: any) => (it.latex ?? "").trim());
+    case "table":
+      return (node.rows ?? []).some((row: string[]) => row.some((c) => (c ?? "").trim()));
+    case "figure":
+      return (node.images ?? []).length > 0;
+    case "section":
+    case "subsection":
+    case "subsubsection":
+    case "frame":
+      return !!(node.title && node.title.trim()) || (node.children ?? []).some(nodeHasContent);
+    default:
+      return false; // cover / toc / bibliography carry no body content
+  }
+}
+
 // A list (LaTeX itemize / enumerate). `listStyle` picks the marker.
 export const newList = (): DocumentNode => ({
   id: crypto.randomUUID(),

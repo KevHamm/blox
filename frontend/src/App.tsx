@@ -40,7 +40,9 @@ import {
   insertStructuralAt,
   insertMathItem,
   addFootnoteToWord,
-  footnoteNumbering
+  footnoteNumbering,
+  findNodeById,
+  nodeHasContent
 } from "./utils/docTree";
 import {
   BLOCK_DEFS,
@@ -176,6 +178,20 @@ function placeCaretAt(el: HTMLElement, offset: number) {
   sel.addRange(range);
 }
 
+// Friendly names for the delete-confirmation prompt, by node type.
+const DELETE_LABELS: Record<string, string> = {
+  section: "section",
+  subsection: "subsection",
+  subsubsection: "subsubsection",
+  paragraph: "paragraph",
+  abstract: "abstract",
+  list: "list",
+  table: "table",
+  math: "equation",
+  figure: "figure",
+  frame: "slide"
+};
+
 function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; template: TemplateLayout }) {
   // ── 1. All state first ──────────────────────────────────
   // Starting content for the chosen class (article / report / letter / …).
@@ -183,7 +199,7 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
   // The document tree + every mutation handler live in this hook.
   const {
     doc, setDoc,
-    updateTextById, updateRichText, updateSectionTitle, updateFigureCaption,
+    updateTextById, updateRichText, toggleParagraphAlign, updateSectionTitle, updateFigureCaption,
     updateMathItem, deleteMathItem, setFootnoteText, removeFootnote,
     updateListItem, addListItem, deleteListItem, setListStyle,
     addSectionAfter, updateFigureWidth,
@@ -261,7 +277,7 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
   const rendererProps = {
     editingId, setEditingId, updateTextById, updateRichText, updateSectionTitle,
     addSubsection, addSubsubsection, updateTableCell,
-    deleteTableColumn, deleteNodeById, addTableRow, deleteTableRow,
+    deleteTableColumn, deleteNodeById: confirmDeleteNode, addTableRow, deleteTableRow,
     addTableColumn, updateTableColWidths, addSectionAfter,
     updateTableCaption, updateTableColors,
     deleteTableRowAt, deleteTableColumnAt,
@@ -394,6 +410,18 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
     return map;
   }, [numberedDoc]);
 
+  // Global equation numbers for display equations (\begin{equation}), in order.
+  const equationNumbers = useMemo(() => {
+    const map: Record<string, number> = {};
+    let n = 0;
+    const walk = (node: any) => {
+      if (node.type === "math" && node.display) map[node.id] = ++n;
+      (node.children ?? []).forEach(walk);
+    };
+    (numberedDoc.children ?? []).forEach(walk);
+    return map;
+  }, [numberedDoc]);
+
   // Global footnote numbers, assigned in reading order.
   const footnoteNumbers = useMemo(() => footnoteNumbering(numberedDoc), [numberedDoc]);
 
@@ -421,6 +449,29 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
   function applyInlineFormat(cmd: "bold" | "italic" | "underline") {
     try { document.execCommand("styleWithCSS", false, "false"); } catch { /* ignore */ }
     document.execCommand(cmd);
+  }
+
+  // Center / un-center the paragraph that holds the current selection. Alignment
+  // is a block property, so it applies to the whole paragraph, not a character
+  // range. The button's pointer press is prevented from stealing focus so the
+  // selection stays put.
+  function centerSelection() {
+    const sel = window.getSelection();
+    const anchor = sel?.anchorNode ?? null;
+    const from = anchor && anchor.nodeType === 1 ? (anchor as HTMLElement) : anchor?.parentElement ?? null;
+    const el = from?.closest("[data-para-id]") as HTMLElement | null;
+    if (el?.dataset.paraId) toggleParagraphAlign(el.dataset.paraId);
+  }
+
+  // Delete a block, asking first when it still holds content. Used for every
+  // block-level trash button (sections, tables, lists, equations, slides, …).
+  function confirmDeleteNode(id: string) {
+    const node = findNodeById(doc, id);
+    if (node && nodeHasContent(node)) {
+      const label = DELETE_LABELS[node.type] ?? "block";
+      if (!window.confirm(`Delete this ${label}? Its contents will be lost.`)) return;
+    }
+    deleteNodeById(id);
   }
 
   // -----------------------------
@@ -832,6 +883,33 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
                       {glyph}
                     </button>
                   ))}
+
+                  {/* Center the paragraph holding the selection. */}
+                  <button
+                    title="Center"
+                    aria-label="Center"
+                    onMouseDown={(e) => { e.preventDefault(); centerSelection(); }}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      padding: 0,
+                      cursor: "pointer",
+                      borderRadius: 10,
+                      border: "1px solid rgba(0,0,0,0.12)",
+                      background: "rgba(255,255,255,0.7)",
+                      color: "#333",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "border-color 0.15s ease, background 0.15s ease"
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <line x1="4" y1="6" x2="20" y2="6" />
+                      <line x1="7" y1="12" x2="17" y2="12" />
+                      <line x1="5" y1="18" x2="19" y2="18" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -923,6 +1001,7 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
                                 column={col}
                                 figureNumbers={figureNumbers}
                                 tableNumbers={tableNumbers}
+                                equationNumbers={equationNumbers}
                                 pendingFootnote={pendingFootnote}
                                 onWordClick={handleWordClick}
                                 footnoteNumbers={footnoteNumbers}
@@ -955,7 +1034,10 @@ function Editor({ sidebarsIn = true, template }: { sidebarsIn?: boolean; templat
                                 }}
                               />
                               <button
-                                onClick={() => removeFootnote(paragraphId, fn.id)}
+                                onClick={() => {
+                                  if ((fn.text ?? "").trim() && !window.confirm("Delete this footnote? Its text will be lost.")) return;
+                                  removeFootnote(paragraphId, fn.id);
+                                }}
                                 title="Delete footnote"
                                 style={{ border: "none", background: "transparent", color: "#c0392b", cursor: "pointer", padding: 0 }}
                               >

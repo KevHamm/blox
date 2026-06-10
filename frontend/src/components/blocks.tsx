@@ -8,6 +8,7 @@ import {
   newPage,
   newAbstract,
   newList,
+  newEquation,
   mathNode,
   MATH_TEMPLATES
 } from "../utils/docTree";
@@ -174,6 +175,11 @@ export const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: 
       )
     })
   },
+  "block::equation": {
+    label: "Equation",
+    icon: () => <KatexIcon tex="a=b" size={18} />,
+    make: () => newEquation()
+  },
   "block::math::integral": mathBlock("block::math::integral", "Integral", "\\int"),
   "block::math::sum":      mathBlock("block::math::sum", "Sum", "\\sum"),
   "block::math::product":  mathBlock("block::math::product", "Product", "\\prod"),
@@ -201,6 +207,7 @@ export const BLOX_ORDER = [
   "block::footnote",
   "block::list",
   "block::table",
+  "block::equation",
   "block::math::integral",
   "block::math::sum",
   "block::math::product",

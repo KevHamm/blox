@@ -43,6 +43,10 @@ export interface DocumentNode {
   footnotes?: { id: string; word: number; text: string }[];
   listStyle?: "dash" | "dot" | "number";
   items?: { id: string; text?: string; latex?: string }[];
+  // A math node rendered as a numbered display equation (\begin{equation}).
+  display?: boolean;
+  // Per-paragraph text alignment override ("center"); default is justified.
+  align?: "center";
   // beamer slide (frame). "title" renders the centered title slide; otherwise a
   // normal frame with a frametitle bar.
   frameVariant?: "title" | "content";
