@@ -3,6 +3,25 @@ import type { Chunk } from "../utils/paginateDocument";
 import { isContainerType } from "../utils/paginateDocument";
 import type { Mark, Fmt } from "../utils/marks";
 import { formatAt, sliceMarks, spliceMarks, normalizeMarks, marksEqual } from "../utils/marks";
+import { greekFor, wordAround } from "../utils/greek";
+
+// A DOM Range spanning characters [a, b) of a contentEditable element, walking
+// its text nodes (skipping non-text like footnote markers).
+function rangeForChars(el: HTMLElement, a: number, b: number): Range | null {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let acc = 0;
+  let sNode: Node | null = null, sOff = 0, eNode: Node | null = null, eOff = 0, n: Node | null;
+  while ((n = walker.nextNode())) {
+    const len = (n.textContent ?? "").length;
+    if (sNode === null && a <= acc + len) { sNode = n; sOff = a - acc; }
+    if (b <= acc + len) { eNode = n; eOff = b - acc; break; }
+    acc += len;
+  }
+  if (!sNode || !eNode) return null;
+  const r = document.createRange();
+  try { r.setStart(sNode, sOff); r.setEnd(eNode, eOff); } catch { return null; }
+  return r;
+}
 import { useDroppable, useDraggable, useDndContext } from "@dnd-kit/core";
 import { TrashIcon } from "../components/TrashIcon";
 import "mathlive";
@@ -514,6 +533,27 @@ function EditableParagraph({
   const isSlice = start !== 0 || end !== text.length;
   const sliceText = isSlice ? text.slice(start, end) : text;
 
+  // Greek-letter suggestion: when the caret sits on a word that spells a Greek
+  // letter, a small clickable glyph hovers as a superscript of its last letter.
+  // Offsets are slice-local; `x`/`y` are viewport coords for the fixed menu.
+  const [greek, setGreek] = useState<
+    { symbol: string; ls: number; le: number; x: number; y: number } | null
+  >(null);
+
+  const detectGreek = () => {
+    const el = ref.current;
+    if (!el || document.activeElement !== el) { setGreek(null); return; }
+    const localText = readEditableRich(el).text;
+    const caret = getCaretOffset(el);
+    const w = wordAround(localText, caret);
+    const sym = w && greekFor(w.word);
+    if (!w || !sym) { setGreek(null); return; }
+    const r = rangeForChars(el, w.end - 1, w.end);
+    if (!r) { setGreek(null); return; }
+    const rect = r.getBoundingClientRect();
+    setGreek({ symbol: sym, ls: w.start, le: w.end, x: rect.right, y: rect.top });
+  };
+
   const html = useMemo(
     () => (isSlice
       ? buildParagraphHtml(sliceText, [], footnoteNumbers, sliceMarks(marks, start, end))
@@ -542,6 +582,20 @@ function EditableParagraph({
     onCaret?.(node.id, start + getCaretOffset(el));
     onTyping?.(node.id);
     if (full !== text || !marksEqual(marks, nextMarks)) updateRichText(node.id, full, nextMarks);
+    detectGreek();
+  };
+
+  // Replace the typed Greek-letter word with its glyph, keeping marks/footnote
+  // word indices coherent (one word in, one word out) and the caret after it.
+  const insertGreek = () => {
+    if (!greek) return;
+    const fs = start + greek.ls, fe = start + greek.le;
+    const full = text.slice(0, fs) + greek.symbol + text.slice(fe);
+    const nextMarks = spliceMarks(marks, fs, fe, [], greek.symbol.length);
+    onCaret?.(node.id, fs + greek.symbol.length);
+    onTyping?.(node.id);
+    updateRichText(node.id, full, nextMarks);
+    setGreek(null);
   };
 
   // Centered paragraphs have no first-line indent; otherwise the letter class is
@@ -551,38 +605,72 @@ function EditableParagraph({
   const indent = centered ? 0 : blockParagraphs ? 0 : firstChild || start > 0 ? 0 : "1.5em";
 
   return (
-    <p
-      ref={ref}
-      className="blox-editable"
-      contentEditable
-      suppressContentEditableWarning
-      data-para-id={node.id}
-      data-slice-start={start}
-      data-slice-end={end}
-      onFocus={() => onTyping?.(node.id)}
-      onInput={onInput}
-      onBlur={() => onTyping?.(null)}
-      onKeyDown={(e) => {
-        // Enter = line break (kept simple as a literal "\n" + pre-wrap).
-        if (e.key === "Enter") {
-          e.preventDefault();
-          document.execCommand("insertText", false, "\n");
-        }
-      }}
-      style={{
-        margin: 0,
-        cursor: "text",
-        outline: "none",
-        textAlign: centered ? "center" : "justify",
-        hyphens: "auto",
-        WebkitHyphens: "auto",
-        whiteSpace: "pre-wrap",
-        textIndent: indent,
-        lineHeight,
-        fontSize,
-        color: "var(--text)"
-      }}
-    />
+    <>
+      <p
+        ref={ref}
+        className="blox-editable"
+        contentEditable
+        suppressContentEditableWarning
+        data-para-id={node.id}
+        data-slice-start={start}
+        data-slice-end={end}
+        onFocus={() => onTyping?.(node.id)}
+        onInput={onInput}
+        onBlur={() => { onTyping?.(null); setGreek(null); }}
+        // Re-check the Greek suggestion after the caret moves (clicks / arrows).
+        onKeyUp={detectGreek}
+        onMouseUp={detectGreek}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") { setGreek(null); return; }
+          // Enter = line break (kept simple as a literal "\n" + pre-wrap).
+          if (e.key === "Enter") {
+            e.preventDefault();
+            document.execCommand("insertText", false, "\n");
+          }
+        }}
+        style={{
+          margin: 0,
+          cursor: "text",
+          outline: "none",
+          textAlign: centered ? "center" : "justify",
+          hyphens: "auto",
+          WebkitHyphens: "auto",
+          whiteSpace: "pre-wrap",
+          textIndent: indent,
+          lineHeight,
+          fontSize,
+          color: "var(--text)"
+        }}
+      />
+      {greek && (
+        <span
+          className="greek-suggest"
+          title={`Insert ${greek.symbol}`}
+          // Keep the paragraph focused/selected so the swap can read the caret.
+          onMouseDown={(e) => { e.preventDefault(); insertGreek(); }}
+          style={{
+            position: "fixed",
+            left: greek.x,
+            top: greek.y,
+            transform: "translateY(-100%)",
+            zIndex: 50,
+            fontFamily: "var(--sans)",
+            fontSize: Math.max(11, (fontSize ?? 13) * 0.9),
+            lineHeight: 1,
+            padding: "2px 6px",
+            borderRadius: 8,
+            background: "#fff",
+            color: "var(--ui-blue)",
+            border: "1px solid rgba(0,0,0,0.12)",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
+            cursor: "pointer",
+            userSelect: "none"
+          }}
+        >
+          {greek.symbol}
+        </span>
+      )}
+    </>
   );
 }
 

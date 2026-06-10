@@ -50,9 +50,14 @@ pagination pass flows that tree into fixed-height columns and pages, so what you
 see on screen mirrors how the content will break in print. Drag-and-drop is
 built on [`@dnd-kit`](https://dndkit.com/).
 
-> Note: the LaTeX exporter currently maps sections, subsections and paragraphs.
-> Tables, figures and subsubsections are modelled in the editor and are the next
-> candidates for export coverage.
+> The LaTeX exporter covers the whole document model: sections / subsections /
+> subsubsections, paragraphs (with bold / italic / underline, centering,
+> footnotes and inline Greek letters), abstracts, lists, tables, figures,
+> display equations and inline math, beamer frames, and the cover / contents /
+> bibliography pages. The preamble pulls in `amsmath` (math) and `graphicx`
+> (images); a document containing beamer frames is emitted as
+> `\documentclass{beamer}`. Figures reference exported image filenames (the
+> editor stores images inline as data URLs).
 
 ---
 

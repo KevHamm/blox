@@ -305,3 +305,13 @@ math-field::part(menu-toggle) {
 .tbl-grip:hover {
   opacity: 1;
 }
+
+/* Greek-letter suggestion: a semi-transparent glyph that goes fully opaque on
+   hover, so it's unobtrusive until the user reaches for it. */
+.greek-suggest {
+  opacity: 0.45;
+  transition: opacity 0.12s ease;
+}
+.greek-suggest:hover {
+  opacity: 1;
+}
