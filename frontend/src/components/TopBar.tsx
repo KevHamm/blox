@@ -110,7 +110,9 @@ function OutlineLabel({ children, width }: { children: any; width: number }) {
 }
 
 // Horizontal strip that centres content when it fits and scrolls when it does
-// not; the vertical mouse wheel scrolls it left/right.
+// not; the vertical mouse wheel scrolls it left/right. It now stretches to the
+// full width of its (centre) container — i.e. the whole document field — and
+// keeps vertical breathing room so the page-count badge is never clipped.
 function ScrollRow({ children }: { children: any }) {
   const ref = useRef<HTMLDivElement>(null);
   return (
@@ -118,12 +120,98 @@ function ScrollRow({ children }: { children: any }) {
       ref={ref}
       onWheel={(e) => { if (ref.current && e.deltaY) ref.current.scrollLeft += e.deltaY; }}
       style={{
-        display: "flex", alignItems: "flex-start", gap: 14,
+        display: "flex", alignItems: "center", gap: 14,
         justifyContent: "safe center", overflowX: "auto", overflowY: "hidden",
-        width: "min(1080px, calc(100vw - 460px))", padding: "2px 0"
+        width: "100%", padding: "12px 6px"
       }}
     >
       {children}
+    </div>
+  );
+}
+
+const DECK_EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
+
+// The expanded view of a multi-page group. It mounts in the same "pile" shape as
+// the StackedPages it replaces, then fans the pages out left → right on the next
+// frame. Clicking the back button restacks them (reversing the animation) and,
+// once that settles, calls onCollapse to return to the overview.
+function ExpandedDeck({
+  group, scale, w, h, pages, onCollapse
+}: { group: OutlineGroup; scale: number; w: number; h: number; pages: any[]; onCollapse: () => void }) {
+  const gap = 14;
+  const off = 5;                    // per-card offset while piled
+  const [spread, setSpread] = useState(false);
+
+  // Fan out on the frame after mount (so the entrance animates from the pile).
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setSpread(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  function back() {
+    setSpread(false);               // restack…
+    window.setTimeout(onCollapse, 430); // …then drop back to the overview
+  }
+
+  const n = group.pages.length;
+  const pileSpan = Math.min(n - 1, 3) * off;     // how far the pile fans
+  const spreadW = n * w + (n - 1) * gap;
+  const labelH = 20;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <button
+        className="outline-collapse"
+        title="Back to overview"
+        onClick={back}
+        style={{ flex: "0 0 auto" }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+      </button>
+
+      <div
+        style={{
+          position: "relative",
+          width: spread ? spreadW : w + pileSpan,
+          height: h + labelH,
+          flex: "0 0 auto",
+          transition: `width 0.43s ${DECK_EASE}`
+        }}
+      >
+        {group.pages.map((pi, i) => {
+          const pile = Math.min(i, 3) * off;
+          return (
+            <div
+              key={pi}
+              style={{
+                position: "absolute",
+                left: spread ? i * (w + gap) : pile,
+                top: spread ? 0 : pile,
+                zIndex: spread ? 1 : n - i,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                transition: `left 0.43s ${DECK_EASE}, top 0.43s ${DECK_EASE}`
+              }}
+            >
+              <MiniPage
+                index={pi} scale={scale} w={w} h={h} dep={pages}
+                onClick={() => jumpToPage(pi)} title={`Go to page ${pi + 1}`}
+              />
+              <span
+                style={{
+                  fontFamily: "var(--ui-font)", fontSize: 11, color: "var(--ui-2nd)",
+                  opacity: spread ? 1 : 0,
+                  transition: `opacity 0.25s ease ${spread ? "0.12s" : "0s"}`
+                }}
+              >
+                p.&nbsp;{pi + 1}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -144,7 +232,7 @@ function DocOutline({
     if (expanded && !outline.some((g) => g.key === expanded)) setExpanded(null);
   }, [outline, expanded]);
 
-  const pageH = 84;
+  const pageH = 74;
   const scale = pageH / layout.pageHeight;
   const w = Math.round(layout.pageWidth * scale);
   const h = pageH;
@@ -166,22 +254,10 @@ function DocOutline({
   if (expandedGroup) {
     return (
       <ScrollRow>
-        <button
-          className="outline-collapse"
-          title="Back to overview"
-          onClick={() => setExpanded(null)}
-          style={{ alignSelf: "center" }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-        {expandedGroup.pages.map((pi) => (
-          <div key={pi} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            <MiniPage index={pi} scale={scale} w={w} h={h} dep={pages} onClick={() => jumpToPage(pi)} title={`Go to page ${pi + 1}`} />
-            <OutlineLabel width={w}>p.&nbsp;{pi + 1}</OutlineLabel>
-          </div>
-        ))}
+        <ExpandedDeck
+          group={expandedGroup} scale={scale} w={w} h={h} pages={pages}
+          onCollapse={() => setExpanded(null)}
+        />
       </ScrollRow>
     );
   }
@@ -251,10 +327,11 @@ function FlipLetter({ front, back, delay, frontBlue, backBlue }: any) {
 }
 
 // The logo doubles as the back button: hovering rotates "LoX" → "aCK" so it
-// reads "BaCK", and clicking it returns to the template chooser.
-function Logo({ onBack }: any) {
+// reads "BaCK", and clicking it returns to the template chooser. `large` blows
+// it up to roughly half the sidebar width for the expanded top bar.
+function Logo({ onBack, large }: any) {
   return (
-    <div className="blox-logo" onClick={onBack} title="Back to templates">
+    <div className={`blox-logo${large ? " large" : ""}`} onClick={onBack} title="Back to templates">
       <span>B</span>
       <FlipLetter front="L" back="a" delay="0s" backBlue />
       <FlipLetter front="o" back="C" delay="0.05s" frontBlue />
@@ -263,10 +340,41 @@ function Logo({ onBack }: any) {
   );
 }
 
+// An iOS-style switch that flips the editor chrome between light and dark.
+function ThemeToggle({ dark, onToggle }: { dark: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className="theme-toggle"
+      onClick={onToggle}
+      aria-pressed={dark}
+      title={dark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label="Toggle dark mode"
+    >
+      <span className="theme-track" data-on={dark ? "true" : "false"}>
+        <span className="theme-thumb">
+          {dark ? (
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+            </svg>
+          )}
+        </span>
+      </span>
+      <span className="theme-label">{dark ? "Dark" : "Light"}</span>
+    </button>
+  );
+}
+
 export function TopBar({
   onBack, onUndo, onRedo, onExport, canUndo, canRedo, visible, collapsed,
-  pages, outline, layout
+  pages, outline, layout, dark, onToggleTheme
 }: any) {
+  // Side regions stack vertically when the bar is expanded and fall back to a
+  // compact row when it collapses to the short control strip.
+  const sideDir = collapsed ? "row" : "column";
   return (
     <div
       className="ui-panel"
@@ -274,52 +382,60 @@ export function TopBar({
         position: "relative",
         flex: "0 0 auto",
         height: "100%",
-        borderBottom: "1px solid rgba(0,0,0,0.08)",
+        borderBottom: "1px solid var(--ui-hairline)",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 20px",
+        alignItems: "stretch",
         opacity: visible ? 1 : 0,
         transition: "opacity 0.4s ease",
         zIndex: 5,
         overflow: "hidden"
       }}
     >
-      {/* Centered, live document outline. Expanded: per-section page previews /
-          stacks. Collapsed: just the section names, as jump-to tabs. */}
+      {/* LEFT — aligned to the left sidebar: big centered logo with undo/redo
+          beneath it (a compact row while collapsed). */}
       <div
         style={{
-          position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
-          zIndex: 1
+          width: 280, flex: "0 0 auto", boxSizing: "border-box",
+          display: "flex", flexDirection: sideDir,
+          alignItems: "center", justifyContent: "center",
+          gap: collapsed ? 12 : 12, padding: "0 16px"
         }}
       >
+        <Logo onBack={onBack} large={!collapsed} />
+        <ControlGroup>
+          <IconButton onClick={onUndo} disabled={!canUndo} title="Undo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 14 4 9 9 4" />
+              <path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9" />
+            </svg>
+          </IconButton>
+          <IconButton onClick={onRedo} disabled={!canRedo} title="Redo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 14 20 9 15 4" />
+              <path d="M20 9H9a5 5 0 0 0-5 5v0a5 5 0 0 0 5 5h6" />
+            </svg>
+          </IconButton>
+        </ControlGroup>
+      </div>
+
+      {/* CENTER — the live document outline, spanning the full width of the
+          document field between the two sidebars. */}
+      <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <DocOutline outline={outline ?? []} layout={layout} collapsed={!!collapsed} pages={pages} />
       </div>
 
-      {/* Left: logo (doubles as back), undo/redo. */}
-      <ControlGroup>
-        <Logo onBack={onBack} />
-
-        <span style={{ width: 1, height: 24, background: "rgba(0,0,0,0.1)", margin: "0 6px 0 2px" }} />
-
-        <IconButton onClick={onUndo} disabled={!canUndo} title="Undo">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="9 14 4 9 9 4" />
-            <path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9" />
-          </svg>
-        </IconButton>
-        <IconButton onClick={onRedo} disabled={!canRedo} title="Redo">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 14 20 9 15 4" />
-            <path d="M20 9H9a5 5 0 0 0-5 5v0a5 5 0 0 0 5 5h6" />
-          </svg>
-        </IconButton>
-      </ControlGroup>
-
-      {/* Right: export. */}
-      <ControlGroup>
+      {/* RIGHT — aligned to the right sidebar: dark-mode toggle above Export. */}
+      <div
+        style={{
+          width: 260, flex: "0 0 auto", boxSizing: "border-box",
+          display: "flex", flexDirection: sideDir,
+          alignItems: "center", justifyContent: "center",
+          gap: 10, padding: "0 16px"
+        }}
+      >
+        <ThemeToggle dark={!!dark} onToggle={onToggleTheme} />
         <button className="ui-btn primary" onClick={onExport}>Export LaTeX</button>
-      </ControlGroup>
+      </div>
     </div>
   );
 }

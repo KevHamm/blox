@@ -336,6 +336,18 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [topOpen, setTopOpen] = useState(true);
+  // Dark mode for the editor chrome (the document paper stays white). Persisted
+  // and applied as a data-theme on the document root so scoped CSS can re-skin
+  // the shell, panels and controls.
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem("blox-theme") === "dark"; } catch { return false; }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    try { localStorage.setItem("blox-theme", dark ? "dark" : "light"); } catch { /* ignore */ }
+  }, [dark]);
+  // Leave the welcome screen in its native light theme when the editor unmounts.
+  useEffect(() => () => { document.documentElement.removeAttribute("data-theme"); }, []);
   // While true, the next click on a paragraph word attaches a footnote there.
   const [pendingFootnote, setPendingFootnote] = useState(false);
   const [documentTitle, setDocumentTitle] = useState(template.title);
@@ -927,6 +939,8 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
           pages={pages}
           outline={outline}
           layout={layout}
+          dark={dark}
+          onToggleTheme={() => setDark((v) => !v)}
         />
       </div>
       <div

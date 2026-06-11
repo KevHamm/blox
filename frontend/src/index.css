@@ -21,6 +21,9 @@
   --ui-text: #1d1d1f;
   --ui-2nd: #6e6e73;
   --ui-blue: #0071e3;
+  /* Frosted-panel background + hairline; re-skinned under [data-theme="dark"]. */
+  --panel-bg: rgba(250, 250, 252, 0.6);
+  --ui-hairline: rgba(0, 0, 0, 0.08);
 
   font: 18px/1.6 var(--sans);
   letter-spacing: 0.18px;
@@ -57,6 +60,55 @@
   #social .button-icon {
     filter: invert(1) brightness(2);
   }
+}
+
+/* Editor dark mode — re-skins the chrome (shell, frosted panels, controls) while
+   the document paper itself stays white. Toggled from the top bar, applied as a
+   data-theme on <html>. */
+:root[data-theme="dark"] {
+  --ui-text: #f2f2f5;
+  --ui-2nd: #9a9aa2;
+  --ui-blue: #2f9bff;
+  --panel-bg: rgba(30, 31, 38, 0.62);
+  --ui-hairline: rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="dark"] .editor-shell {
+  background-color: #0c0d11;
+  background-image:
+    radial-gradient(120% 45% at 50% -8%, rgba(90, 110, 220, 0.18), transparent 60%),
+    radial-gradient(100% 60% at 100% 110%, rgba(60, 150, 150, 0.12), transparent 55%),
+    radial-gradient(rgba(180, 190, 255, 0.06) 1px, transparent 1.6px);
+}
+:root[data-theme="dark"] .ui-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--ui-text);
+}
+:root[data-theme="dark"] .ui-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+:root[data-theme="dark"] .ui-btn.primary {
+  color: #fff;
+  background: var(--ui-blue);
+  border-color: transparent;
+}
+:root[data-theme="dark"] .ui-btn.primary:hover {
+  background: #4aa8ff;
+}
+:root[data-theme="dark"] .outline-tab,
+:root[data-theme="dark"] .outline-collapse {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--ui-text);
+}
+:root[data-theme="dark"] .ui-panel input[type="number"] {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--ui-text);
+}
+:root[data-theme="dark"] .theme-track {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 #root {
@@ -191,7 +243,7 @@ math-field::part(menu-toggle) {
   font-family: var(--ui-font);
   /* Frosted glass: translucent so the tinted shell shows through, with a strong
      blur. The top bar and both sidebars share this exact treatment. */
-  background: rgba(250, 250, 252, 0.6);
+  background: var(--panel-bg);
   backdrop-filter: blur(26px) saturate(180%);
   -webkit-backdrop-filter: blur(26px) saturate(180%);
   color: var(--ui-text);
@@ -426,9 +478,68 @@ math-field::part(menu-toggle) {
   letter-spacing: -0.02em;
   color: var(--ui-text);
 }
+/* Large logo for the expanded top bar — roughly half the sidebar width. */
+.blox-logo.large {
+  font-size: 46px;
+  letter-spacing: -0.03em;
+}
 /* Override the generic ".ui-panel span" grey so logo letters stay dark. */
 .blox-logo span {
   color: inherit;
+}
+
+/* Dark-mode switch in the top bar. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 4px 4px;
+  cursor: pointer;
+  font-family: var(--ui-font);
+}
+.theme-track {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.18);
+  transition: background 0.25s ease;
+}
+.theme-track[data-on="true"] {
+  background: var(--ui-blue);
+}
+.theme-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #c08a2e;
+  transition: left 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.25s ease;
+}
+.theme-track[data-on="true"] .theme-thumb {
+  left: 22px;
+  color: var(--ui-blue);
+}
+.theme-thumb svg {
+  width: 12px;
+  height: 12px;
+}
+.theme-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-2nd);
+  width: 32px;
+  text-align: left;
 }
 .logo-flip {
   display: inline-block;
