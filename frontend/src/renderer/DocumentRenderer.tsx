@@ -1013,6 +1013,74 @@ function DocImage({ figureId, image, deleteFigureImage }: any) {
   );
 }
 
+// A LaTeX-style caption line: the bold tag (e.g. "Figure 1:") and the editable
+// text sit centered on one line whose width shrinks to the caption itself. A
+// hidden mirror span measures the text so the input — and its underline — is
+// exactly as wide as its content rather than a fixed fraction of the figure.
+function CaptionField({ tag, value, onChange }: { tag: string; value: string; onChange: (v: string) => void }) {
+  const sizerRef = useRef<HTMLSpanElement>(null);
+  const [w, setW] = useState(40);
+  const placeholder = "caption…";
+  useLayoutEffect(() => {
+    if (sizerRef.current) setW(Math.ceil(sizerRef.current.getBoundingClientRect().width) + 2);
+  }, [value]);
+  return (
+    <div
+      style={{
+        marginTop: 10,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "baseline",
+        gap: 5,
+        flexWrap: "wrap",
+        maxWidth: "100%",
+        fontSize: 14,
+        fontFamily: "var(--sans)",
+        color: "var(--text)"
+      }}
+    >
+      <strong style={{ whiteSpace: "nowrap" }}>{tag}</strong>
+      <span style={{ position: "relative", display: "inline-block", maxWidth: "100%" }}>
+        {/* hidden mirror: same font, sizes the input to its content */}
+        <span
+          ref={sizerRef}
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            visibility: "hidden",
+            whiteSpace: "pre",
+            fontSize: 14,
+            fontFamily: "var(--sans)"
+          }}
+        >
+          {value || placeholder}
+        </span>
+        <input
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            width: w,
+            maxWidth: "100%",
+            minWidth: 24,
+            border: "none",
+            borderBottom: "1px solid var(--cap-rule)",
+            outline: "none",
+            textAlign: "center",
+            fontSize: 14,
+            fontFamily: "var(--sans)",
+            background: "transparent",
+            color: "var(--text)",
+            padding: 0
+          }}
+        />
+      </span>
+    </div>
+  );
+}
+
 function FigureBlock({
   node,
   updateFigureCaption,
@@ -1092,31 +1160,11 @@ function FigureBlock({
           }}
         />
 
-        <div
-          style={{
-            marginTop: 10,
-            textAlign: "center",
-            fontSize: 14,
-            fontFamily: "var(--sans)",
-            color: "var(--text)"
-          }}
-        >
-          <strong>Figure {figureNumber}:</strong>{" "}
-          <input
-            value={node.caption || ""}
-            onChange={(e) => updateFigureCaption(node.id, e.target.value)}
-            style={{
-              border: "none",
-              borderBottom: "1px solid #ccc",
-              outline: "none",
-              width: "70%",
-              textAlign: "center",
-              fontFamily: "var(--sans)",
-              background: "transparent",
-              color: "var(--text)"
-            }}
-          />
-        </div>
+        <CaptionField
+          tag={`Figure ${figureNumber}:`}
+          value={node.caption || ""}
+          onChange={(v) => updateFigureCaption(node.id, v)}
+        />
       </div>
     </div>
   );
@@ -1562,31 +1610,11 @@ function TableBlock(props: any) {
       </div>
 
       {/* LaTeX-style caption */}
-      <div
-        style={{
-          marginTop: 8,
-          textAlign: "center",
-          fontSize: 14,
-          fontFamily: "var(--sans)",
-          color: "var(--text)"
-        }}
-      >
-        <strong>Table {tableNumbers?.[node.id]}:</strong>{" "}
-        <input
-          value={node.caption || ""}
-          onChange={(e) => updateTableCaption(node.id, e.target.value)}
-          style={{
-            border: "none",
-            borderBottom: "1px solid #ccc",
-            outline: "none",
-            width: "70%",
-            textAlign: "center",
-            fontFamily: "var(--sans)",
-            background: "transparent",
-            color: "var(--text)"
-          }}
-        />
-      </div>
+      <CaptionField
+        tag={`Table ${tableNumbers?.[node.id]}:`}
+        value={node.caption || ""}
+        onChange={(v) => updateTableCaption(node.id, v)}
+      />
 
       {/* paint tool, grid-line toggles, delete-table — all one line */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>

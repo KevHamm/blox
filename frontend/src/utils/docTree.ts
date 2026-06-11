@@ -335,9 +335,27 @@ export const BINOP_COMMANDS = [
   "Box", "boxtimes", "equiv", "cong"
 ];
 
+// Paired delimiters (ceiling / floor / angle brackets). Each Blox inserts the
+// opening + closing delimiter with a gap to type into; `icon` is the palette
+// preview and `tex` the inserted snippet.
+export const DELIMITER_BLOCKS = [
+  { id: "ceil",  icon: "\\lceil x \\rceil",   tex: "\\lceil  \\rceil" },
+  { id: "floor", icon: "\\lfloor x \\rfloor", tex: "\\lfloor  \\rfloor" },
+  { id: "angle", icon: "\\langle x \\rangle", tex: "\\langle  \\rangle" }
+];
+
+// Blackboard-bold number sets (reals, naturals, rationals, integers).
+export const NUMBER_SET_BLOCKS = [
+  { id: "setR", icon: "\\mathbb{R}", tex: "\\mathbb{R}" },
+  { id: "setN", icon: "\\mathbb{N}", tex: "\\mathbb{N}" },
+  { id: "setQ", icon: "\\mathbb{Q}", tex: "\\mathbb{Q}" },
+  { id: "setZ", icon: "\\mathbb{Z}", tex: "\\mathbb{Z}" }
+];
+
 // Default LaTeX for each math Blox block.
 export const MATH_TEMPLATES: Record<string, string> = {
   "block::math::integral": "\\int_{a}^{b} f(x)\\,dx",
+  "block::math::oint": "\\oint_{C} f(x)\\,dx",
   "block::math::sum": "\\sum_{i=1}^{n} a_i",
   "block::math::product": "\\prod_{i=1}^{n} a_i",
   "block::math::fraction": "\\frac{a}{b}",
@@ -348,6 +366,8 @@ for (const c of ARROW_COMMANDS) MATH_TEMPLATES[`block::math::${c}`] = `\\${c}`;
 // \sqrt takes an argument; the rest are bare commands.
 for (const c of SYMBOL_COMMANDS) MATH_TEMPLATES[`block::math::${c}`] = c === "sqrt" ? "\\sqrt{}" : `\\${c}`;
 for (const c of BINOP_COMMANDS) MATH_TEMPLATES[`block::math::${c}`] = `\\${c}`;
+for (const d of DELIMITER_BLOCKS) MATH_TEMPLATES[`block::math::${d.id}`] = d.tex;
+for (const s of NUMBER_SET_BLOCKS) MATH_TEMPLATES[`block::math::${s.id}`] = s.tex;
 
 // Path of nodes from the document root down to (and including) the node with id.
 export function pathTo(node: any, id: string, acc: any[] = []): any[] | null {

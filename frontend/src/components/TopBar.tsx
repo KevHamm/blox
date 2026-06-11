@@ -118,9 +118,11 @@ function ScrollRow({ children }: { children: any }) {
   return (
     <div
       ref={ref}
+      className="outline-swap"
       onWheel={(e) => { if (ref.current && e.deltaY) ref.current.scrollLeft += e.deltaY; }}
       style={{
-        display: "flex", alignItems: "center", gap: 14,
+        // flex-start keeps every page / stack flush along the top.
+        display: "flex", alignItems: "flex-start", gap: 14,
         justifyContent: "safe center", overflowX: "auto", overflowY: "hidden",
         width: "100%", padding: "12px 6px"
       }}
@@ -239,7 +241,7 @@ function DocOutline({
 
   if (collapsed) {
     return (
-      <ScrollRow>
+      <ScrollRow key="tabs">
         {outline.map((g) => (
           <button key={g.key} className="outline-tab" title={g.label} onClick={() => jumpToPage(g.first)}>
             {g.label}
@@ -253,7 +255,7 @@ function DocOutline({
 
   if (expandedGroup) {
     return (
-      <ScrollRow>
+      <ScrollRow key={`deck:${expandedGroup.key}`}>
         <ExpandedDeck
           group={expandedGroup} scale={scale} w={w} h={h} pages={pages}
           onCollapse={() => setExpanded(null)}
@@ -263,7 +265,7 @@ function DocOutline({
   }
 
   return (
-    <ScrollRow>
+    <ScrollRow key="overview">
       {outline.map((g) => (
         <div key={g.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           {g.pages.length === 1 ? (

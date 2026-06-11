@@ -13,7 +13,9 @@ import {
   MATH_TEMPLATES,
   ARROW_COMMANDS,
   SYMBOL_COMMANDS,
-  BINOP_COMMANDS
+  BINOP_COMMANDS,
+  DELIMITER_BLOCKS,
+  NUMBER_SET_BLOCKS
 } from "../utils/docTree";
 
 /* A KaTeX-rendered glyph for the Blox palette icons. */
@@ -24,7 +26,7 @@ export function KatexIcon({ tex, size = 22 }: { tex: string; size?: number }) {
   );
   return (
     <span
-      style={{ fontSize: size, lineHeight: 1, color: "#333" }}
+      style={{ fontSize: size, lineHeight: 1, color: "var(--glyph)" }}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
@@ -184,6 +186,7 @@ export const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: 
     make: () => newEquation()
   },
   "block::math::integral": mathBlock("block::math::integral", "Integral", "\\int"),
+  "block::math::oint":     mathBlock("block::math::oint", "Contour integral", "\\oint"),
   "block::math::sum":      mathBlock("block::math::sum", "Sum", "\\sum"),
   "block::math::product":  mathBlock("block::math::product", "Product", "\\prod"),
   "block::math::fraction": mathBlock("block::math::fraction", "Fraction", "\\frac{a}{b}"),
@@ -206,6 +209,14 @@ for (const c of SYMBOL_COMMANDS) {
 }
 for (const c of BINOP_COMMANDS) {
   BLOCK_DEFS[`block::math::${c}`] = mathBlock(`block::math::${c}`, c, `\\${c}`, SYMBOL_ICON_SIZE);
+}
+// Paired delimiters and blackboard number sets carry an explicit preview glyph
+// (the inserted snippet differs from the rendered icon).
+for (const d of DELIMITER_BLOCKS) {
+  BLOCK_DEFS[`block::math::${d.id}`] = mathBlock(`block::math::${d.id}`, d.id, d.icon, SYMBOL_ICON_SIZE);
+}
+for (const s of NUMBER_SET_BLOCKS) {
+  BLOCK_DEFS[`block::math::${s.id}`] = mathBlock(`block::math::${s.id}`, s.id, s.icon, SYMBOL_ICON_SIZE);
 }
 
 // Structural blocks land at the correct hierarchy level, not literally at the
@@ -234,15 +245,21 @@ export const DOCUMENT_ORDER = [
 export const MATH_ORDER = [
   "block::equation",
   "block::math::integral",
+  "block::math::oint",
   "block::math::sum",
   "block::math::product",
   "block::math::fraction",
   "block::math::matrix"
 ];
 
-export const MATH_SYMBOL_ORDER = [...ARROW_COMMANDS, ...SYMBOL_COMMANDS, ...BINOP_COMMANDS].map(
-  (c) => `block::math::${c}`
-);
+// Math symbols, split into collapsible subcategories for the sidebar palette.
+export const MATH_SYMBOL_GROUPS: { title: string; ids: string[] }[] = [
+  { title: "Arrows",      ids: ARROW_COMMANDS.map((c) => `block::math::${c}`) },
+  { title: "Operators",   ids: BINOP_COMMANDS.map((c) => `block::math::${c}`) },
+  { title: "Symbols",     ids: SYMBOL_COMMANDS.map((c) => `block::math::${c}`) },
+  { title: "Delimiters",  ids: DELIMITER_BLOCKS.map((d) => `block::math::${d.id}`) },
+  { title: "Number sets", ids: NUMBER_SET_BLOCKS.map((s) => `block::math::${s.id}`) }
+];
 
 /* The visual box for a Blox item: an icon with a label below it. In `compact`
    mode (used for the math-symbol grid) the label is dropped and the box is a
@@ -255,16 +272,16 @@ export function BlockBox({ id, shadow, compact }: { id: string; shadow?: boolean
       <div
         title={def.label}
         style={{
-          border: "1px solid #ccc",
+          border: "1px solid var(--block-border)",
           borderRadius: 8,
-          background: "#fafafa",
+          background: "var(--block-bg)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           aspectRatio: "1 / 1",
           width: "100%",
           boxSizing: "border-box",
-          color: "#333",
+          color: "var(--glyph)",
           overflow: "hidden",
           boxShadow: shadow ? "0 4px 12px rgba(0,0,0,0.25)" : undefined
         }}
@@ -276,15 +293,15 @@ export function BlockBox({ id, shadow, compact }: { id: string; shadow?: boolean
   return (
     <div
       style={{
-        border: "1px solid #ccc",
+        border: "1px solid var(--block-border)",
         borderRadius: 6,
         padding: "10px 6px",
-        background: "#fafafa",
+        background: "var(--block-bg)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         gap: 4,
-        color: "#333",
+        color: "var(--glyph)",
         width: "100%",
         boxSizing: "border-box",
         boxShadow: shadow ? "0 4px 12px rgba(0,0,0,0.25)" : undefined

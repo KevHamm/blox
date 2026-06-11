@@ -124,8 +124,9 @@ export function DraggableBlock({ id, compact }: { id: string; compact?: boolean 
   );
 }
 
-/* A collapsible sidebar group with a clickable header. */
-export function Collapsible({ title, children, defaultOpen = true }: any) {
+/* A collapsible sidebar group with a clickable header. `sub` renders a smaller,
+   lighter header for nested subcategories. */
+export function Collapsible({ title, children, defaultOpen = true, sub = false }: any) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div>
@@ -137,13 +138,16 @@ export function Collapsible({ title, children, defaultOpen = true }: any) {
           display: "flex",
           alignItems: "center",
           gap: 6,
-          margin: "0 0 8px"
+          margin: "0 0 8px",
+          fontSize: sub ? 13 : undefined,
+          fontWeight: sub ? 500 : undefined,
+          color: sub ? "var(--ui-2nd)" : undefined
         }}
       >
         <span
           style={{
             display: "inline-block",
-            fontSize: 10,
+            fontSize: sub ? 9 : 10,
             transform: open ? "rotate(90deg)" : "none",
             transition: "transform 0.1s ease"
           }}
@@ -216,7 +220,7 @@ export function NumberControl({
           }}
           style={{ width: 64 }}
         />
-        {unit && <span style={{ fontSize: 12, color: "#666" }}>{unit}</span>}
+        {unit && <span style={{ fontSize: 12, color: "var(--ui-2nd)" }}>{unit}</span>}
       </div>
     </div>
   );

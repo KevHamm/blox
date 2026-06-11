@@ -50,7 +50,7 @@ import {
   STRUCTURAL,
   DOCUMENT_ORDER,
   MATH_ORDER,
-  MATH_SYMBOL_ORDER,
+  MATH_SYMBOL_GROUPS,
   BlockBox,
   LayoutIcon
 } from "./components/blocks";
@@ -290,11 +290,11 @@ function EdgeToggle({
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#fff",
-        border: "1px solid rgba(0,0,0,0.12)",
+        background: "var(--edge-bg)",
+        border: "1px solid var(--edge-border)",
         borderRadius: 7,
         boxShadow: "0 2px 8px rgba(20,20,50,0.16)",
-        color: "#666",
+        color: "var(--ui-2nd)",
         cursor: "pointer",
         padding: 0
       }}
@@ -310,7 +310,7 @@ function EdgeToggle({
   );
 }
 
-function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean; template: TemplateLayout; onBack?: () => void }) {
+function Editor({ sidebarsIn = true, template, onBack, dark, onToggleTheme }: { sidebarsIn?: boolean; template: TemplateLayout; onBack?: () => void; dark: boolean; onToggleTheme: () => void }) {
   // ── 1. All state first ──────────────────────────────────
   // Starting content for the chosen class (article / report / letter / …).
   const initialDoc = useMemo(() => templateDoc(template.cls), [template.cls]);
@@ -336,18 +336,6 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [topOpen, setTopOpen] = useState(true);
-  // Dark mode for the editor chrome (the document paper stays white). Persisted
-  // and applied as a data-theme on the document root so scoped CSS can re-skin
-  // the shell, panels and controls.
-  const [dark, setDark] = useState(() => {
-    try { return localStorage.getItem("blox-theme") === "dark"; } catch { return false; }
-  });
-  useEffect(() => {
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-    try { localStorage.setItem("blox-theme", dark ? "dark" : "light"); } catch { /* ignore */ }
-  }, [dark]);
-  // Leave the welcome screen in its native light theme when the editor unmounts.
-  useEffect(() => () => { document.documentElement.removeAttribute("data-theme"); }, []);
   // While true, the next click on a paragraph word attaches a footnote there.
   const [pendingFootnote, setPendingFootnote] = useState(false);
   const [documentTitle, setDocumentTitle] = useState(template.title);
@@ -940,7 +928,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
           outline={outline}
           layout={layout}
           dark={dark}
-          onToggleTheme={() => setDark((v) => !v)}
+          onToggleTheme={onToggleTheme}
         />
       </div>
       <div
@@ -1007,7 +995,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
           }}
         >
           {/* Tab strip: Typography controls vs the Blox palette. */}
-          <div style={{ display: "flex", gap: 4, background: "rgba(0,0,0,0.05)", borderRadius: 10, padding: 3 }}>
+          <div style={{ display: "flex", gap: 4, background: "var(--tabstrip-bg)", borderRadius: 10, padding: 3 }}>
             {(["typography", "blox"] as const).map((t) => (
               <button
                 key={t}
@@ -1022,8 +1010,8 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
                   fontFamily: "var(--ui-font)",
                   fontSize: 13,
                   fontWeight: 600,
-                  color: sidebarTab === t ? "var(--text)" : "#8a8a8e",
-                  background: sidebarTab === t ? "#fff" : "transparent",
+                  color: sidebarTab === t ? "var(--ui-text)" : "var(--ui-2nd)",
+                  background: sidebarTab === t ? "var(--tab-active-bg)" : "transparent",
                   boxShadow: sidebarTab === t ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
                   transition: "background 0.15s ease, color 0.15s ease"
                 }}
@@ -1077,14 +1065,14 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
                         lineHeight: 0,
                         cursor: "pointer",
                         borderRadius: 10,
-                        color: "#444",
+                        color: "var(--ui-text)",
                         transition: "border-color 0.15s ease, background 0.15s ease",
                         border:
                           layout.columns === c
                             ? "2px solid var(--ui-blue)"
-                            : "1px solid rgba(0,0,0,0.12)",
+                            : "1px solid var(--ctrl-border)",
                         background:
-                          layout.columns === c ? "rgba(0,113,227,0.08)" : "rgba(255,255,255,0.7)"
+                          layout.columns === c ? "rgba(0,113,227,0.08)" : "var(--ctrl-surface)"
                       }}
                     >
                       <LayoutIcon columns={c} />
@@ -1092,7 +1080,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
                   ))}
 
                   {/* divider before the text-format buttons */}
-                  <span style={{ width: 1, height: 26, background: "rgba(0,0,0,0.12)", margin: "0 2px" }} />
+                  <span style={{ width: 1, height: 26, background: "var(--divider)", margin: "0 2px" }} />
 
                   {/* Select text in a paragraph, then click to format it. */}
                   {([
@@ -1112,9 +1100,9 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
                         padding: 0,
                         cursor: "pointer",
                         borderRadius: 10,
-                        border: "1px solid rgba(0,0,0,0.12)",
-                        background: "rgba(255,255,255,0.7)",
-                        color: "#333",
+                        border: "1px solid var(--ctrl-border)",
+                        background: "var(--ctrl-surface)",
+                        color: "var(--ui-text)",
                         fontFamily: "var(--sans)",
                         fontSize: 16,
                         lineHeight: 0,
@@ -1137,9 +1125,9 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
                       padding: 0,
                       cursor: "pointer",
                       borderRadius: 10,
-                      border: "1px solid rgba(0,0,0,0.12)",
-                      background: "rgba(255,255,255,0.7)",
-                      color: "#333",
+                      border: "1px solid var(--ctrl-border)",
+                      background: "var(--ctrl-surface)",
+                      color: "var(--ui-text)",
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1159,16 +1147,12 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
 
           {sidebarTab === "blox" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {([
-                { title: "Document", ids: DOCUMENT_ORDER, symbols: false },
-                { title: "Math", ids: MATH_ORDER, symbols: false },
-                { title: "Math symbols", ids: MATH_SYMBOL_ORDER, symbols: true }
-              ] as const).map(({ title, ids, symbols }) => (
-                <Collapsible key={title} title={title}>
+              {/* A grid of Blox icons; `symbols` lays them out compact (label-less). */}
+              {(() => {
+                const grid = (ids: readonly string[], symbols: boolean) => (
                   <div
                     style={{
                       display: "grid",
-                      // Math symbols are compact, label-less glyphs in 3 columns.
                       gridTemplateColumns: symbols ? "1fr 1fr 1fr" : "1fr 1fr",
                       gap: 8
                     }}
@@ -1179,8 +1163,25 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
                         <DraggableBlock key={id} id={id} compact={symbols} />
                       ))}
                   </div>
-                </Collapsible>
-              ))}
+                );
+                return (
+                  <>
+                    <Collapsible title="Document">{grid(DOCUMENT_ORDER, false)}</Collapsible>
+                    <Collapsible title="Math">{grid(MATH_ORDER, false)}</Collapsible>
+                    {/* Math symbols: an outer group holding a collapsible
+                        subcategory per symbol family. */}
+                    <Collapsible title="Math symbols">
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {MATH_SYMBOL_GROUPS.map((g) => (
+                          <Collapsible key={g.title} title={g.title} sub defaultOpen={false}>
+                            {grid(g.ids, true)}
+                          </Collapsible>
+                        ))}
+                      </div>
+                    </Collapsible>
+                  </>
+                );
+              })()}
             </div>
           )}
 
@@ -1358,7 +1359,7 @@ function Editor({ sidebarsIn = true, template, onBack }: { sidebarsIn?: boolean;
 
           <div
             style={{
-              border: `2px dashed ${imageDropActive ? "var(--ui-blue)" : "rgba(0,0,0,0.18)"}`,
+              border: `2px dashed ${imageDropActive ? "var(--ui-blue)" : "var(--ctrl-border)"}`,
               borderRadius: 10,
               padding: "14px 10px",
               textAlign: "center",
@@ -1428,6 +1429,16 @@ export default function App() {
   const [overlayOn, setOverlayOn] = useState(false);
   // The page layout for the selected template (article / report / letter / …).
   const [template, setTemplate] = useState<TemplateLayout>(templateFor("article"));
+  // Dark mode for the whole app (welcome + editor chrome). Persisted and applied
+  // as data-theme on <html> so scoped CSS re-skins everything; the document
+  // paper itself stays white.
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem("blox-theme") === "dark"; } catch { return false; }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    try { localStorage.setItem("blox-theme", dark ? "dark" : "light"); } catch { /* ignore */ }
+  }, [dark]);
 
   function start(preset?: string, rect?: DOMRect) {
     setTemplate(templateFor(preset));
@@ -1487,7 +1498,15 @@ export default function App() {
 
   return (
     <>
-      {showEditor && <Editor sidebarsIn={phase === "editor"} template={template} onBack={goBack} />}
+      {showEditor && (
+        <Editor
+          sidebarsIn={phase === "editor"}
+          template={template}
+          onBack={goBack}
+          dark={dark}
+          onToggleTheme={() => setDark((v) => !v)}
+        />
+      )}
 
       {phase !== "editor" && (
         <div

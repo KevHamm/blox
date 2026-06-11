@@ -30,17 +30,17 @@ const card: CSSProperties = {
   fontWeight: 600,
   letterSpacing: "-0.01em",
   fontFamily: APPLE_FONT,
-  background: "rgba(255, 255, 255, 0.66)",
+  background: "var(--welcome-card-bg)",
   backdropFilter: "blur(20px) saturate(180%)",
   WebkitBackdropFilter: "blur(20px) saturate(180%)",
-  border: "1px solid rgba(255, 255, 255, 0.7)",
+  border: "1px solid var(--welcome-card-border)",
   boxShadow: "0 10px 34px rgba(30, 25, 70, 0.10)"
 };
 
 const descText: CSSProperties = {
   fontSize: 14,
   lineHeight: 1.5,
-  color: "#6e6e73",
+  color: "var(--ui-2nd)",
   fontFamily: APPLE_FONT,
   padding: "0 4px"
 };
@@ -147,7 +147,7 @@ export function Welcome({ onStart }: WelcomeProps) {
             fontWeight: 600,
             letterSpacing: "-0.035em",
             lineHeight: 1.05,
-            color: "#1d1d1f",
+            color: "var(--ui-text)",
             fontFamily: APPLE_FONT
           }}
         >
@@ -159,7 +159,7 @@ export function Welcome({ onStart }: WelcomeProps) {
             fontSize: 20,
             fontWeight: 400,
             letterSpacing: "-0.01em",
-            color: "#6e6e73",
+            color: "var(--ui-2nd)",
             fontFamily: APPLE_FONT,
             transition: "opacity 0.3s ease"
           }}
@@ -225,7 +225,7 @@ export function Welcome({ onStart }: WelcomeProps) {
                   style={{
                     ...card,
                     position: "relative",
-                    color: "#1d1d1f",
+                    color: "var(--ui-text)",
                     cursor: disabled ? "not-allowed" : "pointer",
                     opacity: disabled ? 0.6 : 1
                   }}
