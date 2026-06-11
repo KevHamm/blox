@@ -240,6 +240,87 @@ def _figure_to_latex(node, index: int) -> str:
     return "\n".join(lines)
 
 
+# --- Free-form overlay shapes -------------------------------------------
+# Shapes are stored in editor pixels (96 dpi) measured from each page's top-left
+# corner. LaTeX's default article paper is US-Letter (612 × 792 bp), so 1 px =
+# 72/96 = 0.75 bp and the page is 792 bp tall. We place each page's shapes with
+# eso-pic's per-page shipout hook + a TikZ overlay anchored at the page's lower-
+# left corner, so they land exactly where they were drawn.
+_BP = 0.75          # px → bp
+_PAGE_H_BP = 792.0  # US-Letter height in bp
+
+
+def _color_name(hex_str: str) -> str:
+    return "bloxc" + (hex_str or "").lstrip("#").upper()
+
+
+def _num(v) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _shape_draw(s) -> str:
+    x, y = _num(s.get("x")), _num(s.get("y"))
+    w, h = _num(s.get("w")), _num(s.get("h"))
+    sw = max(_num(s.get("strokeWidth")) or 1.0, 0.1)
+    kind = s.get("kind")
+    opts = [f"draw={_color_name(s.get('color', '#000000'))}", f"line width={round(sw * _BP, 2)}bp"]
+
+    x1, x2 = round(x * _BP, 2), round((x + w) * _BP, 2)
+    y_top, y_bot = round(_PAGE_H_BP - y * _BP, 2), round(_PAGE_H_BP - (y + h) * _BP, 2)
+
+    if kind in ("rect", "circle") and s.get("fill"):
+        opts.append(f"fill={_color_name(s.get('fill'))}")
+
+    if kind == "rect":
+        return f"\\draw[{', '.join(opts)}] ({x1},{y_bot}) rectangle ({x2},{y_top});"
+    if kind == "circle":
+        cx, cy = round((x + w / 2) * _BP, 2), round(_PAGE_H_BP - (y + h / 2) * _BP, 2)
+        rx, ry = round((w / 2) * _BP, 2), round((h / 2) * _BP, 2)
+        return f"\\draw[{', '.join(opts)}] ({cx},{cy}) ellipse [x radius={rx}, y radius={ry}];"
+
+    # line / arrow — across the chosen diagonal of the box.
+    (px1, py1), (px2, py2) = ((x1, y_bot), (x2, y_top)) if s.get("flip") else ((x1, y_top), (x2, y_bot))
+    if kind == "arrow":
+        opts.append(f"-{{Latex[length={round(max(6.0, sw * 2.2), 2)}bp]}}")
+    return f"\\draw[{', '.join(opts)}] ({px1},{py1}) -- ({px2},{py2});"
+
+
+def _shapes_to_latex(shapes):
+    """Return (color-definition lines, shipout-hook lines) for the shapes, or
+    ([], []) when there are none."""
+    shapes = [s for s in (shapes or []) if s.get("kind")]
+    if not shapes:
+        return [], []
+
+    # One \definecolor per distinct stroke / fill colour.
+    colors = {}
+    for s in shapes:
+        for key in ("color", "fill"):
+            c = s.get(key)
+            if c:
+                colors[_color_name(c)] = c.lstrip("#").upper()
+    color_lines = [f"\\definecolor{{{name}}}{{HTML}}{{{hexv}}}" for name, hexv in sorted(colors.items())]
+
+    by_page = {}
+    for s in shapes:
+        by_page.setdefault(int(_num(s.get("page"))), []).append(s)
+
+    hook = ["\\AddToShipoutPictureFG{%"]
+    for p in sorted(by_page):
+        hook.append(f"  \\ifnum\\value{{page}}={p + 1}\\relax")
+        hook.append("    \\AtPageLowerLeft{%")
+        hook.append("      \\begin{tikzpicture}[overlay,x=1bp,y=1bp]")
+        for s in by_page[p]:
+            hook.append("        " + _shape_draw(s))
+        hook.append("      \\end{tikzpicture}}%")
+        hook.append("  \\fi")
+    hook.append("}")
+    return color_lines, hook
+
+
 # Section depth → command.
 _SECTION_CMD = {0: "section", 1: "subsection", 2: "subsubsection"}
 
@@ -311,6 +392,8 @@ def document_to_latex(doc) -> str:
     children = doc.get("children", []) if doc else []
     is_beamer = any(c.get("type") == "frame" for c in children)
 
+    color_lines, hook_lines = _shapes_to_latex(doc.get("shapes") if doc else None)
+
     preamble = [
         "\\documentclass{beamer}" if is_beamer else "\\documentclass{article}",
         "\\usepackage[utf8]{inputenc}",
@@ -318,6 +401,17 @@ def document_to_latex(doc) -> str:
         "\\usepackage{amssymb}",
         "\\usepackage{graphicx}",
     ]
+    if hook_lines:
+        # Overlay shapes need TikZ (with the Latex arrow tip) and eso-pic's
+        # per-page foreground hook to place them at absolute page coordinates.
+        preamble += [
+            "\\usepackage{tikz}",
+            "\\usetikzlibrary{arrows.meta}",
+            "\\usepackage{eso-pic}",
+            "\\usepackage{xcolor}",
+        ]
+        preamble += color_lines
+        preamble += hook_lines
 
     fig_counter = [0]
     body = ["\\begin{document}"]

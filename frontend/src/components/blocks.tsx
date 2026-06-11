@@ -155,6 +155,23 @@ export function FootnoteGlyph() {
   );
 }
 
+// Line-art glyphs for the free-form shape Blox (line / arrow / rectangle / circle).
+export function ShapeGlyph({ kind }: { kind: "line" | "arrow" | "rect" | "circle" }) {
+  return (
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      {kind === "line" && <line x1="4" y1="20" x2="20" y2="4" />}
+      {kind === "arrow" && (
+        <>
+          <line x1="4" y1="20" x2="19" y2="5" />
+          <polyline points="11 5 19 5 19 13" />
+        </>
+      )}
+      {kind === "rect" && <rect x="4" y="6" width="16" height="12" rx="1" />}
+      {kind === "circle" && <circle cx="12" cy="12" r="8" />}
+    </svg>
+  );
+}
+
 const mathBlock = (id: string, label: string, iconTex: string, iconSize = 22) => ({
   label,
   icon: () => <KatexIcon tex={iconTex} size={iconSize} />,
@@ -194,8 +211,23 @@ export const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: 
 
   "block::page::cover":        { label: "Cover Page",        icon: () => <PageGlyph kind="coverpage" />,    make: () => newPage("coverpage") },
   "block::page::toc":          { label: "Contents",          icon: () => <PageGlyph kind="toc" />,          make: () => newPage("toc") },
-  "block::page::bibliography": { label: "Bibliography",       icon: () => <PageGlyph kind="bibliography" />, make: () => newPage("bibliography") }
+  "block::page::bibliography": { label: "Bibliography",       icon: () => <PageGlyph kind="bibliography" />, make: () => newPage("bibliography") },
+
+  // Free-form shapes — dropped anywhere on a page (handled specially in App;
+  // `make` returns null because shapes live on doc.shapes, not in the tree).
+  "block::shape::line":   { label: "Line",      icon: () => <ShapeGlyph kind="line" />,   make: () => null },
+  "block::shape::arrow":  { label: "Arrow",     icon: () => <ShapeGlyph kind="arrow" />,  make: () => null },
+  "block::shape::rect":   { label: "Rectangle", icon: () => <ShapeGlyph kind="rect" />,   make: () => null },
+  "block::shape::circle": { label: "Circle",    icon: () => <ShapeGlyph kind="circle" />, make: () => null }
 };
+
+// The shapes Blox category (free-form overlay graphics).
+export const SHAPE_ORDER = [
+  "block::shape::line",
+  "block::shape::arrow",
+  "block::shape::rect",
+  "block::shape::circle"
+];
 
 // Math-symbol Blox render their glyph as the icon (shown label-less and larger
 // in the sidebar). Each inserts a math node containing the command.

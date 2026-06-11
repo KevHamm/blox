@@ -1,3 +1,23 @@
+// A free-form vector shape that floats over the document (not part of the text
+// flow). Anchored to a page by index, positioned/sized in page pixels measured
+// from the page's top-left corner (margins included). Lines/arrows are drawn
+// across the diagonal of their bounding box (top-left → bottom-right, or the
+// other diagonal when `flip` is set); rects/circles fill their box.
+export type ShapeKind = "line" | "arrow" | "rect" | "circle";
+export interface Shape {
+  id: string;
+  kind: ShapeKind;
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: string;        // stroke colour (hex)
+  fill?: string | null; // fill colour (hex) for rect/circle, or null for none
+  strokeWidth: number;  // stroke / wall thickness, in page px
+  flip?: boolean;       // line/arrow: draw the bottom-left → top-right diagonal
+}
+
 /**
  * A node in the document tree. The editor is intentionally loose: a single
  * shape covers documents, sections, subsections, subsubsections, paragraphs,
@@ -56,4 +76,6 @@ export interface DocumentNode {
   // normal frame with a frametitle bar.
   frameVariant?: "title" | "content";
   children?: DocumentNode[];
+  // Free-form overlay shapes (only meaningful on the root document node).
+  shapes?: Shape[];
 }
