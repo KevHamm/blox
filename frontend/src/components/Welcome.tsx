@@ -1,8 +1,11 @@
 import { useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
+import { Logo, ThemeToggle } from "./chrome";
 
 interface WelcomeProps {
   onStart: (preset?: string, rect?: DOMRect) => void;
+  dark: boolean;
+  onToggleTheme: () => void;
 }
 
 // San-Francisco-first system stack — the Apple typography feel.
@@ -111,7 +114,7 @@ const descLayer = (show: boolean): CSSProperties => ({
   ...descText
 });
 
-export function Welcome({ onStart }: WelcomeProps) {
+export function Welcome({ onStart, dark, onToggleTheme }: WelcomeProps) {
   const [picking, setPicking] = useState(false);
 
   return (
@@ -128,6 +131,11 @@ export function Welcome({ onStart }: WelcomeProps) {
       {sheets.map((s, i) => (
         <div key={i} className="welcome-sheet" style={s} />
       ))}
+
+      {/* Light / dark toggle, pinned to the top-right corner. */}
+      <div style={{ position: "absolute", top: 20, right: 24, zIndex: 3 }}>
+        <ThemeToggle dark={dark} onToggle={onToggleTheme} />
+      </div>
 
       <div
         style={{
@@ -148,10 +156,13 @@ export function Welcome({ onStart }: WelcomeProps) {
             letterSpacing: "-0.035em",
             lineHeight: 1.05,
             color: "var(--ui-text)",
-            fontFamily: APPLE_FONT
+            fontFamily: APPLE_FONT,
+            display: "inline-flex",
+            alignItems: "baseline",
+            gap: "0.28em"
           }}
         >
-          Welcome to Blox
+          Welcome to <Logo flip={false} style={{ fontSize: "1em" }} />
         </h1>
         <p
           style={{

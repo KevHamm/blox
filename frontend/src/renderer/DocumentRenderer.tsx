@@ -5,6 +5,7 @@ import type { Mark, Fmt } from "../utils/marks";
 import { formatAt, sliceMarks, spliceMarks, normalizeMarks, marksEqual } from "../utils/marks";
 import { symbolFor, wordAround } from "../utils/greek";
 import { arrowAutocorrect } from "../utils/arrows";
+import { confirmDialog } from "../components/ConfirmDialog";
 
 // A DOM Range spanning characters [a, b) of a contentEditable element, walking
 // its text nodes (skipping non-text like footnote markers).
@@ -983,7 +984,10 @@ function DocImage({ figureId, image, deleteFigureImage }: any) {
     >
       {/* per-image trash; stops the pointer from starting a drag */}
       <button
-        onClick={() => { if (window.confirm("Delete this image?")) deleteFigureImage(figureId, image.id); }}
+        onClick={() => {
+          confirmDialog({ title: "Delete image?", message: "This image will be removed from the figure.", confirmLabel: "Delete", danger: true })
+            .then((ok) => { if (ok) deleteFigureImage(figureId, image.id); });
+        }}
         onPointerDown={(e) => e.stopPropagation()}
         title="Delete image"
         style={{

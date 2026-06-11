@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, useEffect } from "react";
+import { Logo, ThemeToggle } from "./chrome";
 
 // Tall enough to hold the mini page preview — roughly half a sidebar's width.
 export const TOPBAR_HEIGHT = 140;
@@ -370,59 +371,6 @@ function ControlGroup({ children }: any) {
   );
 }
 
-// One flipping letter of the logo: shows `front` normally, `back` on hover.
-function FlipLetter({ front, back, delay, frontBlue, backBlue }: any) {
-  const blue = { color: "var(--ui-blue)" };
-  return (
-    <span className="logo-flip" style={{ transitionDelay: delay }}>
-      <span className="logo-face logo-front" style={frontBlue ? blue : undefined}>{front}</span>
-      <span className="logo-face logo-back" style={backBlue ? blue : undefined}>{back}</span>
-    </span>
-  );
-}
-
-// The logo doubles as the back button: hovering rotates "LoX" → "aCK" so it
-// reads "BaCK", and clicking it returns to the template chooser. `large` blows
-// it up to roughly half the sidebar width for the expanded top bar.
-function Logo({ onBack, large }: any) {
-  return (
-    <div className={`blox-logo${large ? " large" : ""}`} onClick={onBack} title="Back to templates">
-      <span>B</span>
-      <FlipLetter front="L" back="a" delay="0s" backBlue />
-      <FlipLetter front="o" back="C" delay="0.05s" frontBlue />
-      <FlipLetter front="X" back="K" delay="0.1s" />
-    </div>
-  );
-}
-
-// An iOS-style switch that flips the editor chrome between light and dark.
-function ThemeToggle({ dark, onToggle }: { dark: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      className="theme-toggle"
-      onClick={onToggle}
-      aria-pressed={dark}
-      title={dark ? "Switch to light mode" : "Switch to dark mode"}
-      aria-label="Toggle dark mode"
-    >
-      <span className="theme-track" data-on={dark ? "true" : "false"}>
-        <span className="theme-thumb">
-          {dark ? (
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="4" />
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-            </svg>
-          )}
-        </span>
-      </span>
-      <span className="theme-label">{dark ? "Dark" : "Light"}</span>
-    </button>
-  );
-}
-
 export function TopBar({
   onBack, onUndo, onRedo, onExport, canUndo, canRedo, visible, collapsed,
   pages, outline, layout, dark, onToggleTheme
@@ -456,7 +404,7 @@ export function TopBar({
           gap: collapsed ? 12 : 12, padding: "0 16px"
         }}
       >
-        <Logo onBack={onBack} large={!collapsed} />
+        <Logo onClick={onBack} large={!collapsed} />
         <ControlGroup>
           <IconButton onClick={onUndo} disabled={!canUndo} title="Undo">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

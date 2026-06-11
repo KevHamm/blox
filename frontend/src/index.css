@@ -473,6 +473,67 @@ math-field::part(menu-toggle) {
 .ui-btn.primary:hover {
   background: #0077ed;
 }
+.ui-btn.danger {
+  color: #fff;
+  background: #e0392b;
+  border-color: transparent;
+}
+.ui-btn.danger:hover {
+  background: #c8281b;
+}
+
+/* Custom confirm dialog ---------------------------------------------------- */
+@keyframes confirmFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes confirmPopIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 20, 35, 0.32);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: confirmFadeIn 0.18s ease;
+}
+.confirm-card {
+  width: 100%;
+  max-width: 360px;
+  box-sizing: border-box;
+  padding: 20px 20px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--ui-hairline);
+  box-shadow: 0 18px 60px rgba(10, 10, 30, 0.32);
+  animation: confirmPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.confirm-title {
+  font-family: var(--ui-font);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ui-text);
+  margin-bottom: 6px;
+}
+.confirm-message {
+  font-family: var(--ui-font);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ui-2nd);
+  margin-bottom: 18px;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
 
 /* Every button inside the document page is faded until hovered. */
 .doc-area button {

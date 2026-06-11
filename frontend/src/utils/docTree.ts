@@ -356,6 +356,7 @@ export const NUMBER_SET_BLOCKS = [
 export const MATH_TEMPLATES: Record<string, string> = {
   "block::math::integral": "\\int_{a}^{b} f(x)\\,dx",
   "block::math::oint": "\\oint_{C} f(x)\\,dx",
+  "block::math::lim": "\\lim_{x \\to \\infty} f(x)",
   "block::math::sum": "\\sum_{i=1}^{n} a_i",
   "block::math::product": "\\prod_{i=1}^{n} a_i",
   "block::math::fraction": "\\frac{a}{b}",

@@ -56,6 +56,7 @@ import {
   LayoutIcon
 } from "./components/blocks";
 import { ShapeLayer } from "./components/shapes";
+import { ConfirmHost, confirmDialog } from "./components/ConfirmDialog";
 import type { Shape, ShapeKind } from "./types/document";
 import {
   DraggableImage,
@@ -654,13 +655,20 @@ function Editor({ sidebarsIn = true, template, onBack, dark, onToggleTheme }: { 
     if (el?.dataset.paraId) toggleParagraphAlign(el.dataset.paraId);
   }
 
-  // Delete a block, asking first when it still holds content. Used for every
-  // block-level trash button (sections, tables, lists, equations, slides, …).
+  // Delete a block, asking first (via the custom confirm dialog) when it still
+  // holds content. Used for every block-level trash button (sections, tables,
+  // lists, equations, slides, …).
   function confirmDeleteNode(id: string) {
     const node = findNodeById(doc, id);
     if (node && nodeHasContent(node)) {
       const label = DELETE_LABELS[node.type] ?? "block";
-      if (!window.confirm(`Delete this ${label}? Its contents will be lost.`)) return;
+      confirmDialog({
+        title: `Delete ${label}?`,
+        message: `This ${label} and its contents will be removed.`,
+        confirmLabel: "Delete",
+        danger: true
+      }).then((ok) => { if (ok) deleteNodeById(id); });
+      return;
     }
     deleteNodeById(id);
   }
@@ -1369,8 +1377,13 @@ function Editor({ sidebarsIn = true, template, onBack, dark, onToggleTheme }: { 
                               />
                               <button
                                 onClick={() => {
-                                  if ((fn.text ?? "").trim() && !window.confirm("Delete this footnote? Its text will be lost.")) return;
-                                  removeFootnote(paragraphId, fn.id);
+                                  if (!(fn.text ?? "").trim()) { removeFootnote(paragraphId, fn.id); return; }
+                                  confirmDialog({
+                                    title: "Delete footnote?",
+                                    message: "This footnote and its text will be removed.",
+                                    confirmLabel: "Delete",
+                                    danger: true
+                                  }).then((ok) => { if (ok) removeFootnote(paragraphId, fn.id); });
                                 }}
                                 title="Delete footnote"
                                 style={{ border: "none", background: "transparent", color: "#c0392b", cursor: "pointer", padding: 0 }}
@@ -1623,7 +1636,7 @@ export default function App() {
             pointerEvents: phase === "morph" ? "none" : "auto"
           }}
         >
-          <Welcome onStart={start} />
+          <Welcome onStart={start} dark={dark} onToggleTheme={() => setDark((v) => !v)} />
         </div>
       )}
 
@@ -1647,6 +1660,9 @@ export default function App() {
           }}
         />
       )}
+
+      {/* App-wide custom confirm dialog host. */}
+      <ConfirmHost />
     </>
   );
 }
