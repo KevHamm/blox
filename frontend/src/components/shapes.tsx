@@ -270,7 +270,7 @@ function ShapeView({
             <button
               title="Delete shape"
               onClick={onDelete}
-              style={{ border: "none", background: "transparent", color: "#e0392b", cursor: "pointer", padding: 2, display: "inline-flex" }}
+              style={{ border: "none", background: "transparent", color: "var(--ui-danger-text)", cursor: "pointer", padding: 2, display: "inline-flex" }}
             >
               <TrashIcon size={14} />
             </button>

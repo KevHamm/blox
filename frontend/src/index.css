@@ -15,30 +15,41 @@
   --heading: "KaTeX_Main", Georgia, serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  /* Apple-style UI font for the editor chrome (not the document content). */
+  /* System UI font for the editor chrome (not the document content). */
   --ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
     "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --ui-text: #1d1d1f;
-  --ui-2nd: #6e6e73;
-  --ui-blue: #0071e3;
-  /* Frosted-panel background + hairline; re-skinned under [data-theme="dark"]. */
-  --panel-bg: rgba(250, 250, 252, 0.6);
-  --ui-hairline: rgba(0, 0, 0, 0.08);
+  /* "Porcelain & ink": warm paper-toned neutrals with an indigo-ink accent.
+     Re-skinned under [data-theme="dark"] into a violet-ink night. */
+  --ui-text: #25221e;
+  --ui-2nd: #76716a;
+  --ui-disabled: #c4beb3;
+  /* The accent family. --ui-blue (kept name; many call sites) is the accent as
+     a *foreground* (icons, text, glows); --ui-accent-fill is the accent as a
+     solid *fill* behind white text; soft/ring are its tint and focus halo. */
+  --ui-blue: #5048e5;
+  --ui-accent-fill: #5048e5;
+  --ui-accent-soft: rgba(80, 72, 229, 0.1);
+  --ui-accent-ring: rgba(80, 72, 229, 0.42);
+  --ui-danger-text: #c43c2e;
+  /* Frosted-panel background + hairline. */
+  --panel-bg: rgba(252, 250, 246, 0.62);
+  --panel-glint: rgba(255, 255, 255, 0.5);
+  --ui-hairline: rgba(62, 52, 35, 0.1);
   /* Editor-control surfaces (tabs, palette blocks, buttons, glyphs, edges). All
      re-skinned under [data-theme="dark"] for the full-app dark mode. */
-  --tabstrip-bg: rgba(0, 0, 0, 0.05);
-  --tab-active-bg: #fff;
-  --ctrl-surface: rgba(255, 255, 255, 0.7);
-  --ctrl-border: rgba(0, 0, 0, 0.12);
-  --divider: rgba(0, 0, 0, 0.1);
-  --block-bg: #fafafa;
-  --block-border: #ccc;
-  --glyph: #333;
-  --edge-bg: #fff;
-  --edge-border: rgba(0, 0, 0, 0.12);
-  --cap-rule: #c9c9cf;
-  --welcome-card-bg: rgba(255, 255, 255, 0.66);
-  --welcome-card-border: rgba(255, 255, 255, 0.7);
+  --tabstrip-bg: rgba(62, 52, 35, 0.06);
+  --tab-active-bg: #fffdf9;
+  --ctrl-surface: rgba(255, 253, 248, 0.75);
+  --ctrl-border: rgba(62, 52, 35, 0.14);
+  --divider: rgba(62, 52, 35, 0.11);
+  --block-bg: #faf8f2;
+  --block-border: #cfc8bb;
+  --glyph: #3a362f;
+  --edge-bg: #fffdf8;
+  --edge-border: rgba(62, 52, 35, 0.14);
+  --cap-rule: #cdc6b9;
+  --welcome-card-bg: rgba(255, 253, 248, 0.66);
+  --welcome-card-border: rgba(255, 251, 242, 0.75);
 
   font: 18px/1.6 var(--sans);
   letter-spacing: 0.18px;
@@ -81,36 +92,43 @@
    the document paper itself stays white. Toggled from the top bar, applied as a
    data-theme on <html>. */
 :root[data-theme="dark"] {
-  --ui-text: #f2f2f5;
-  --ui-2nd: #9a9aa2;
-  --ui-blue: #2f9bff;
-  --panel-bg: rgba(30, 31, 38, 0.62);
-  --ui-hairline: rgba(255, 255, 255, 0.1);
-  --tabstrip-bg: rgba(255, 255, 255, 0.06);
-  --tab-active-bg: rgba(255, 255, 255, 0.18);
-  --ctrl-surface: rgba(255, 255, 255, 0.07);
-  --ctrl-border: rgba(255, 255, 255, 0.16);
-  --divider: rgba(255, 255, 255, 0.14);
-  --block-bg: rgba(255, 255, 255, 0.06);
-  --block-border: rgba(255, 255, 255, 0.16);
-  --glyph: #e7e7ec;
-  --edge-bg: #2a2b31;
-  --edge-border: rgba(255, 255, 255, 0.16);
-  --welcome-card-bg: rgba(42, 44, 54, 0.62);
-  --welcome-card-border: rgba(255, 255, 255, 0.12);
+  --ui-text: #efedea;
+  --ui-2nd: #9c9892;
+  --ui-disabled: #56535c;
+  --ui-blue: #9298ff;
+  --ui-accent-fill: #5a5ae0;
+  --ui-accent-soft: rgba(146, 152, 255, 0.14);
+  --ui-accent-ring: rgba(146, 152, 255, 0.5);
+  --ui-danger-text: #ff8d7a;
+  --panel-bg: rgba(28, 27, 33, 0.6);
+  --panel-glint: rgba(255, 255, 255, 0.07);
+  --ui-hairline: rgba(255, 248, 235, 0.1);
+  --tabstrip-bg: rgba(255, 248, 235, 0.06);
+  --tab-active-bg: rgba(255, 248, 235, 0.17);
+  --ctrl-surface: rgba(255, 248, 235, 0.07);
+  --ctrl-border: rgba(255, 248, 235, 0.16);
+  --divider: rgba(255, 248, 235, 0.14);
+  --block-bg: rgba(255, 248, 235, 0.06);
+  --block-border: rgba(255, 248, 235, 0.16);
+  --glyph: #e8e5e0;
+  --edge-bg: #27252e;
+  --edge-border: rgba(255, 248, 235, 0.16);
+  --cap-rule: #57545e;
+  --welcome-card-bg: rgba(38, 36, 46, 0.62);
+  --welcome-card-border: rgba(255, 248, 235, 0.13);
 }
-/* Welcome screen in dark mode: a deep aurora backdrop + softened sheets. */
+/* Welcome screen in dark mode: a quiet ink-night backdrop — an indigo wash up
+   top, a warm ember glow low-right — with softened paper sheets. */
 :root[data-theme="dark"] .welcome-bg {
   background:
-    radial-gradient(60% 60% at 18% 20%, hsla(265, 70%, 40%, 0.45) 0, transparent 60%),
-    radial-gradient(55% 55% at 82% 14%, hsla(198, 75%, 42%, 0.40) 0, transparent 60%),
-    radial-gradient(55% 55% at 82% 84%, hsla(330, 70%, 42%, 0.38) 0, transparent 60%),
-    radial-gradient(55% 55% at 18% 82%, hsla(150, 60%, 40%, 0.32) 0, transparent 60%),
-    linear-gradient(180deg, #0e0f15, #07080c);
+    radial-gradient(65% 60% at 16% 12%, hsla(243, 65%, 42%, 0.40) 0, transparent 62%),
+    radial-gradient(55% 55% at 86% 82%, hsla(22, 75%, 45%, 0.26) 0, transparent 60%),
+    radial-gradient(50% 50% at 84% 12%, hsla(258, 55%, 45%, 0.24) 0, transparent 60%),
+    linear-gradient(180deg, #0d0c13, #08070c);
 }
 :root[data-theme="dark"] .welcome-sheet {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 248, 235, 0.045);
+  border-color: rgba(255, 248, 235, 0.09);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
 }
 :root[data-theme="dark"] .welcome-card {
@@ -118,44 +136,54 @@
 }
 :root[data-theme="dark"] .welcome-card:hover {
   box-shadow: 0 24px 50px rgba(0, 0, 0, 0.55);
+  border-color: rgba(146, 152, 255, 0.35);
 }
 :root[data-theme="dark"] .editor-shell {
-  background-color: #0c0d11;
+  background-color: #0e0d13;
   background-image:
-    radial-gradient(120% 45% at 50% -8%, rgba(90, 110, 220, 0.18), transparent 60%),
-    radial-gradient(100% 60% at 100% 110%, rgba(60, 150, 150, 0.12), transparent 55%),
-    radial-gradient(rgba(180, 190, 255, 0.06) 1px, transparent 1.6px);
+    radial-gradient(120% 45% at 50% -8%, rgba(96, 92, 230, 0.16), transparent 60%),
+    radial-gradient(100% 60% at 100% 110%, rgba(214, 120, 60, 0.08), transparent 55%),
+    radial-gradient(rgba(200, 196, 255, 0.055) 1px, transparent 1.6px);
 }
 :root[data-theme="dark"] .ui-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 248, 235, 0.08);
+  border-color: rgba(255, 248, 235, 0.14);
   color: var(--ui-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 :root[data-theme="dark"] .ui-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 248, 235, 0.15);
+  border-color: rgba(255, 248, 235, 0.24);
 }
 :root[data-theme="dark"] .ui-btn.primary {
   color: #fff;
-  background: var(--ui-blue);
+  background: linear-gradient(180deg, #666ced, #5152dc);
   border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 4px 14px rgba(90, 90, 224, 0.4);
 }
 :root[data-theme="dark"] .ui-btn.primary:hover {
-  background: #4aa8ff;
+  background: linear-gradient(180deg, #767cf4, #5f60e6);
+}
+:root[data-theme="dark"] .ui-btn.danger {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 4px 14px rgba(190, 60, 60, 0.35);
 }
 :root[data-theme="dark"] .outline-tab,
 :root[data-theme="dark"] .outline-collapse {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 248, 235, 0.08);
+  border-color: rgba(255, 248, 235, 0.12);
   color: var(--ui-text);
 }
 :root[data-theme="dark"] .ui-panel input[type="number"] {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 248, 235, 0.06);
+  border-color: rgba(255, 248, 235, 0.14);
   color: var(--ui-text);
 }
 :root[data-theme="dark"] .theme-track {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 248, 235, 0.2);
 }
 
 #root {
@@ -238,19 +266,31 @@ math-field::part(menu-toggle) {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(60% 60% at 18% 20%, hsla(265, 90%, 86%, 0.55) 0, transparent 60%),
-    radial-gradient(55% 55% at 82% 14%, hsla(198, 95%, 80%, 0.50) 0, transparent 60%),
-    radial-gradient(55% 55% at 82% 84%, hsla(330, 90%, 86%, 0.50) 0, transparent 60%),
-    radial-gradient(55% 55% at 18% 82%, hsla(150, 80%, 82%, 0.45) 0, transparent 60%),
-    linear-gradient(180deg, #f7f8fd, #eceff7);
+    radial-gradient(65% 60% at 16% 12%, hsla(243, 75%, 88%, 0.6) 0, transparent 62%),
+    radial-gradient(55% 55% at 86% 84%, hsla(28, 85%, 85%, 0.55) 0, transparent 60%),
+    radial-gradient(50% 50% at 85% 10%, hsla(258, 70%, 90%, 0.5) 0, transparent 60%),
+    linear-gradient(180deg, #fbfaf5, #f1eee6);
+}
+/* A whisper of paper grain over the welcome washes (sits beneath the floating
+   sheets and all content, which paint after it in DOM order). */
+.welcome-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
 }
 
 .welcome-sheet {
   position: absolute;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 14px 36px rgba(60, 60, 120, 0.12);
+  /* Faintly ruled, like sheets of writing paper. */
+  background:
+    repeating-linear-gradient(180deg, transparent 0 14px, rgba(80, 72, 229, 0.055) 14px 15px),
+    rgba(255, 253, 247, 0.5);
+  border: 1px solid rgba(255, 252, 244, 0.8);
+  box-shadow: 0 14px 36px rgba(70, 58, 35, 0.11);
   animation: welcome-floaty 9s ease-in-out infinite;
   pointer-events: none;
 }
@@ -263,8 +303,8 @@ math-field::part(menu-toggle) {
 }
 .welcome-card:hover {
   transform: translateY(-6px) scale(1.012);
-  box-shadow: 0 24px 50px rgba(20, 20, 60, 0.16);
-  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 24px 50px rgba(55, 45, 25, 0.16);
+  border-color: rgba(80, 72, 229, 0.35);
 }
 .welcome-card:active {
   transform: translateY(-2px) scale(0.998);
@@ -287,14 +327,16 @@ math-field::part(menu-toggle) {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(30, 25, 70, 0.08);
+  box-shadow: 0 4px 14px rgba(70, 58, 35, 0.08);
   transition:
     transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.3s ease;
 }
 .welcome-resume:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(30, 25, 70, 0.14);
+  box-shadow: 0 10px 24px rgba(70, 58, 35, 0.14);
+  border-color: var(--ui-accent-ring);
 }
 .welcome-resume:active {
   transform: translateY(0);
@@ -308,11 +350,11 @@ math-field::part(menu-toggle) {
 /* Editor shell — the soft tint + faint dot grid sits on the outer shell (behind
    the top bar AND the sidebars) so both frost over the same backdrop. */
 .editor-shell {
-  background-color: #eceef5;
+  background-color: #f2f0e9;
   background-image:
-    radial-gradient(120% 45% at 50% -8%, rgba(120, 130, 215, 0.14), transparent 60%),
-    radial-gradient(100% 60% at 100% 110%, rgba(110, 200, 195, 0.10), transparent 55%),
-    radial-gradient(rgba(48, 52, 100, 0.06) 1px, transparent 1.6px);
+    radial-gradient(120% 45% at 50% -8%, rgba(99, 91, 229, 0.11), transparent 60%),
+    radial-gradient(100% 60% at 100% 110%, rgba(214, 140, 60, 0.08), transparent 55%),
+    radial-gradient(rgba(74, 62, 36, 0.075) 1px, transparent 1.6px);
   background-size: 100% 100%, 100% 100%, 23px 23px;
 }
 .editor-canvas {
@@ -323,10 +365,12 @@ math-field::part(menu-toggle) {
 .ui-panel {
   font-family: var(--ui-font);
   /* Frosted glass: translucent so the tinted shell shows through, with a strong
-     blur. The top bar and both sidebars share this exact treatment. */
+     blur and a hairline glint along the top edge, like light catching the pane.
+     The top bar and both sidebars share this exact treatment. */
   background: var(--panel-bg);
   backdrop-filter: blur(26px) saturate(180%);
   -webkit-backdrop-filter: blur(26px) saturate(180%);
+  box-shadow: inset 0 1px 0 var(--panel-glint);
   color: var(--ui-text);
 }
 .ui-panel h3 {
@@ -373,7 +417,7 @@ math-field::part(menu-toggle) {
   transition: box-shadow 0.15s ease, transform 0.1s ease;
 }
 .outline-page:hover {
-  box-shadow: 0 2px 10px rgba(0, 113, 227, 0.5) !important;
+  box-shadow: 0 2px 10px var(--ui-accent-ring) !important;
   transform: translateY(-1px);
 }
 .outline-tab {
@@ -387,17 +431,17 @@ math-field::part(menu-toggle) {
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--ui-text);
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(62, 52, 35, 0.05);
+  border: 1px solid rgba(62, 52, 35, 0.09);
   border-radius: 999px;
   padding: 6px 14px;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .outline-tab:hover {
-  background: rgba(0, 113, 227, 0.1);
+  background: var(--ui-accent-soft);
   color: var(--ui-blue);
-  border-color: rgba(0, 113, 227, 0.4);
+  border-color: var(--ui-accent-ring);
 }
 .outline-collapse {
   flex: 0 0 auto;
@@ -407,14 +451,14 @@ math-field::part(menu-toggle) {
   align-items: center;
   justify-content: center;
   color: var(--ui-text);
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(62, 52, 35, 0.05);
+  border: 1px solid rgba(62, 52, 35, 0.09);
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
 .outline-collapse:hover {
-  background: rgba(0, 113, 227, 0.1);
+  background: var(--ui-accent-soft);
   color: var(--ui-blue);
 }
 
@@ -424,7 +468,11 @@ math-field::part(menu-toggle) {
 .ui-panel,
 .doc-area {
   scrollbar-width: thin;                       /* Firefox */
-  scrollbar-color: rgba(60, 60, 67, 0.28) transparent;
+  scrollbar-color: rgba(62, 55, 40, 0.28) transparent;
+}
+:root[data-theme="dark"] .ui-panel,
+:root[data-theme="dark"] .doc-area {
+  scrollbar-color: rgba(255, 248, 235, 0.22) transparent;
 }
 .ui-panel::-webkit-scrollbar,
 .doc-area::-webkit-scrollbar {
@@ -437,7 +485,7 @@ math-field::part(menu-toggle) {
 }
 .ui-panel::-webkit-scrollbar-thumb,
 .doc-area::-webkit-scrollbar-thumb {
-  background: rgba(60, 60, 67, 0.28);
+  background: rgba(62, 55, 40, 0.28);
   border-radius: 999px;
   border: 3px solid transparent;               /* inset the pill from the edge */
   background-clip: padding-box;
@@ -445,7 +493,17 @@ math-field::part(menu-toggle) {
 }
 .ui-panel:hover::-webkit-scrollbar-thumb,
 .doc-area:hover::-webkit-scrollbar-thumb {
-  background: rgba(60, 60, 67, 0.42);
+  background: rgba(62, 55, 40, 0.42);
+  background-clip: padding-box;
+}
+:root[data-theme="dark"] .ui-panel::-webkit-scrollbar-thumb,
+:root[data-theme="dark"] .doc-area::-webkit-scrollbar-thumb {
+  background: rgba(255, 248, 235, 0.2);
+  background-clip: padding-box;
+}
+:root[data-theme="dark"] .ui-panel:hover::-webkit-scrollbar-thumb,
+:root[data-theme="dark"] .doc-area:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 248, 235, 0.32);
   background-clip: padding-box;
 }
 .ui-panel::-webkit-scrollbar-thumb:hover,
@@ -472,48 +530,70 @@ math-field::part(menu-toggle) {
   accent-color: var(--ui-blue);
 }
 .ui-panel input[type="number"] {
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(62, 52, 35, 0.14);
   border-radius: 7px;
   padding: 3px 6px;
+  background: rgba(255, 253, 248, 0.7);
   color: var(--ui-text);
 }
 
-/* A clean, neutral Apple-style button. */
+/* A clean, neutral button on warm porcelain. */
 .ui-btn {
   font-family: var(--ui-font);
   font-size: 13px;
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--ui-text);
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 253, 247, 0.85);
+  border: 1px solid rgba(62, 52, 35, 0.12);
   border-radius: 10px;
   padding: 8px 14px;
   cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 2px rgba(70, 58, 35, 0.06);
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
 }
 .ui-btn:hover {
-  background: #fff;
-  border-color: rgba(0, 0, 0, 0.2);
+  background: #fffefb;
+  border-color: rgba(62, 52, 35, 0.24);
 }
 .ui-btn:active {
   transform: scale(0.97);
 }
+/* Filled buttons get a soft ink gradient + top glint, like a pressed seal. */
 .ui-btn.primary {
   color: #fff;
-  background: var(--ui-blue);
+  background: linear-gradient(180deg, #5d55ee, #483fd8);
   border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 4px 14px rgba(80, 72, 229, 0.35);
 }
 .ui-btn.primary:hover {
-  background: #0077ed;
+  background: linear-gradient(180deg, #6a63f2, #544ce0);
 }
 .ui-btn.danger {
   color: #fff;
-  background: #e0392b;
+  background: linear-gradient(180deg, #df4f3c, #cd372a);
   border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 4px 14px rgba(205, 55, 42, 0.3);
 }
 .ui-btn.danger:hover {
-  background: #c8281b;
+  background: linear-gradient(180deg, #e65e4a, #d63f31);
+}
+/* Keyboard focus: an ink halo (outline only — never shifts layout). */
+.ui-btn:focus-visible,
+.outline-tab:focus-visible,
+.outline-collapse:focus-visible,
+.shape-step:focus-visible,
+.theme-toggle:focus-visible,
+.welcome-card:focus-visible,
+.welcome-resume:focus-visible {
+  outline: 2px solid var(--ui-accent-ring);
+  outline-offset: 2px;
 }
 
 /* Custom confirm dialog ---------------------------------------------------- */
@@ -533,9 +613,9 @@ math-field::part(menu-toggle) {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(20, 20, 35, 0.32);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: rgba(18, 14, 24, 0.38);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
   animation: confirmFadeIn 0.18s ease;
 }
 .confirm-card {
@@ -543,9 +623,11 @@ math-field::part(menu-toggle) {
   max-width: 360px;
   box-sizing: border-box;
   padding: 20px 20px 16px;
-  border-radius: 16px;
+  border-radius: 18px;
   border: 1px solid var(--ui-hairline);
-  box-shadow: 0 18px 60px rgba(10, 10, 30, 0.32);
+  box-shadow:
+    inset 0 1px 0 var(--panel-glint),
+    0 24px 80px rgba(20, 12, 40, 0.35);
   animation: confirmPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .confirm-title {
@@ -595,7 +677,7 @@ math-field::part(menu-toggle) {
 /* Faint placeholder for empty section / title fields, so an unnamed heading
    stays visible. */
 .heading-input::placeholder {
-  color: #c7c7cf;
+  color: #c9c3b8;
   opacity: 1;
 }
 
@@ -605,14 +687,16 @@ math-field::part(menu-toggle) {
   border-radius: 3px;
   transition: background 0.1s ease;
 }
+/* Accents painted on the document paper use fixed ink tints (the paper stays
+   white in dark mode, so these must not follow the chrome theme). */
 .fn-word:hover {
-  background: rgba(0, 113, 227, 0.18);
-  box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.35);
+  background: rgba(80, 72, 229, 0.16);
+  box-shadow: 0 0 0 1px rgba(80, 72, 229, 0.35);
 }
 
 /* Border-editor click strips between table cells. */
 .tbl-border-edge:hover {
-  background: rgba(0, 113, 227, 0.25);
+  background: rgba(80, 72, 229, 0.25);
 }
 
 /* Table row/column reorder grips: hidden until the table is hovered. */
@@ -678,11 +762,11 @@ math-field::part(menu-toggle) {
   height: 24px;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(62, 52, 35, 0.2);
   transition: background 0.25s ease;
 }
 .theme-track[data-on="true"] {
-  background: var(--ui-blue);
+  background: var(--ui-accent-fill);
 }
 .theme-thumb {
   position: absolute;

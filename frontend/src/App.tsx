@@ -1096,7 +1096,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
               left: "50%",
               transform: "translateX(-50%)",
               zIndex: 100,
-              background: "var(--ui-blue)",
+              background: "var(--ui-accent-fill)",
               color: "#fff",
               fontFamily: "var(--ui-font)",
               fontSize: 13,
@@ -1127,7 +1127,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
             width: 280,
             boxSizing: "border-box",
             padding: 20,
-            borderRight: "1px solid rgba(0,0,0,0.08)",
+            borderRight: "1px solid var(--ui-hairline)",
             display: "flex",
             flexDirection: "column",
             gap: 12,
@@ -1219,7 +1219,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
                             ? "2px solid var(--ui-blue)"
                             : "1px solid var(--ctrl-border)",
                         background:
-                          layout.columns === c ? "rgba(0,113,227,0.08)" : "var(--ctrl-surface)"
+                          layout.columns === c ? "var(--ui-accent-soft)" : "var(--ctrl-surface)"
                       }}
                     >
                       <LayoutIcon columns={c} />
@@ -1502,7 +1502,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
             width: 260,
             boxSizing: "border-box",
             padding: 20,
-            borderLeft: "1px solid rgba(0,0,0,0.08)",
+            borderLeft: "1px solid var(--ui-hairline)",
             display: "flex",
             flexDirection: "column",
             gap: 12,
@@ -1533,7 +1533,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
               fontSize: 12,
               lineHeight: 1.4,
               color: imageDropActive ? "var(--ui-blue)" : "var(--ui-2nd)",
-              background: imageDropActive ? "rgba(0,113,227,0.08)" : "transparent",
+              background: imageDropActive ? "var(--ui-accent-soft)" : "transparent",
               transition: "border-color 0.15s ease, background 0.15s ease, color 0.15s ease",
               pointerEvents: "none"
             }}
@@ -1568,7 +1568,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
               width: 160,
               height: "auto",
               borderRadius: 4,
-              border: "1px solid #4a90e2",
+              border: "1px solid var(--ui-blue)",
               boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
               opacity: 0.5
             }}
@@ -1728,7 +1728,7 @@ export default function App() {
             background: "#ffffff",
             borderRadius: 8,
             boxShadow:
-              "0 12px 40px rgba(20, 20, 50, 0.18), 0 2px 6px rgba(20, 20, 50, 0.06)",
+              "0 12px 40px rgba(55, 45, 25, 0.18), 0 2px 6px rgba(55, 45, 25, 0.06)",
             opacity: overlayOn ? 1 : 0,
             transition: `left 0.55s ${MORPH_EASE}, top 0.55s ${MORPH_EASE}, width 0.55s ${MORPH_EASE}, height 0.55s ${MORPH_EASE}, opacity 0.3s ease`,
             willChange: "left, top, width, height, opacity",

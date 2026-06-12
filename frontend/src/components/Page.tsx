@@ -48,7 +48,7 @@ export function Page({
         overflow: "hidden",
         background: "white",
         borderRadius: 6,
-        boxShadow: "0 12px 40px rgba(20, 20, 50, 0.10), 0 2px 6px rgba(20, 20, 50, 0.06)",
+        boxShadow: "0 12px 40px rgba(55, 45, 25, 0.10), 0 2px 6px rgba(55, 45, 25, 0.06)",
         marginBottom: 44,
         paddingTop: padTop,
         paddingBottom: padBottom,

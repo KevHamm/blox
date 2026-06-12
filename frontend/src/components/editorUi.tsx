@@ -51,7 +51,7 @@ export function DraggableImage({ img, onDelete }: any) {
           width: "100%",
           height: "auto",
           borderRadius: 4,
-          border: "1px solid #ddd",
+          border: "1px solid var(--ctrl-border)",
           display: "block",
           pointerEvents: "none"
         }}
@@ -60,7 +60,7 @@ export function DraggableImage({ img, onDelete }: any) {
         style={{
           marginTop: 4,
           fontSize: 12,
-          color: "#444",
+          color: "var(--ui-2nd)",
           wordBreak: "break-word"
         }}
       >

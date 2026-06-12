@@ -42,7 +42,9 @@ const clampFrac = (v: number, min: number, max: number) =>
 /* -----------------------------
    DROP INDICATOR (insertion line)
 ----------------------------- */
-const DROP_LINE = "#0071e3";
+// Fixed ink indigo (not a theme var): these accents paint onto the document
+// paper, which stays white even in dark mode.
+const DROP_LINE = "#5048e5";
 
 /* A thin horizontal insertion line shaped like  |>-----------------<|  drawn as
    an overlay so it never pushes the surrounding content apart. Rendered around a

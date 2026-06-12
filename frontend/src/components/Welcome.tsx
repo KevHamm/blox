@@ -42,7 +42,7 @@ const card: CSSProperties = {
   backdropFilter: "blur(20px) saturate(180%)",
   WebkitBackdropFilter: "blur(20px) saturate(180%)",
   border: "1px solid var(--welcome-card-border)",
-  boxShadow: "0 10px 34px rgba(30, 25, 70, 0.10)"
+  boxShadow: "0 10px 34px rgba(70, 58, 35, 0.10)"
 };
 
 const descText: CSSProperties = {
@@ -234,7 +234,7 @@ export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: Welc
             <span
               style={{
                 fontSize: 14,
-                color: "#e0383e",
+                color: "var(--ui-danger-text)",
                 fontFamily: APPLE_FONT,
                 padding: "5px 0"
               }}

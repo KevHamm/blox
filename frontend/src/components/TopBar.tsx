@@ -90,7 +90,7 @@ function StackedPages({
       </div>
       <span style={{
         position: "absolute", right: -6, top: -6, minWidth: 16, height: 16, padding: "0 4px",
-        borderRadius: 8, background: "var(--ui-blue)", color: "#fff", fontSize: 10, fontWeight: 700,
+        borderRadius: 8, background: "var(--ui-accent-fill)", color: "#fff", fontSize: 10, fontWeight: 700,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         fontFamily: "var(--ui-font)", boxShadow: "0 1px 4px rgba(0,0,0,0.25)"
       }}>{count}</span>
@@ -352,7 +352,7 @@ function IconButton({ onClick, disabled, title, children }: any) {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        color: disabled ? "#bdbdc4" : "var(--ui-text)",
+        color: disabled ? "var(--ui-disabled)" : "var(--ui-text)",
         cursor: disabled ? "default" : "pointer"
       }}
     >
