@@ -8,6 +8,13 @@ import { useDocument } from "./hooks/useDocument";
 import { numberDocument } from "./utils/numberDocument";
 import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
+import {
+  buildProject,
+  downloadProject,
+  saveAutosave,
+  loadAutosave,
+  type BloxProject
+} from "./utils/persistence";
 
 import {
   DndContext,
@@ -314,10 +321,14 @@ function EdgeToggle({
   );
 }
 
-function Editor({ sidebarsIn = true, template, onBack, dark, onToggleTheme }: { sidebarsIn?: boolean; template: TemplateLayout; onBack?: () => void; dark: boolean; onToggleTheme: () => void }) {
+function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTheme }: { sidebarsIn?: boolean; template: TemplateLayout; project?: BloxProject | null; onBack?: () => void; dark: boolean; onToggleTheme: () => void }) {
   // ── 1. All state first ──────────────────────────────────
-  // Starting content for the chosen class (article / report / letter / …).
-  const initialDoc = useMemo(() => templateDoc(template.cls), [template.cls]);
+  // Starting content: the reopened project's tree, or fresh content for the
+  // chosen class (article / report / letter / …).
+  const initialDoc = useMemo(
+    () => project?.doc ?? templateDoc(template.cls),
+    [template.cls, project]
+  );
   // The document tree + every mutation handler live in this hook.
   const {
     doc, setDoc,
@@ -344,7 +355,7 @@ function Editor({ sidebarsIn = true, template, onBack, dark, onToggleTheme }: { 
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   // While true, the next click on a paragraph word attaches a footnote there.
   const [pendingFootnote, setPendingFootnote] = useState(false);
-  const [documentTitle, setDocumentTitle] = useState(template.title);
+  const [documentTitle, setDocumentTitle] = useState(project?.title ?? template.title);
   // Measured heights: every flow leaf (paragraph/table/figure) and every
   // container header (section/subsection/subsubsection).
   const [leafHeights,   setLeafHeights]   = useState<Record<string, number>>({});
@@ -352,8 +363,11 @@ function Editor({ sidebarsIn = true, template, onBack, dark, onToggleTheme }: { 
   // Per-paragraph line geometry, so a long paragraph can be split across pages.
   const [lineData, setLineData] = useState<LineMap>({});
 
-  // Images uploaded via the right sidebar (preview gallery).
-  const [images, setImages] = useState<{ id: string; src: string; name: string }[]>([]);
+  // Images uploaded via the right sidebar (preview gallery). Data URLs, so a
+  // reopened project's gallery comes back intact.
+  const [images, setImages] = useState<{ id: string; src: string; name: string }[]>(
+    () => project?.images ?? []
+  );
   // True while OS files are being dragged over the right sidebar (drop to upload).
   const [imageDropActive, setImageDropActive] = useState(false);
   // Source of the image currently being dragged (for the drag overlay preview).
@@ -386,8 +400,8 @@ function Editor({ sidebarsIn = true, template, onBack, dark, onToggleTheme }: { 
 
 
   // Page layout, seeded from the chosen template (article / report / letter /
-  // beamer / book). Page geometry stays fixed; the typography controls edit the
-  // text settings.
+  // beamer / book), with a reopened project's saved layout merged on top. Page
+  // geometry stays fixed; the typography controls edit the text settings.
   const [layout, setLayout] = useState(() => ({
     pageWidth: template.pageWidth,
     pageHeight: template.pageHeight,
@@ -398,12 +412,32 @@ function Editor({ sidebarsIn = true, template, onBack, dark, onToggleTheme }: { 
     textWidth: template.textWidth,
     lineHeight: template.lineHeight,
     columns: template.columns,
-    fontSize: template.fontSize
+    fontSize: template.fontSize,
+    ...(project?.layout ?? {})
   }));
 
   // Usable width/height between the page margins (derived from the layout).
   const contentWidth = layout.pageWidth - layout.padLeft - layout.padRight;
   const contentHeight = layout.pageHeight - layout.padTop - layout.padBottom;
+
+  // ── Autosave ────────────────────────────────────────────
+  // Debounced snapshot of the whole session (doc, title, layout, gallery) into
+  // the single localStorage autosave slot; the welcome screen offers it back as
+  // "Continue last session".
+  const autosaveTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    window.clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = window.setTimeout(() => {
+      saveAutosave(buildProject(template.cls, documentTitle, layout, doc, images));
+    }, 800);
+    return () => window.clearTimeout(autosaveTimer.current);
+  }, [doc, documentTitle, layout, images, template.cls]);
+
+  // Download the session as a .blox project file (re-openable from the
+  // welcome screen's "Open project").
+  function saveProject() {
+    downloadProject(buildProject(template.cls, documentTitle, layout, doc, images));
+  }
 
   const rendererProps = {
     editingId, setEditingId, updateTextById, updateRichText, updateSectionTitle,
@@ -1017,7 +1051,22 @@ function Editor({ sidebarsIn = true, template, onBack, dark, onToggleTheme }: { 
           onBack={onBack}
           onUndo={undo}
           onRedo={redo}
-          onExport={() => exportLatex(numberedDoc)}
+          onSave={saveProject}
+          onExport={() =>
+            exportLatex(numberedDoc, {
+              cls: template.cls,
+              title: documentTitle,
+              columns: layout.columns,
+              fontSizePx: layout.fontSize
+            }).catch(() =>
+              confirmDialog({
+                title: "Export failed",
+                message: "Couldn't reach the export service — make sure the backend is running on localhost:8000.",
+                confirmLabel: "OK",
+                noCancel: true
+              })
+            )
+          }
           canUndo={canUndo}
           canRedo={canRedo}
           visible={sidebarsIn}
@@ -1546,6 +1595,15 @@ export default function App() {
   const [overlayOn, setOverlayOn] = useState(false);
   // The page layout for the selected template (article / report / letter / …).
   const [template, setTemplate] = useState<TemplateLayout>(templateFor("article"));
+  // A saved project being reopened (from a .blox file or the autosave slot);
+  // null means the editor starts from the template's fresh content.
+  const [project, setProject] = useState<BloxProject | null>(null);
+  // The autosaved session offered on the welcome screen, re-read every time the
+  // welcome screen shows (it changes while editing).
+  const [autosave, setAutosave] = useState<BloxProject | null>(null);
+  useEffect(() => {
+    if (phase === "welcome") setAutosave(loadAutosave());
+  }, [phase]);
   // Dark mode for the whole app (welcome + editor chrome). Persisted and applied
   // as data-theme on <html> so scoped CSS re-skins everything; the document
   // paper itself stays white.
@@ -1558,7 +1616,19 @@ export default function App() {
   }, [dark]);
 
   function start(preset?: string, rect?: DOMRect) {
+    setProject(null);
     setTemplate(templateFor(preset));
+    beginSession(rect);
+  }
+
+  // Reopen a saved project: same morph, but the editor seeds from the project.
+  function openProject(p: BloxProject, rect?: DOMRect) {
+    setProject(p);
+    setTemplate(templateFor(p.cls));
+    beginSession(rect);
+  }
+
+  function beginSession(rect?: DOMRect) {
     if (!rect) {
       setPhase("editor");
       return;
@@ -1619,6 +1689,7 @@ export default function App() {
         <Editor
           sidebarsIn={phase === "editor"}
           template={template}
+          project={project}
           onBack={goBack}
           dark={dark}
           onToggleTheme={() => setDark((v) => !v)}
@@ -1636,7 +1707,13 @@ export default function App() {
             pointerEvents: phase === "morph" ? "none" : "auto"
           }}
         >
-          <Welcome onStart={start} dark={dark} onToggleTheme={() => setDark((v) => !v)} />
+          <Welcome
+            onStart={start}
+            onOpen={openProject}
+            autosave={autosave}
+            dark={dark}
+            onToggleTheme={() => setDark((v) => !v)}
+          />
         </div>
       )}
 

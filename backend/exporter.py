@@ -3,12 +3,29 @@ document.
 
 Everything that can live in the editor is serialised here: sections /
 subsections / subsubsections, paragraphs (with bold / italic / underline runs,
-centering, footnotes and inline Greek letters), abstracts, lists, tables,
-figures, display equations and inline math, beamer frames, and the cover /
-contents / bibliography pages. The preamble pulls in the packages those features
-need — notably ``amsmath`` for math and ``graphicx`` for images.
+centering, footnotes and inline Greek letters), abstracts, lists, tables
+(including per-cell background colours), figures, display equations and inline
+math, beamer frames, and the cover / contents / bibliography pages. The
+preamble pulls in the packages those features need — notably ``amsmath`` for
+math and ``graphicx`` for images.
+
+Two entry points:
+
+``document_to_latex(doc, meta)``
+    The ``.tex`` source alone. Figure images stay as placeholder filenames the
+    user must supply next to the file.
+
+``export_bundle(doc, meta)``
+    ``(tex, assets)`` where ``assets`` is a list of ``(filename, bytes)`` —
+    every figure image decoded from its editor data-URL, named exactly as the
+    ``\\includegraphics`` calls reference it, so zipping the lot up compiles
+    as-is.
+
+``meta`` carries editor state that lives outside the doc tree: the template
+class (``cls``), the document title, the column count and the body font size.
 """
 
+import base64
 import re
 
 # --- Greek letters -------------------------------------------------------
@@ -205,13 +222,20 @@ def _table_to_latex(node) -> str:
     v = borders.get("v", True) is not False
     h = borders.get("h", True) is not False
     colspec = ("|" + "|".join(["c"] * cols) + "|") if v else ("c" * cols)
+    colors = node.get("colors") or []
 
     lines = ["\\begin{table}[h]", "\\centering", f"\\begin{{tabular}}{{{colspec}}}"]
     if h:
         lines.append("\\hline")
-    for row in rows:
-        cells = " & ".join(text_to_latex(c) for c in row)
-        lines.append(cells + " \\\\")
+    for r, row in enumerate(rows):
+        cells = []
+        for c, cell in enumerate(row):
+            tex = text_to_latex(cell)
+            fill = colors[r][c] if r < len(colors) and c < len(colors[r]) else None
+            if fill:
+                tex = f"\\cellcolor{{{_color_name(fill)}}} " + tex
+            cells.append(tex)
+        lines.append(" & ".join(cells) + " \\\\")
         if h:
             lines.append("\\hline")
     lines.append("\\end{tabular}")
@@ -222,16 +246,56 @@ def _table_to_latex(node) -> str:
     return "\n".join(lines)
 
 
-def _figure_to_latex(node, index: int) -> str:
+# --- Figures --------------------------------------------------------------
+# The editor stores images as data URLs. For a bundle export each one is
+# decoded to real bytes and written next to the .tex with a deterministic
+# name; pdflatex understands png / jpg / pdf, so anything else keeps its own
+# extension and is flagged with a comment.
+_DATA_URL = re.compile(r"^data:([^;,]+);base64,(.*)$", re.S)
+_MIME_EXT = {
+    "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg",
+    "application/pdf": "pdf", "image/pdf": "pdf",
+}
+_PDFLATEX_OK = {"png", "jpg", "pdf"}
+
+
+def _decode_image(src):
+    """Decode an editor data-URL → ``(bytes, extension)``, or ``(None, None)``."""
+    m = _DATA_URL.match(src or "")
+    if not m:
+        return None, None
+    mime, payload = m.group(1).lower(), m.group(2)
+    try:
+        data = base64.b64decode(payload)
+    except Exception:
+        return None, None
+    ext = _MIME_EXT.get(mime)
+    if ext is None:
+        ext = re.sub(r"[^a-z0-9]", "", mime.split("/")[-1]) or "bin"
+    return data, ext
+
+
+def _figure_to_latex(node, index: int, assets=None) -> str:
     images = node.get("images", []) or []
     n = len(images) or 1
     width = node.get("width", 1) or 1
     per = min(width, 1.0 / n)
     lines = ["\\begin{figure}[h]", "\\centering"]
-    # Images are stored as data URLs in the editor; reference them by filename.
-    lines.append("% replace the filenames below with your exported image files")
-    incs = [f"\\includegraphics[width={round(per, 3)}\\linewidth]{{figure-{index}-{i + 1}}}"
-            for i in range(n)]
+    incs, notes = [], []
+    for i in range(n):
+        src = images[i].get("src") if i < len(images) else None
+        name = f"figure-{index}-{i + 1}"
+        data, ext = (None, None) if assets is None else _decode_image(src)
+        if data is not None:
+            fname = f"{name}.{ext}"
+            assets.append((fname, data))
+            if ext not in _PDFLATEX_OK:
+                notes.append(f"% {fname}: pdflatex only reads png/jpg/pdf — convert this file")
+            incs.append(f"\\includegraphics[width={round(per, 3)}\\linewidth]{{{fname}}}")
+        else:
+            notes.append(f"% supply an image file named {name} (png/jpg/pdf) next to this .tex")
+            incs.append(f"\\includegraphics[width={round(per, 3)}\\linewidth]{{{name}}}")
+    lines += notes
     lines.append("\\hfill".join(incs))
     caption = node.get("caption", "")
     if caption:
@@ -289,11 +353,11 @@ def _shape_draw(s) -> str:
 
 
 def _shapes_to_latex(shapes):
-    """Return (color-definition lines, shipout-hook lines) for the shapes, or
-    ([], []) when there are none."""
+    """Return (colour name → hex dict, shipout-hook lines) for the shapes, or
+    ({}, []) when there are none."""
     shapes = [s for s in (shapes or []) if s.get("kind")]
     if not shapes:
-        return [], []
+        return {}, []
 
     # One \definecolor per distinct stroke / fill colour.
     colors = {}
@@ -302,7 +366,6 @@ def _shapes_to_latex(shapes):
             c = s.get(key)
             if c:
                 colors[_color_name(c)] = c.lstrip("#").upper()
-    color_lines = [f"\\definecolor{{{name}}}{{HTML}}{{{hexv}}}" for name, hexv in sorted(colors.items())]
 
     by_page = {}
     for s in shapes:
@@ -318,16 +381,29 @@ def _shapes_to_latex(shapes):
         hook.append("      \\end{tikzpicture}}%")
         hook.append("  \\fi")
     hook.append("}")
-    return color_lines, hook
+    return colors, hook
+
+
+def _collect_table_colors(node, out):
+    """Walk the tree gathering every table cell colour (name → hex)."""
+    if node.get("type") == "table":
+        for row in (node.get("colors") or []):
+            for c in row:
+                if c:
+                    out[_color_name(c)] = c.lstrip("#").upper()
+    for ch in node.get("children", []) or []:
+        _collect_table_colors(ch, out)
 
 
 # Section depth → command.
 _SECTION_CMD = {0: "section", 1: "subsection", 2: "subsubsection"}
 
 
-def node_to_latex(node, depth: int = 0, fig_counter=None) -> str:
-    if fig_counter is None:
-        fig_counter = [0]
+def node_to_latex(node, depth: int = 0, ctx=None) -> str:
+    # `ctx` threads the figure counter and (for bundle exports) the list that
+    # decoded image files are appended to; `assets` of None means "tex only".
+    if ctx is None:
+        ctx = {"fig": 0, "assets": None}
     t = node.get("type")
 
     if t == "paragraph":
@@ -346,8 +422,8 @@ def node_to_latex(node, depth: int = 0, fig_counter=None) -> str:
         return _table_to_latex(node)
 
     if t == "figure":
-        fig_counter[0] += 1
-        return _figure_to_latex(node, fig_counter[0])
+        ctx["fig"] += 1
+        return _figure_to_latex(node, ctx["fig"], ctx.get("assets"))
 
     if t == "math":
         body = _math_body(node)
@@ -369,7 +445,11 @@ def node_to_latex(node, depth: int = 0, fig_counter=None) -> str:
 
     if t == "frame":  # beamer slide
         title = text_to_latex(strip_prefix(node.get("title", "")))
-        inner = "\n".join(node_to_latex(c, 0, fig_counter) for c in node.get("children", []))
+        inner = "\n".join(node_to_latex(c, 0, ctx) for c in node.get("children", []))
+        if node.get("frameVariant") == "title":
+            # The centered title slide: big title, content (author / date) below.
+            return ("\\begin{frame}[plain]\n\\centering\n\\vfill\n{\\LARGE "
+                    + title + "\\par}\n\\bigskip\n" + inner + "\n\\vfill\n\\end{frame}")
         return "\\begin{frame}{" + title + "}\n" + inner + "\n\\end{frame}"
 
     if t in ("section", "subsection", "subsubsection"):
@@ -378,29 +458,70 @@ def node_to_latex(node, depth: int = 0, fig_counter=None) -> str:
         title = text_to_latex(strip_prefix(node.get("title", cmd.capitalize())))
         lines = [f"\\{cmd}{{{title}}}"]
         for child in node.get("children", []):
-            lines.append(node_to_latex(child, depth + 1, fig_counter))
+            lines.append(node_to_latex(child, depth + 1, ctx))
         return "\n\n".join(lines)
 
     # Unknown / structural-only node: serialise its children if any.
     children = node.get("children", [])
     if children:
-        return "\n\n".join(node_to_latex(c, depth, fig_counter) for c in children)
+        return "\n\n".join(node_to_latex(c, depth, ctx) for c in children)
     return ""
 
 
-def document_to_latex(doc) -> str:
-    children = doc.get("children", []) if doc else []
-    is_beamer = any(c.get("type") == "frame" for c in children)
+def export_bundle(doc, meta=None, bundle_assets=True):
+    """Serialise the document → ``(tex, assets)``.
 
-    color_lines, hook_lines = _shapes_to_latex(doc.get("shapes") if doc else None)
+    ``assets`` is a list of ``(filename, bytes)`` for every figure image that
+    could be decoded from its data-URL (empty when ``bundle_assets`` is False —
+    figures then keep placeholder names the user must supply).
+    """
+    meta = meta or {}
+    children = doc.get("children", []) if doc else []
+    cls = (meta.get("cls") or "").lower()
+    is_beamer = cls == "beamer" or any(c.get("type") == "frame" for c in children)
+
+    shape_colors, hook_lines = _shapes_to_latex(doc.get("shapes") if doc else None)
+    table_colors = {}
+    if doc:
+        _collect_table_colors(doc, table_colors)
+    all_colors = {**shape_colors, **table_colors}
+    color_lines = [f"\\definecolor{{{name}}}{{HTML}}{{{hexv}}}"
+                   for name, hexv in sorted(all_colors.items())]
+
+    # Class options: body size (10pt is the default; the editor's 13px ≈ 10pt)
+    # and two-column flow. Beamer loads xcolor itself, so its table-colour
+    # support has to come in as a class option rather than a \usepackage.
+    opts = []
+    pt = _num(meta.get("fontSizePx")) * 72.0 / 96.0
+    if not is_beamer:
+        if pt >= 11.5:
+            opts.append("12pt")
+        elif pt >= 10.5:
+            opts.append("11pt")
+        if int(_num(meta.get("columns")) or 1) >= 2:
+            opts.append("twocolumn")
+    elif table_colors:
+        opts.append("xcolor={table}")
+
+    base = "beamer" if is_beamer else {"report": "report", "book": "book"}.get(cls, "article")
+    opt_s = "[" + ",".join(opts) + "]" if opts else ""
 
     preamble = [
-        "\\documentclass{beamer}" if is_beamer else "\\documentclass{article}",
+        f"\\documentclass{opt_s}{{{base}}}",
         "\\usepackage[utf8]{inputenc}",
         "\\usepackage{amsmath}",
         "\\usepackage{amssymb}",
         "\\usepackage{graphicx}",
     ]
+    if cls == "letter":
+        # The editor's letter template is article geometry with 1-inch margins
+        # (the letter class has no \section, so article + geometry mirrors it).
+        preamble.append("\\usepackage[margin=1in]{geometry}")
+    if not is_beamer:
+        if table_colors:
+            preamble.append("\\usepackage[table]{xcolor}")  # also loads colortbl
+        elif all_colors:
+            preamble.append("\\usepackage{xcolor}")
     if hook_lines:
         # Overlay shapes need TikZ (with the Latex arrow tip) and eso-pic's
         # per-page foreground hook to place them at absolute page coordinates.
@@ -408,17 +529,33 @@ def document_to_latex(doc) -> str:
             "\\usepackage{tikz}",
             "\\usetikzlibrary{arrows.meta}",
             "\\usepackage{eso-pic}",
-            "\\usepackage{xcolor}",
         ]
-        preamble += color_lines
-        preamble += hook_lines
+    preamble += color_lines
+    preamble += hook_lines
 
-    fig_counter = [0]
+    # \maketitle for classes that support it, unless the document already has
+    # its own cover page (which would duplicate the title).
+    title = (meta.get("title") or "").strip()
+    has_cover = any(c.get("type") == "coverpage" for c in children)
+    use_maketitle = bool(title) and not is_beamer and cls != "letter" and not has_cover
+    if use_maketitle:
+        preamble += [f"\\title{{{text_to_latex(title)}}}", "\\author{}", "\\date{}"]
+
+    assets = []
+    ctx = {"fig": 0, "assets": assets if bundle_assets else None}
     body = ["\\begin{document}"]
+    if use_maketitle:
+        body.append("\\maketitle")
     for child in children:
-        chunk = node_to_latex(child, 0, fig_counter)
+        chunk = node_to_latex(child, 0, ctx)
         if chunk.strip():
             body.append(chunk)
     body.append("\\end{document}")
 
-    return "\n".join(preamble) + "\n\n" + "\n\n".join(body) + "\n"
+    tex = "\n".join(preamble) + "\n\n" + "\n\n".join(body) + "\n"
+    return tex, assets
+
+
+def document_to_latex(doc, meta=None) -> str:
+    tex, _ = export_bundle(doc, meta, bundle_assets=False)
+    return tex

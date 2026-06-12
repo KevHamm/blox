@@ -10,6 +10,8 @@ type ConfirmOpts = {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  // Notice mode: a single OK-style button (used for errors / info).
+  noCancel?: boolean;
 };
 
 type Pending = { opts: ConfirmOpts; resolve: (v: boolean) => void };
@@ -53,7 +55,8 @@ export function ConfirmHost() {
     message,
     confirmLabel = "Confirm",
     cancelLabel = "Cancel",
-    danger
+    danger,
+    noCancel
   } = pending.opts;
 
   return (
@@ -67,7 +70,7 @@ export function ConfirmHost() {
         <div className="confirm-title">{title}</div>
         <div className="confirm-message">{message}</div>
         <div className="confirm-actions">
-          <button className="ui-btn" onClick={() => done(false)}>{cancelLabel}</button>
+          {!noCancel && <button className="ui-btn" onClick={() => done(false)}>{cancelLabel}</button>}
           <button
             className={`ui-btn ${danger ? "danger" : "primary"}`}
             onClick={() => done(true)}

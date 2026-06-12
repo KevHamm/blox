@@ -372,7 +372,7 @@ function ControlGroup({ children }: any) {
 }
 
 export function TopBar({
-  onBack, onUndo, onRedo, onExport, canUndo, canRedo, visible, collapsed,
+  onBack, onUndo, onRedo, onExport, onSave, canUndo, canRedo, visible, collapsed,
   pages, outline, layout, dark, onToggleTheme
 }: any) {
   // Side regions stack vertically when the bar is expanded and fall back to a
@@ -437,7 +437,12 @@ export function TopBar({
         }}
       >
         <ThemeToggle dark={!!dark} onToggle={onToggleTheme} />
-        <button className="ui-btn primary" onClick={onExport}>Export LaTeX</button>
+        <ControlGroup>
+          <button className="ui-btn" onClick={onSave} title="Download this project as a .blox file">
+            Save
+          </button>
+          <button className="ui-btn primary" onClick={onExport}>Export LaTeX</button>
+        </ControlGroup>
       </div>
     </div>
   );

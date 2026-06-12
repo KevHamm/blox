@@ -1,9 +1,14 @@
-import { useState } from "react";
-import type { CSSProperties, MouseEvent } from "react";
+import { useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties, MouseEvent } from "react";
 import { Logo, ThemeToggle } from "./chrome";
+import { parseProject, timeAgo, type BloxProject } from "../utils/persistence";
 
 interface WelcomeProps {
   onStart: (preset?: string, rect?: DOMRect) => void;
+  // Open a saved project (from a .blox file or the autosave slot).
+  onOpen: (project: BloxProject, rect?: DOMRect) => void;
+  // The autosaved session, if one exists — shown as a "continue" pill.
+  autosave: BloxProject | null;
   dark: boolean;
   onToggleTheme: () => void;
 }
@@ -61,8 +66,8 @@ const PRESETS = [
 
 // The three intro buttons live in the middle slots (1, 2, 3). Clicking
 // "Start new project" fans the two end cards (0, 4) outward and morphs all
-// three into the document presets.
-const INTRO: Record<number, { label: string; desc: string; enabled: boolean }> = {
+// three into the document presets; "Open project" opens a .blox file instead.
+const INTRO: Record<number, { label: string; desc: string; enabled: boolean; action?: "new" | "open" }> = {
   1: {
     label: "Design page",
     desc: "Design single or multiple pages such as resumes, cover pages, and more.",
@@ -70,13 +75,15 @@ const INTRO: Record<number, { label: string; desc: string; enabled: boolean }> =
   },
   2: {
     label: "Open project",
-    desc: "Continue working on one of your saved projects.",
-    enabled: false
+    desc: "Open a saved .blox project file and keep working on it.",
+    enabled: true,
+    action: "open"
   },
   3: {
     label: "Start new project",
     desc: "Pick a template and start from a clean document.",
-    enabled: true
+    enabled: true,
+    action: "new"
   }
 };
 
@@ -114,8 +121,31 @@ const descLayer = (show: boolean): CSSProperties => ({
   ...descText
 });
 
-export function Welcome({ onStart, dark, onToggleTheme }: WelcomeProps) {
+export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: WelcomeProps) {
   const [picking, setPicking] = useState(false);
+  // Open-project plumbing: the hidden file input, the card rect captured at
+  // click time (so the morph can start from the card), and a parse error.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const openRectRef = useRef<DOMRect | undefined>(undefined);
+  const errTimer = useRef<number | undefined>(undefined);
+  const [openError, setOpenError] = useState<string | null>(null);
+
+  function showOpenError(msg: string) {
+    setOpenError(msg);
+    window.clearTimeout(errTimer.current);
+    errTimer.current = window.setTimeout(() => setOpenError(null), 5000);
+  }
+
+  async function handleFileChosen(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    try {
+      onOpen(parseProject(await file.text()), openRectRef.current);
+    } catch {
+      showOpenError("That file doesn't look like a Blox project (.blox).");
+    }
+  }
 
   return (
     <div
@@ -136,6 +166,15 @@ export function Welcome({ onStart, dark, onToggleTheme }: WelcomeProps) {
       <div style={{ position: "absolute", top: 20, right: 24, zIndex: 3 }}>
         <ThemeToggle dark={dark} onToggle={onToggleTheme} />
       </div>
+
+      {/* Hidden picker behind the "Open project" card. */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".blox,application/json"
+        style={{ display: "none" }}
+        onChange={handleFileChosen}
+      />
 
       <div
         style={{
@@ -166,7 +205,7 @@ export function Welcome({ onStart, dark, onToggleTheme }: WelcomeProps) {
         </h1>
         <p
           style={{
-            margin: "0 0 48px",
+            margin: "0 0 10px",
             fontSize: 20,
             fontWeight: 400,
             letterSpacing: "-0.01em",
@@ -179,6 +218,40 @@ export function Welcome({ onStart, dark, onToggleTheme }: WelcomeProps) {
             ? "Choose a template to start a new project."
             : "Beautiful documents, designed visually."}
         </p>
+
+        {/* Fixed-height row under the subtitle: the continue-last-session pill
+            (when an autosave exists), or an open-project error. Reserving the
+            height keeps the cards from shifting when either appears. */}
+        <div
+          style={{
+            height: 38,
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "center"
+          }}
+        >
+          {openError ? (
+            <span
+              style={{
+                fontSize: 14,
+                color: "#e0383e",
+                fontFamily: APPLE_FONT,
+                padding: "5px 0"
+              }}
+            >
+              {openError}
+            </span>
+          ) : autosave && !picking ? (
+            <button
+              className="welcome-resume"
+              onClick={(e) => onOpen(autosave, e.currentTarget.getBoundingClientRect())}
+              title="Restore the autosaved session"
+            >
+              Continue “{autosave.title || "Untitled"}”
+              <span className="resume-when">· saved {timeAgo(autosave.savedAt)}</span>
+            </button>
+          ) : null}
+        </div>
 
         <div
           style={{
@@ -203,7 +276,15 @@ export function Welcome({ onStart, dark, onToggleTheme }: WelcomeProps) {
 
             const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
               if (!picking) {
-                if (intro?.enabled) setPicking(true); // "Start new project" fans out the presets
+                if (!intro?.enabled) return;
+                if (intro.action === "open") {
+                  // Remember where the card sits so the morph can start there
+                  // once the chosen file has been read.
+                  openRectRef.current = e.currentTarget.getBoundingClientRect();
+                  fileRef.current?.click();
+                } else {
+                  setPicking(true); // "Start new project" fans out the presets
+                }
               } else {
                 // Hand the card's exact rect to App so it can grow into the page.
                 onStart(p.id, e.currentTarget.getBoundingClientRect());
