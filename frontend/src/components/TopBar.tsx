@@ -205,6 +205,13 @@ function OutlineStage({
   const expandedGroup = eIndex >= 0 ? outline[eIndex] : null;
   const n = expandedGroup ? expandedGroup.pages.length : 0;
 
+  // The fanned-out deck is centred in the stage rather than left-aligned, so a
+  // section's pages sit under the middle of the top bar. It's clamped left so it
+  // never slides under the back button; very long decks (wider than the stage)
+  // then extend to the right, but short ones stay centred.
+  const deckW = n > 0 ? n * w + (n - 1) * DECK_GAP : 0;
+  const deckStart = Math.max(DECK_LEFT, (stageW - deckW) / 2);
+
   // Mount the deck piled at its slot, let it paint, then flip to the fanned-out
   // layout so the change animates. A short timeout (rather than rAF) keeps this
   // reliable even when the tab isn't actively painting.
@@ -280,7 +287,7 @@ function OutlineStage({
       {/* The expanded section's pages: piled at its slot, fanning to the left. */}
       {expandedGroup && expandedGroup.pages.map((pi, j) => {
         const pileLeft = overviewOrigin + slotX[eIndex] - sx + Math.min(j, 3) * STAGE_OFF;
-        const left = spread ? DECK_LEFT + j * (w + DECK_GAP) : pileLeft;
+        const left = spread ? deckStart + j * (w + DECK_GAP) : pileLeft;
         const top = spread ? STAGE_PAD_TOP : STAGE_PAD_TOP + Math.min(j, 3) * STAGE_OFF;
         // Stagger the fan-out left → right (and the restack right → left) so the
         // pages visibly unspool one after another.

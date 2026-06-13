@@ -23,6 +23,8 @@ export function Logo({
 }: { onClick?: () => void; large?: boolean; flip?: boolean; style?: CSSProperties }) {
   const cls = `blox-logo${large ? " large" : ""}`;
   if (!flip) {
+    // Static wordmark (welcome title): same colour as the surrounding text, with
+    // only the "o" tinted to the brand accent (matching the in-document "BLoX").
     return (
       <div className={cls} style={{ cursor: onClick ? "pointer" : "default", ...style }} onClick={onClick}>
         <span>B</span>

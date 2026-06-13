@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { flushSync } from "react-dom";
 import { DocumentRenderer, HeadingInput } from "./renderer/DocumentRenderer";
 import { Page } from "./components/Page";
 import { TopBar, TOPBAR_HEIGHT, TOPBAR_COLLAPSED_HEIGHT } from "./components/TopBar";
@@ -48,7 +49,17 @@ import {
   insertStructuralAt,
   insertMathItem,
   addFootnoteToWord,
+  addFootnoteAtOffset,
   footnoteNumbering,
+  getBib,
+  bibEntryNumbers,
+  newBibEntry,
+  addBibEntry,
+  updateBibEntry,
+  removeBibEntry,
+  setBibStyleTree,
+  ensureBibliography,
+  addCitationAtOffset,
   findNodeById,
   nodeHasContent
 } from "./utils/docTree";
@@ -64,6 +75,7 @@ import {
 } from "./components/blocks";
 import { ShapeLayer } from "./components/shapes";
 import { ConfirmHost, confirmDialog } from "./components/ConfirmDialog";
+import { SelectionToolbar, CiteEditor, newEntryTemplate } from "./components/citations";
 import type { Shape, ShapeKind } from "./types/document";
 import {
   DraggableImage,
@@ -631,6 +643,56 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
 
   // Global footnote numbers, assigned in reading order.
   const footnoteNumbers = useMemo(() => footnoteNumbering(numberedDoc), [numberedDoc]);
+
+  // ── Citations / bibliography ────────────────────────────
+  // entryId → its 1-based reference number (position in the bibliography).
+  const bibNumbers = useMemo(() => bibEntryNumbers(doc), [doc]);
+  // The BibTeX editor modal: "new" captures where a fresh citation will be
+  // inserted; "edit" targets an existing entry. null = closed.
+  const [citeEditor, setCiteEditor] = useState<
+    | { mode: "new"; paragraphId: string; offset: number; raw: string }
+    | { mode: "edit"; entryId: string; raw: string }
+    | null
+  >(null);
+
+  // Selection-toolbar actions.
+  function addFootnoteAtSelection(paragraphId: string, offset: number) {
+    setDoc((prev) => addFootnoteAtOffset(prev, paragraphId, offset, crypto.randomUUID()));
+  }
+  function openQuoteForSelection(paragraphId: string, offset: number) {
+    setCiteEditor({ mode: "new", paragraphId, offset, raw: newEntryTemplate });
+  }
+  // Clicking an in-text [n] opens its entry to edit.
+  function openCiteEditorForEntry(entryId: string) {
+    const entry = getBib(doc).entries.find((e: any) => e.id === entryId);
+    if (entry) setCiteEditor({ mode: "edit", entryId, raw: entry.raw });
+  }
+  // Commit the editor: a new entry creates the bibliography (if absent), the
+  // entry, and the inline citation in one history step; an edit just updates it.
+  function saveCiteEditor(raw: string) {
+    if (!citeEditor) return;
+    if (citeEditor.mode === "new") {
+      const { paragraphId, offset } = citeEditor;
+      setDoc((prev) => {
+        const entry = newBibEntry(raw);
+        let next = ensureBibliography(prev);
+        next = addBibEntry(next, entry);
+        next = addCitationAtOffset(next, paragraphId, offset, crypto.randomUUID(), entry.id);
+        return next;
+      });
+    } else {
+      const { entryId } = citeEditor;
+      setDoc((prev) => updateBibEntry(prev, entryId, raw));
+    }
+    setCiteEditor(null);
+  }
+  function deleteCiteEntry(entryId: string) {
+    setDoc((prev) => removeBibEntry(prev, entryId));
+    setCiteEditor(null);
+  }
+  function setBibStyle(style: string) {
+    setDoc((prev) => setBibStyleTree(prev, style));
+  }
 
   // Click a paragraph word while in "pick a word" mode → attach a footnote.
   function handleWordClick(paragraphId: string, word: number) {
@@ -1289,6 +1351,21 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
                   </button>
                 </div>
               </div>
+
+              {/* Bibliography style → LaTeX \bibliographystyle. */}
+              <div>
+                <label>Citation style</label>
+                <select
+                  className="ui-select"
+                  value={getBib(doc).style}
+                  onChange={(e) => setBibStyle(e.target.value)}
+                  style={{ marginTop: 8, width: "100%" }}
+                >
+                  {["IEEEtran", "plain", "unsrt", "abbrv", "alpha", "apalike", "acm", "siam"].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 
@@ -1392,6 +1469,11 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
                                 pendingFootnote={pendingFootnote}
                                 onWordClick={handleWordClick}
                                 footnoteNumbers={footnoteNumbers}
+                                citeNumbers={bibNumbers}
+                                onCiteClick={openCiteEditorForEntry}
+                                bibEntries={getBib(doc).entries}
+                                onEditBibEntry={openCiteEditorForEntry}
+                                onDeleteBibEntry={deleteCiteEntry}
                                 {...rendererProps}
                               />
                             </div>
@@ -1579,6 +1661,27 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
           </div>
         ) : null}
       </DragOverlay>
+
+      {/* Floating text-selection toolbar (bold / italic / underline / footnote /
+          quote) and the BibTeX entry editor it opens. */}
+      {!pendingFootnote && (
+        <SelectionToolbar
+          onBold={() => applyInlineFormat("bold")}
+          onItalic={() => applyInlineFormat("italic")}
+          onUnderline={() => applyInlineFormat("underline")}
+          onFootnote={addFootnoteAtSelection}
+          onQuote={openQuoteForSelection}
+        />
+      )}
+      {citeEditor && (
+        <CiteEditor
+          initial={citeEditor.raw}
+          isEdit={citeEditor.mode === "edit"}
+          onSave={saveCiteEditor}
+          onCancel={() => setCiteEditor(null)}
+          onDelete={citeEditor.mode === "edit" ? () => deleteCiteEntry(citeEditor.entryId) : undefined}
+        />
+      )}
     </DndContext>
   );
 }
@@ -1610,10 +1713,22 @@ export default function App() {
   const [dark, setDark] = useState(() => {
     try { return localStorage.getItem("blox-theme") === "dark"; } catch { return false; }
   });
-  useEffect(() => {
+  // Apply synchronously (layout effect) so a View-Transition capture sees the
+  // new theme within the same frame.
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     try { localStorage.setItem("blox-theme", dark ? "dark" : "light"); } catch { /* ignore */ }
   }, [dark]);
+
+  // Toggle light/dark with a smooth full-page crossfade (View Transitions API),
+  // so the swap eases instead of snapping. Falls back to an instant toggle when
+  // the API is unavailable or the user prefers reduced motion.
+  function toggleTheme() {
+    const start = (document as any).startViewTransition?.bind(document);
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!start || reduce) { setDark((v) => !v); return; }
+    start(() => flushSync(() => setDark((v) => !v)));
+  }
 
   function start(preset?: string, rect?: DOMRect) {
     setProject(null);
@@ -1638,9 +1753,15 @@ export default function App() {
     setGrown(false);
     setPhase("morph"); // mounts the editor behind the (fading) welcome screen
 
-    requestAnimationFrame(() => {
-      // The editor is now in the DOM — land the overlay exactly on the page.
-      const el = document.querySelector(".blox-page") as HTMLElement | null;
+    // Land the overlay exactly on the document's first page. Scope the query to
+    // `.doc-area` — the top bar clones real `.blox-page` nodes into its outline
+    // and renders earlier in the DOM, so an unscoped `.blox-page` would match a
+    // tiny top-bar clone and the card would morph into the corner instead of the
+    // page. Retry across a few frames in case the editor hasn't laid out yet.
+    let tries = 0;
+    const place = () => {
+      const el = document.querySelector(".doc-area .blox-page") as HTMLElement | null;
+      if (!el && tries++ < 20) { requestAnimationFrame(place); return; }
       const t: MorphRect = el
         ? (() => {
             const r = el.getBoundingClientRect();
@@ -1648,13 +1769,14 @@ export default function App() {
           })()
         : {
             left: (window.innerWidth - PAGE_WIDTH) / 2,
-            top: 24,
+            top: TOPBAR_HEIGHT + 24,
             width: PAGE_WIDTH,
             height: PAGE_HEIGHT
           };
       setTarget(t);
       requestAnimationFrame(() => setGrown(true)); // trigger the grow transition
-    });
+    };
+    requestAnimationFrame(place);
 
     window.setTimeout(() => setPhase("editor"), 520); // sidebars slide in, welcome unmounts
     window.setTimeout(() => setOverlayOn(false), 560); // fade overlay → reveal the real document
@@ -1692,7 +1814,7 @@ export default function App() {
           project={project}
           onBack={goBack}
           dark={dark}
-          onToggleTheme={() => setDark((v) => !v)}
+          onToggleTheme={toggleTheme}
         />
       )}
 
@@ -1712,7 +1834,7 @@ export default function App() {
             onOpen={openProject}
             autosave={autosave}
             dark={dark}
-            onToggleTheme={() => setDark((v) => !v)}
+            onToggleTheme={toggleTheme}
           />
         </div>
       )}

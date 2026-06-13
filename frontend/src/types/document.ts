@@ -66,6 +66,12 @@ export interface DocumentNode {
   // `unconnected` (painted red, prefixed with a warning) and is never reassigned
   // to a different word.
   footnotes?: { id: string; offset: number; text: string; unconnected?: boolean }[];
+  // Inline citations anchored at a character offset, referencing a bibliography
+  // entry. Rendered as a clickable [n] marker (n = the entry's number).
+  citations?: { id: string; offset: number; entryId: string }[];
+  // Document-level bibliography (only meaningful on the root node): the chosen
+  // BibTeX style and the list of raw entries citations point at.
+  bib?: { style: string; entries: { id: string; key: string; raw: string }[] };
   listStyle?: "dash" | "dot" | "number";
   items?: { id: string; text?: string; latex?: string }[];
   // A math node rendered as a numbered display equation (\begin{equation}).

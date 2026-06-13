@@ -13,9 +13,10 @@ interface WelcomeProps {
   onToggleTheme: () => void;
 }
 
-// San-Francisco-first system stack — the Apple typography feel.
-const APPLE_FONT =
-  '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif';
+// Editor-chrome fonts, shared via CSS custom properties: Inter for body copy,
+// Space Grotesk (display) for the hero wordmark.
+const APPLE_FONT = "var(--ui-font)";
+const DISPLAY_FONT = "var(--ui-display)";
 
 // DIN-A4 portrait proportions for the choice cards.
 const CARD_W = 232;
@@ -87,14 +88,19 @@ const INTRO: Record<number, { label: string; desc: string; enabled: boolean; act
   }
 };
 
-// Decorative floating "paper sheets" in the background.
-const sheets: any[] = [
-  { width: 124, height: 168, top: "12%", left: "8%",  "--rot": "-13deg", animationDelay: "0s" },
-  { width: 88,  height: 120, top: "15%", right: "13%", "--rot": "11deg",  animationDelay: "1.7s" },
-  { width: 152, height: 205, bottom: "9%", right: "9%", "--rot": "-7deg",  animationDelay: "0.7s" },
-  { width: 100, height: 138, bottom: "13%", left: "10%", "--rot": "9deg",  animationDelay: "3s" },
-  { width: 60,  height: 84,  top: "46%", left: "4%",  "--rot": "6deg",   animationDelay: "2.3s" },
-  { width: 70,  height: 96,  top: "40%", right: "5%",  "--rot": "-5deg",  animationDelay: "1.1s" }
+// Decorative floating "blocks" in the background — the BLoX motif. Each is a
+// rounded cube (an extruded stack rendered in CSS) that drifts and rotates.
+// `--hue` tints the face into the violet→fuchsia→cyan brand range; size is one
+// dimension (blocks are square).
+const blocks: any[] = [
+  { size: 132, top: "13%", left: "7%",   "--rot": "-13deg", "--hue": "265", animationDelay: "0s" },
+  { size: 92,  top: "15%", right: "12%",  "--rot": "12deg",  "--hue": "322", animationDelay: "1.7s" },
+  { size: 156, bottom: "10%", right: "8%", "--rot": "-8deg", "--hue": "280", animationDelay: "0.7s" },
+  { size: 104, bottom: "14%", left: "9%",  "--rot": "10deg", "--hue": "210", animationDelay: "3s" },
+  { size: 64,  top: "47%", left: "4%",    "--rot": "7deg",   "--hue": "300", animationDelay: "2.3s" },
+  { size: 76,  top: "39%", right: "5%",    "--rot": "-6deg", "--hue": "250", animationDelay: "1.1s" },
+  { size: 48,  top: "24%", left: "23%",   "--rot": "16deg",  "--hue": "330", animationDelay: "2.9s" },
+  { size: 54,  bottom: "26%", right: "22%", "--rot": "-12deg", "--hue": "200", animationDelay: "0.4s" }
 ];
 
 const labelLayer = (show: boolean): CSSProperties => ({
@@ -158,8 +164,8 @@ export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: Welc
         fontFamily: APPLE_FONT
       }}
     >
-      {sheets.map((s, i) => (
-        <div key={i} className="welcome-sheet" style={s} />
+      {blocks.map((b, i) => (
+        <div key={i} className="welcome-block" style={{ ...b, width: b.size, height: b.size }} />
       ))}
 
       {/* Light / dark toggle, pinned to the top-right corner. */}
@@ -195,7 +201,7 @@ export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: Welc
             letterSpacing: "-0.035em",
             lineHeight: 1.05,
             color: "var(--ui-text)",
-            fontFamily: APPLE_FONT,
+            fontFamily: DISPLAY_FONT,
             display: "inline-flex",
             alignItems: "baseline",
             gap: "0.28em"
@@ -214,9 +220,7 @@ export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: Welc
             transition: "opacity 0.3s ease"
           }}
         >
-          {picking
-            ? "Choose a template to start a new project."
-            : "Beautiful documents, designed visually."}
+          {picking ? "Choose a template to start a new project." : " "}
         </p>
 
         {/* Fixed-height row under the subtitle: the continue-last-session pill
@@ -303,7 +307,13 @@ export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: Welc
                   transform: collapsed ? "scale(0.92)" : "scale(1)",
                   transition: `width 0.5s ${EASE}, margin 0.5s ${EASE}, opacity 0.45s ease, transform 0.45s ease`,
                   transitionDelay: collapsed ? "0s" : isEnd ? "0.12s" : "0s",
+                  // Clip horizontally for the fan-out (width 0 → CARD_W). The
+                  // paddingTop + matching negative marginTop extend the clip box
+                  // upward without shifting the card, so the hover raise
+                  // (translateY) isn't sliced off at the top.
                   overflow: "hidden",
+                  paddingTop: 14,
+                  marginTop: -14,
                   pointerEvents: collapsed ? "none" : "auto",
                   display: "flex",
                   flexDirection: "column",

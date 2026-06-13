@@ -108,7 +108,7 @@ export function useDocument(initial?: DocumentNode) {
   // Update a paragraph's text, inline formatting marks, and (when provided) its
   // reconciled footnotes. The footnote reconciliation — which marker survived
   // the edit, which became unconnected — is computed in the editor from the DOM.
-  function updateRichText(id: string, value: string, marks: any[], footnotes?: any[]) {
+  function updateRichText(id: string, value: string, marks: any[], footnotes?: any[], citations?: any[]) {
     function update(node: any): any {
       if (node.id === id && node.type === "paragraph") {
         const next: any = { ...node, text: value };
@@ -117,6 +117,10 @@ export function useDocument(initial?: DocumentNode) {
         if (footnotes !== undefined) {
           if (footnotes.length) next.footnotes = footnotes;
           else delete next.footnotes;
+        }
+        if (citations !== undefined) {
+          if (citations.length) next.citations = citations;
+          else delete next.citations;
         }
         return next;
       }

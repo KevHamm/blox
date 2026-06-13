@@ -5,6 +5,7 @@ import type { Mark, Fmt } from "../utils/marks";
 import { formatAt, sliceMarks, spliceMarks, normalizeMarks, marksEqual } from "../utils/marks";
 import { symbolFor, wordAround } from "../utils/greek";
 import { arrowAutocorrect } from "../utils/arrows";
+import { formatBibEntry } from "../utils/docTree";
 import { confirmDialog } from "../components/ConfirmDialog";
 
 // A DOM Range spanning characters [a, b) of a contentEditable element, walking
@@ -397,7 +398,9 @@ function buildParagraphHtml(
   text: string,
   footnotes: any[],
   footnoteNumbers: Record<string, number> | undefined,
-  marks: Mark[] = []
+  marks: Mark[] = [],
+  citations: any[] = [],
+  citeNumbers: Record<string, number> | undefined = undefined
 ): string {
   // Footnote markers keyed by their anchor character offset. Unconnected
   // footnotes (their word was deleted) have no marker.
@@ -406,6 +409,13 @@ function buildParagraphHtml(
     if (f.unconnected || f.offset == null) continue;
     const at = Math.min(Math.max(f.offset, 0), text.length);
     fnAt.set(at, (fnAt.get(at) ?? []).concat(f));
+  }
+  // Citation markers keyed by their anchor offset (same machinery as footnotes).
+  const citeAt = new Map<number, any[]>();
+  for (const c of citations) {
+    if (c.offset == null) continue;
+    const at = Math.min(Math.max(c.offset, 0), text.length);
+    citeAt.set(at, (citeAt.get(at) ?? []).concat(c));
   }
 
   // A block with white-space:pre-wrap does not render its final newline (the
@@ -416,20 +426,25 @@ function buildParagraphHtml(
   const trailingBr = text.endsWith("\n") ? '<br data-bogus="1">' : "";
 
   // Nothing to decorate → the original fast path.
-  if (!marks.length && fnAt.size === 0) return escapeHtml(text) + trailingBr;
+  if (!marks.length && fnAt.size === 0 && citeAt.size === 0) return escapeHtml(text) + trailingBr;
 
   let html = "";
   let cur: Fmt = { b: false, i: false, u: false };
   for (let p = 0; p <= text.length; p++) {
     const fns = fnAt.get(p);
-    if (fns) {
-      // Footnote markers sit outside any format run.
+    const cites = citeAt.get(p);
+    if (fns || cites) {
+      // Footnote / citation markers sit outside any format run.
       html += fmtClose(cur);
       cur = { b: false, i: false, u: false };
-      for (const f of fns)
+      for (const f of fns ?? [])
         html +=
           `<sup data-fn="${f.id}" contenteditable="false" ` +
           `style="font-size:0.7em;vertical-align:super;">${footnoteNumbers?.[f.id] ?? 0}</sup>`;
+      for (const c of cites ?? [])
+        html +=
+          `<span data-cite="${c.id}" contenteditable="false" class="cite-marker" ` +
+          `title="Edit citation">[${citeNumbers?.[c.entryId] ?? "?"}]</span>`;
     }
     if (p === text.length) break;
     const f = formatAt(marks, p);
@@ -443,10 +458,15 @@ function buildParagraphHtml(
 // Read the contentEditable back out as plain text plus formatting marks: footnote
 // markers are dropped, <br> becomes a newline, and each text node's b/i/u state
 // (from its ancestor tags / inline styles) becomes a mark range.
-function readEditableRich(el: HTMLElement): { text: string; marks: Mark[]; fnMarkers: { id: string; offset: number }[] } {
+function readEditableRich(el: HTMLElement): {
+  text: string; marks: Mark[];
+  fnMarkers: { id: string; offset: number }[];
+  citeMarkers: { id: string; offset: number }[];
+} {
   let text = "";
   const runs: Mark[] = [];
   const fnMarkers: { id: string; offset: number }[] = [];
+  const citeMarkers: { id: string; offset: number }[] = [];
 
   const fmtOfNode = (node: Node | null): Fmt => {
     let b = false, i = false, u = false;
@@ -489,6 +509,10 @@ function readEditableRich(el: HTMLElement): { text: string; marks: Mark[]; fnMar
           fnMarkers.push({ id: e.getAttribute("data-fn")!, offset: text.length });
           continue;
         }
+        if (e.hasAttribute("data-cite")) {
+          citeMarkers.push({ id: e.getAttribute("data-cite")!, offset: text.length });
+          continue;
+        }
         // The rendered trailing "bogus" <br> (see buildParagraphHtml) only
         // gives the empty last line height; it isn't part of the text.
         if (e.nodeName === "BR") { if (!e.hasAttribute("data-bogus")) text += "\n"; continue; }
@@ -497,7 +521,7 @@ function readEditableRich(el: HTMLElement): { text: string; marks: Mark[]; fnMar
     }
   };
   walk(el);
-  return { text, marks: normalizeMarks(runs), fnMarkers };
+  return { text, marks: normalizeMarks(runs), fnMarkers, citeMarkers };
 }
 
 // A small superscript footnote marker (used in the footnote word-picker view).
@@ -529,13 +553,14 @@ function getCaretOffset(el: HTMLElement): number {
 // never shows more than its share (which would duplicate it across pages).
 function EditableParagraph({
   node, updateRichText, onTyping, onCaret,
-  lineHeight, fontSize, firstChild, footnoteNumbers,
+  lineHeight, fontSize, firstChild, footnoteNumbers, citeNumbers, onCiteClick,
   sliceStart, sliceEnd, blockParagraphs
 }: any) {
   const ref = useRef<HTMLParagraphElement>(null);
   const text: string = node.text ?? "";
   const footnotes: any[] = node.footnotes ?? [];
   const marks: Mark[] = node.marks ?? [];
+  const citations: any[] = node.citations ?? [];
 
   const start: number = sliceStart ?? 0;
   const end: number = sliceEnd ?? text.length;
@@ -566,8 +591,8 @@ function EditableParagraph({
   const html = useMemo(
     () => (isSlice
       ? buildParagraphHtml(sliceText, [], footnoteNumbers, sliceMarks(marks, start, end))
-      : buildParagraphHtml(text, footnotes, footnoteNumbers, marks)),
-    [text, sliceText, isSlice, footnotes, footnoteNumbers, marks, start, end]
+      : buildParagraphHtml(text, footnotes, footnoteNumbers, marks, citations, citeNumbers)),
+    [text, sliceText, isSlice, footnotes, footnoteNumbers, marks, citations, citeNumbers, start, end]
   );
 
   // Always keep the DOM equal to this slice's content. The caret is collapsed by
@@ -585,7 +610,7 @@ function EditableParagraph({
     // Reconstruct this slice's plain text and its formatting, then splice both
     // back into the whole node (so b/i/u applied to a selection persists, and a
     // page-split paragraph keeps its formatting too).
-    const { text: domText, marks: sliceRuns, fnMarkers } = readEditableRich(el);
+    const { text: domText, marks: sliceRuns, fnMarkers, citeMarkers } = readEditableRich(el);
     const localCaret = getCaretOffset(el);
 
     // ASCII arrow autocorrect (-> ← => <= <-> <=> |-> |-->) within this slice.
@@ -612,12 +637,27 @@ function EditableParagraph({
       );
     }
 
+    // Reconcile citations against their surviving markers (same as footnotes).
+    // Only when the whole paragraph is rendered — split slices carry no markers,
+    // so the citations are passed through untouched.
+    let nextCitations = citations;
+    if (!isSlice && citations.length) {
+      const present = new Map(citeMarkers.map((m) => [m.id, m.offset]));
+      const rebuilt = citations
+        .filter((c: any) => present.has(c.id))
+        .map((c: any) => ({ ...c, offset: present.get(c.id) as number }));
+      const changed =
+        rebuilt.length !== citations.length ||
+        rebuilt.some((c: any, i: number) => c.offset !== citations[i]?.offset || c.id !== citations[i]?.id);
+      if (changed) nextCitations = rebuilt;
+    }
+
     const full = text.slice(0, start) + outText + text.slice(end);
     const nextMarks = spliceMarks(marks, start, end, outRuns, outText.length);
     onCaret?.(node.id, start + outCaret);
     onTyping?.(node.id);
-    if (full !== text || !marksEqual(marks, nextMarks) || nextFootnotes !== footnotes)
-      updateRichText(node.id, full, nextMarks, nextFootnotes);
+    if (full !== text || !marksEqual(marks, nextMarks) || nextFootnotes !== footnotes || nextCitations !== citations)
+      updateRichText(node.id, full, nextMarks, nextFootnotes, nextCitations);
     detectGreek();
   };
 
@@ -677,10 +717,21 @@ function EditableParagraph({
                 ? { ...f, offset: f.offset + 1 }
                 : f
             );
+            const nextCitations = citations.map((c: any) =>
+              c.offset != null && c.offset >= fullCaret ? { ...c, offset: c.offset + 1 } : c
+            );
             onCaret?.(node.id, fullCaret + 1);
             onTyping?.(node.id);
-            updateRichText(node.id, newFull, nextMarks, nextFootnotes);
+            updateRichText(node.id, newFull, nextMarks, nextFootnotes, nextCitations);
           }
+        }}
+        onClick={(e) => {
+          // Clicking an inline [n] marker opens its bibliography entry to edit.
+          const marker = (e.target as HTMLElement)?.closest?.("[data-cite]") as HTMLElement | null;
+          if (!marker) return;
+          const cid = marker.getAttribute("data-cite");
+          const c = citations.find((x: any) => x.id === cid);
+          if (c) { e.preventDefault(); onCiteClick?.(c.entryId); }
         }}
         style={{
           margin: 0,
@@ -1884,7 +1935,9 @@ const PAGE_TITLES: Record<string, string> = {
   toc: "Table of Contents",
   bibliography: "Bibliography"
 };
-function PageBlock({ node, deleteNodeById }: any) {
+function PageBlock({ node, deleteNodeById, bibEntries, citeNumbers, onEditBibEntry, onDeleteBibEntry }: any) {
+  const isBib = node.type === "bibliography";
+  const entries: any[] = isBib ? bibEntries ?? [] : [];
   return (
     <div
       style={{
@@ -1900,6 +1953,35 @@ function PageBlock({ node, deleteNodeById }: any) {
         </h1>
         <TrashButton onClick={() => deleteNodeById(node.id)} label="Delete page" />
       </div>
+
+      {isBib && (
+        <div style={{ marginTop: 18, fontSize: 14, color: "var(--text)", fontFamily: "var(--sans)" }}>
+          {entries.length === 0 ? (
+            <p style={{ color: "#9a9aa2", fontStyle: "italic", margin: 0 }}>
+              No references yet. Select text in a paragraph and use the Quote button to add one.
+            </p>
+          ) : (
+            entries.map((e: any) => (
+              <div
+                key={e.id}
+                className="bib-entry"
+                style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 10, lineHeight: 1.45 }}
+              >
+                <span style={{ flex: "0 0 auto", color: "var(--text)" }}>[{citeNumbers?.[e.id] ?? "?"}]</span>
+                <span
+                  className="bib-entry-text"
+                  title="Edit this reference"
+                  onClick={() => onEditBibEntry?.(e.id)}
+                  style={{ flex: 1, cursor: "pointer" }}
+                >
+                  {formatBibEntry(e.raw)}
+                </span>
+                <TrashButton onClick={() => onDeleteBibEntry?.(e.id)} label="Delete reference" />
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

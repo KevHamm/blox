@@ -499,6 +499,120 @@ export function footnoteNumbering(doc: any): Record<string, number> {
   return map;
 }
 
+// Attach a new footnote anchored directly at a character offset (used by the
+// selection toolbar, which knows the exact caret position).
+export function addFootnoteAtOffset(node: any, paragraphId: string, offset: number, id: string): any {
+  if (node.type === "paragraph" && node.id === paragraphId) {
+    const footnotes = [...(node.footnotes ?? []), { id, offset, text: "" }];
+    return { ...node, footnotes };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => addFootnoteAtOffset(c, paragraphId, offset, id)) };
+}
+
+// ── Citations & bibliography ─────────────────────────────────────────────
+// The bibliography lives on the root doc as `bib = { style, entries }`; each
+// entry is raw BibTeX plus its parsed cite key. Inline citations live on
+// paragraphs as `citations: { id, offset, entryId }[]` and render as a clickable
+// [n] marker whose number is the entry's 1-based position in `bib.entries`.
+export const DEFAULT_BIB_STYLE = "IEEEtran";
+
+export function getBib(doc: any): { style: string; entries: any[] } {
+  const bib = doc?.bib ?? {};
+  return { style: bib.style ?? DEFAULT_BIB_STYLE, entries: bib.entries ?? [] };
+}
+
+// entryId → 1-based citation number (its position in the entries list).
+export function bibEntryNumbers(doc: any): Record<string, number> {
+  const map: Record<string, number> = {};
+  getBib(doc).entries.forEach((e: any, i: number) => { map[e.id] = i + 1; });
+  return map;
+}
+
+// The cite key from a raw BibTeX entry ("@article{key, …").
+export function parseBibKey(raw: string): string {
+  const m = (raw || "").match(/@\s*\w+\s*\{\s*([^,\s}]+)/);
+  return m ? m[1] : "";
+}
+
+// A field value ("author = {…}" or 'author = "…"') from raw BibTeX.
+export function parseBibField(raw: string, field: string): string {
+  const m = (raw || "").match(new RegExp(field + "\\s*=\\s*[{\"]([\\s\\S]*?)[}\"]\\s*,?", "i"));
+  return m ? m[1].replace(/\s+/g, " ").trim() : "";
+}
+
+// A one-line, IEEE-ish rendering of an entry for the on-page bibliography.
+export function formatBibEntry(raw: string): string {
+  const author = parseBibField(raw, "author");
+  const title = parseBibField(raw, "title");
+  const venue = parseBibField(raw, "journal") || parseBibField(raw, "booktitle") || parseBibField(raw, "publisher");
+  const year = parseBibField(raw, "year");
+  // IEEE-ish: Author, “Title,” Venue, Year. The title already carries its own
+  // trailing comma inside the quotes, so the venue follows with just a space.
+  let out = author ? author.replace(/\s+and\s+/g, ", ") : "";
+  if (title) out = out ? `${out}, “${title},”` : `“${title},”`;
+  if (venue) out = out ? `${out} ${venue}` : venue;
+  if (year) out = out ? `${out}, ${year}` : year;
+  return out || parseBibKey(raw) || "(empty entry)";
+}
+
+export const newBibEntry = (raw: string, id?: string) => ({
+  id: id ?? crypto.randomUUID(),
+  key: parseBibKey(raw) || `ref${Math.random().toString(36).slice(2, 7)}`,
+  raw
+});
+
+// Ensure a bibliography page exists (singleton, ranked last in the document).
+export function ensureBibliography(doc: any): any {
+  if ((doc.children ?? []).some((c: any) => c.type === "bibliography")) return doc;
+  return insertPage(doc, { id: crypto.randomUUID(), type: "bibliography", title: "Bibliography" });
+}
+
+export function addBibEntry(doc: any, entry: any): any {
+  const bib = getBib(doc);
+  return { ...doc, bib: { style: bib.style, entries: [...bib.entries, entry] } };
+}
+
+export function updateBibEntry(doc: any, entryId: string, raw: string): any {
+  const bib = getBib(doc);
+  return {
+    ...doc,
+    bib: {
+      style: bib.style,
+      entries: bib.entries.map((e: any) => (e.id === entryId ? { ...e, raw, key: parseBibKey(raw) || e.key } : e))
+    }
+  };
+}
+
+export function setBibStyleTree(doc: any, style: string): any {
+  return { ...doc, bib: { style, entries: getBib(doc).entries } };
+}
+
+function stripCitationsOf(node: any, entryId: string): any {
+  let next = node;
+  if (node.type === "paragraph" && node.citations?.length) {
+    next = { ...node, citations: node.citations.filter((c: any) => c.entryId !== entryId) };
+  }
+  if (next.children) next = { ...next, children: next.children.map((c: any) => stripCitationsOf(c, entryId)) };
+  return next;
+}
+
+// Remove a bib entry and every inline citation that referenced it.
+export function removeBibEntry(doc: any, entryId: string): any {
+  const bib = getBib(doc);
+  const stripped = stripCitationsOf(doc, entryId);
+  return { ...stripped, bib: { style: bib.style, entries: bib.entries.filter((e: any) => e.id !== entryId) } };
+}
+
+// Add an inline citation marker at a character offset in a paragraph.
+export function addCitationAtOffset(node: any, paragraphId: string, offset: number, id: string, entryId: string): any {
+  if (node.type === "paragraph" && node.id === paragraphId) {
+    return { ...node, citations: [...(node.citations ?? []), { id, offset, entryId }] };
+  }
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => addCitationAtOffset(c, paragraphId, offset, id, entryId)) };
+}
+
 // Remove an equation part; drop the whole math block when its last part is gone.
 export function deleteMathItemTree(node: any, mathId: string, itemId: string): any {
   if (!node.children) return node;

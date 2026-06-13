@@ -130,30 +130,34 @@ def _wrap(text: str, fmt) -> str:
     return text
 
 
-def text_to_latex(text: str, marks=None, footnotes=None) -> str:
+def text_to_latex(text: str, marks=None, footnotes=None, citations=None, cite_keys=None) -> str:
     """Escape paragraph text and wrap bold/italic/underline runs, inserting
-    ``\\footnote{…}`` after the words footnotes are attached to, converting
-    newlines to line breaks, and Greek glyphs to LaTeX."""
+    ``\\footnote{…}`` and ``\\cite{key}`` at the character offsets they anchor to,
+    converting newlines to line breaks, and Greek glyphs to LaTeX."""
     text = text or ""
     marks = marks or []
     footnotes = footnotes or []
+    citations = citations or []
+    cite_keys = cite_keys or {}
 
-    # Footnotes keyed by the character offset they sit at (end of the word core).
-    fn_at = {}
-    if footnotes:
-        pos, word_idx = 0, -1
-        for tok in re.split(r"(\s+)", text):
-            if tok == "":
-                continue
-            if tok.strip() == "":
-                pos += len(tok)
-                continue
-            word_idx += 1
-            fns = [f for f in footnotes if f.get("word") == word_idx]
-            if fns:
-                core = _TRAILING_PUNCT.sub("", tok)
-                fn_at.setdefault(pos + len(core), []).extend(fns)
-            pos += len(tok)
+    # Inline inserts keyed by the character offset they sit at: footnotes first,
+    # then citations (both are anchored by offset in the editor model).
+    inserts = {}
+
+    def _clamp(off):
+        return max(0, min(int(off), len(text)))
+
+    for f in footnotes:
+        if f.get("unconnected") or f.get("offset") is None:
+            continue
+        inserts.setdefault(_clamp(f["offset"]), []).append(
+            r"\footnote{" + text_to_latex(f.get("text", "")) + "}")
+    for c in citations:
+        if c.get("offset") is None:
+            continue
+        key = cite_keys.get(c.get("entryId"))
+        if key:
+            inserts.setdefault(_clamp(c["offset"]), []).append(r"\cite{" + key + "}")
 
     out = []
     buf = []
@@ -168,10 +172,9 @@ def text_to_latex(text: str, marks=None, footnotes=None) -> str:
     n = len(text)
     p = 0
     while p <= n:
-        if p in fn_at:
+        if p in inserts:
             flush()
-            for f in fn_at[p]:
-                out.append(r"\footnote{" + text_to_latex(f.get("text", "")) + "}")
+            out.extend(inserts[p])
             cur = None
         if p == n:
             break
@@ -407,7 +410,8 @@ def node_to_latex(node, depth: int = 0, ctx=None) -> str:
     t = node.get("type")
 
     if t == "paragraph":
-        body = text_to_latex(node.get("text", ""), node.get("marks"), node.get("footnotes"))
+        body = text_to_latex(node.get("text", ""), node.get("marks"), node.get("footnotes"),
+                             node.get("citations"), ctx.get("cite_keys"))
         if node.get("align") == "center":
             return "\\begin{center}\n" + body + "\n\\end{center}"
         return body
@@ -439,6 +443,12 @@ def node_to_latex(node, depth: int = 0, ctx=None) -> str:
         return "\\tableofcontents\n\\newpage"
 
     if t == "bibliography":
+        # With real entries, defer to BibTeX (the .bib is emitted via filecontents
+        # and the chosen \bibliographystyle); otherwise keep a placeholder.
+        if ctx.get("bib_entries"):
+            ctx["bib_emitted"] = True
+            return ("\\bibliographystyle{" + ctx.get("bib_style", "IEEEtran") + "}\n"
+                    "\\bibliography{refs}")
         return ("\\begin{thebibliography}{9}\n"
                 "  \\bibitem{ref1} Author, \\emph{Title}, Year.\n"
                 "\\end{thebibliography}")
@@ -541,8 +551,21 @@ def export_bundle(doc, meta=None, bundle_assets=True):
     if use_maketitle:
         preamble += [f"\\title{{{text_to_latex(title)}}}", "\\author{}", "\\date{}"]
 
+    # Bibliography: entryId → cite key, the chosen style, and the raw .bib body.
+    bib = (doc.get("bib") if doc else None) or {}
+    bib_entries = bib.get("entries") or []
+    bib_style = bib.get("style") or "IEEEtran"
+    cite_keys = {e.get("id"): e.get("key") for e in bib_entries if e.get("key")}
+
     assets = []
-    ctx = {"fig": 0, "assets": assets if bundle_assets else None}
+    ctx = {
+        "fig": 0,
+        "assets": assets if bundle_assets else None,
+        "cite_keys": cite_keys,
+        "bib_entries": bool(bib_entries),
+        "bib_style": bib_style,
+        "bib_emitted": False,
+    }
     body = ["\\begin{document}"]
     if use_maketitle:
         body.append("\\maketitle")
@@ -550,9 +573,22 @@ def export_bundle(doc, meta=None, bundle_assets=True):
         chunk = node_to_latex(child, 0, ctx)
         if chunk.strip():
             body.append(chunk)
+    # Entries exist but no bibliography page was placed → append one at the end.
+    if bib_entries and not ctx["bib_emitted"]:
+        body.append("\\bibliographystyle{" + bib_style + "}\n\\bibliography{refs}")
     body.append("\\end{document}")
 
-    tex = "\n".join(preamble) + "\n\n" + "\n\n".join(body) + "\n"
+    # The .bib ships inline via filecontents so the archive compiles with the
+    # standard latex → bibtex → latex × 2 run (no separate file to manage).
+    head = ""
+    if bib_entries:
+        refs = "\n\n".join((e.get("raw") or "").strip() for e in bib_entries)
+        head = (
+            "% Run: pdflatex -> bibtex -> pdflatex (x2) to resolve citations.\n"
+            "\\begin{filecontents*}[overwrite]{refs.bib}\n" + refs + "\n\\end{filecontents*}\n\n"
+        )
+
+    tex = head + "\n".join(preamble) + "\n\n" + "\n\n".join(body) + "\n"
     return tex, assets
 
 
