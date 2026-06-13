@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import type { CSSProperties } from "react";
 import { useDraggable, useDroppable, useDndContext } from "@dnd-kit/core";
 import { TrashIcon } from "./TrashIcon";
 import { clamp } from "../utils/docTree";
@@ -223,5 +224,66 @@ export function NumberControl({
         {unit && <span style={{ fontSize: 12, color: "var(--ui-2nd)" }}>{unit}</span>}
       </div>
     </div>
+  );
+}
+
+// A small pinned button that rides the inner edge of a sidebar / the top bar.
+// Clicking it slides that panel out of the way; when the panel is hidden the
+// button stays at the screen edge so it can be slid back into view.
+export function EdgeToggle({
+  edge, open, size, collapsedSize = 0, onToggle
+}: { edge: "left" | "right" | "top"; open: boolean; size: number; collapsedSize?: number; onToggle: () => void }) {
+  const vertical = edge === "top";
+  const ease = "cubic-bezier(0.16, 1, 0.3, 1)";
+  // The panel-edge offset: full size when open, the collapsed remnant when hidden
+  // (0 for the sidebars, the short control-bar height for the top bar).
+  const off = open ? size : collapsedSize;
+  // Anchor the panel-edge side flush (so the button is never clipped off-screen
+  // when the panel is hidden) and only center on the long axis.
+  const pos: CSSProperties = { position: "fixed", zIndex: 55 };
+  if (edge === "left") {
+    pos.left = off; pos.top = "50%";
+    pos.transform = "translateY(-50%)"; pos.transition = `left 0.45s ${ease}`;
+  } else if (edge === "right") {
+    pos.right = off; pos.top = "50%";
+    pos.transform = "translateY(-50%)"; pos.transition = `right 0.45s ${ease}`;
+  } else {
+    pos.top = off; pos.left = "50%";
+    pos.transform = "translateX(-50%)"; pos.transition = `top 0.45s ${ease}`;
+  }
+  // Chevron points "in" (hide) when open, "out" (show) when closed.
+  const dir =
+    edge === "left" ? (open ? "left" : "right")
+    : edge === "right" ? (open ? "right" : "left")
+    : (open ? "up" : "down");
+  return (
+    <button
+      onClick={onToggle}
+      title={open ? "Hide panel" : "Show panel"}
+      aria-label={open ? "Hide panel" : "Show panel"}
+      style={{
+        ...pos,
+        width: vertical ? 42 : 20,
+        height: vertical ? 20 : 42,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "var(--edge-bg)",
+        border: "1px solid var(--edge-border)",
+        borderRadius: 7,
+        boxShadow: "0 2px 8px rgba(20,20,50,0.16)",
+        color: "var(--ui-2nd)",
+        cursor: "pointer",
+        padding: 0
+      }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        {dir === "left" && <polyline points="15 18 9 12 15 6" />}
+        {dir === "right" && <polyline points="9 18 15 12 9 6" />}
+        {dir === "up" && <polyline points="18 15 12 9 6 15" />}
+        {dir === "down" && <polyline points="6 9 12 15 18 9" />}
+      </svg>
+    </button>
   );
 }

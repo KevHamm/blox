@@ -6,6 +6,10 @@ import { TopBar, TOPBAR_HEIGHT, TOPBAR_COLLAPSED_HEIGHT } from "./components/Top
 import { TrashIcon } from "./components/TrashIcon";
 import { Welcome } from "./components/Welcome";
 import { useDocument } from "./hooks/useDocument";
+import { useImageGallery } from "./hooks/useImageGallery";
+import { useShapes } from "./hooks/useShapes";
+import { useCitations } from "./hooks/useCitations";
+import { useEditorDnd } from "./hooks/useEditorDnd";
 import { numberDocument } from "./utils/numberDocument";
 import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
@@ -20,13 +24,20 @@ import {
 import {
   DndContext,
   DragOverlay,
-  pointerWithin,
   PointerSensor,
   useSensor,
   useSensors,
   MeasuringStrategy
 } from "@dnd-kit/core";
-import { getEventCoordinates } from "@dnd-kit/utilities";
+import { snapCenterToCursor, dropCollision } from "./utils/dnd";
+import {
+  collectPageFootnotes,
+  measureParagraphLines,
+  flowHeight,
+  lineDataUnchanged,
+  placeCaretAt,
+  type LineMap
+} from "./utils/measure";
 
 import {
   COLUMN_GAP,
@@ -35,37 +46,14 @@ import {
 } from "./utils/pageConfig";
 import { templateFor, templateDoc, type TemplateLayout } from "./utils/templates";
 import {
-  findFigureNode,
-  findDocImageSrc,
-  locateFigure,
-  removeFigureImage,
-  insertFigureImageAt,
-  insertFigure,
-  insertNodeAt,
-  newSection,
-  insertOrdered,
-  insertPage,
-  MATH_TEMPLATES,
-  insertStructuralAt,
-  insertMathItem,
   addFootnoteToWord,
   addFootnoteAtOffset,
   footnoteNumbering,
   getBib,
-  bibEntryNumbers,
-  newBibEntry,
-  addBibEntry,
-  updateBibEntry,
-  removeBibEntry,
-  setBibStyleTree,
-  ensureBibliography,
-  addCitationAtOffset,
   findNodeById,
   nodeHasContent
 } from "./utils/docTree";
 import {
-  BLOCK_DEFS,
-  STRUCTURAL,
   DOCUMENT_ORDER,
   MATH_ORDER,
   MATH_SYMBOL_GROUPS,
@@ -75,188 +63,15 @@ import {
 } from "./components/blocks";
 import { ShapeLayer } from "./components/shapes";
 import { ConfirmHost, confirmDialog } from "./components/ConfirmDialog";
-import { SelectionToolbar, CiteEditor, newEntryTemplate } from "./components/citations";
-import type { Shape, ShapeKind } from "./types/document";
+import { SelectionToolbar, CiteEditor } from "./components/citations";
 import {
   DraggableImage,
   DroppableDocArea,
   DraggableBlock,
   Collapsible,
-  NumberControl
+  NumberControl,
+  EdgeToggle
 } from "./components/editorUi";
-
-// Keep the drag preview centered on the cursor, so the pointer (what the drop
-// zones actually test against) sits in the middle of the image being placed.
-const snapCenterToCursor = ({ activatorEvent, draggingNodeRect, transform }: any) => {
-  if (draggingNodeRect && activatorEvent) {
-    const coords = getEventCoordinates(activatorEvent);
-    if (!coords) return transform;
-    return {
-      ...transform,
-      x: transform.x + coords.x - draggingNodeRect.left - draggingNodeRect.width / 2,
-      y: transform.y + coords.y - draggingNodeRect.top - draggingNodeRect.height / 2
-    };
-  }
-  return transform;
-};
-
-// Prefer real drop slots over the enclosing column/document droppables, so a
-// zone always wins (and highlights/accepts) when the pointer is inside it.
-function dropCollision(args: any) {
-  const hits = pointerWithin(args);
-  const zones = hits.filter((h: any) => {
-    const id = String(h.id);
-    return id.startsWith("dz::") || id.startsWith("figdz::") || id.startsWith("mathdz::");
-  });
-  return zones.length ? zones : hits;
-}
-
-// Gather every footnote whose target paragraph lands on this page (paragraphs
-// are never split across pages), ordered by their global number.
-function collectPageFootnotes(
-  cols: any[],
-  footnoteNumbers: Record<string, number>
-): { paragraphId: string; fn: any; number: number }[] {
-  const out: { paragraphId: string; fn: any; number: number }[] = [];
-  const walk = (chunk: any) => {
-    const n = chunk.node;
-    if (n.type === "paragraph" && n.footnotes?.length) {
-      n.footnotes.forEach((fn: any) =>
-        out.push({ paragraphId: n.id, fn, number: footnoteNumbers[fn.id] ?? 0 })
-      );
-    }
-    (chunk.children ?? []).forEach(walk);
-  };
-  cols.forEach((col: any[]) => col.forEach(walk));
-  return out.sort((a, b) => a.number - b.number);
-}
-
-// Measure each rendered line of a paragraph: where it starts (char offset) and
-// its cumulative bottom (px) from the element's top.
-//
-// Line geometry comes from Range.getClientRects() (one rect per wrapped line),
-// which is layout-derived and therefore correct even for lines scrolled out of
-// view or clipped by an overflow:hidden page. The per-line *start offset* is then
-// found by binary-searching character positions with getBoundingClientRect —
-// deliberately NOT caretRangeFromPoint, which returns null for any point outside
-// the viewport and so silently collapsed every off-screen line to offset 0,
-// breaking the split of long (multi-page) paragraphs.
-function measureParagraphLines(p: HTMLElement): { offset: number; bottom: number }[] {
-  const total = (p.textContent ?? "").length;
-  if (!total) return [];
-  const pTop = p.getBoundingClientRect().top;
-
-  // Merge the raw client rects into one entry per visual line (by top).
-  const range = document.createRange();
-  range.selectNodeContents(p);
-  const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0 || r.height > 0);
-  const lineRects: { top: number; bottom: number }[] = [];
-  let prevTop = Number.NEGATIVE_INFINITY;
-  for (const r of rects) {
-    if (r.top > prevTop + 1) { lineRects.push({ top: r.top, bottom: r.bottom }); prevTop = r.top; }
-    else { const L = lineRects[lineRects.length - 1]; L.bottom = Math.max(L.bottom, r.bottom); }
-  }
-  if (!lineRects.length) return [];
-
-  // Contiguous text-node segments, so a global char offset can be turned into a
-  // Range (footnote markers and other non-text nodes are skipped).
-  const segs: { node: Node; start: number; end: number }[] = [];
-  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
-  let acc = 0, n: Node | null;
-  while ((n = walker.nextNode())) {
-    const len = (n.textContent ?? "").length;
-    segs.push({ node: n, start: acc, end: acc + len });
-    acc += len;
-  }
-  const charRange = (a: number, b: number): Range | null => {
-    let sN: Node | null = null, sO = 0, eN: Node | null = null, eO = 0;
-    for (const s of segs) {
-      if (sN === null && a < s.end) { sN = s.node; sO = a - s.start; }
-      if (b <= s.end) { eN = s.node; eO = b - s.start; break; }
-    }
-    if (!sN || !eN) return null;
-    const r = document.createRange();
-    try { r.setStart(sN, sO); r.setEnd(eN, eO); } catch { return null; }
-    return r;
-  };
-  // Top (viewport y) of the single character starting at global offset `o`.
-  const topOfChar = (o: number): number | null => {
-    const r = charRange(o, o + 1);
-    if (!r) return null;
-    const cr = r.getBoundingClientRect();
-    return cr.height ? cr.top : null;
-  };
-
-  // First line always starts at 0; each later line's start is the first char
-  // whose rect sits on (or below) that line's top.
-  const out: { offset: number; bottom: number }[] = [{ offset: 0, bottom: lineRects[0].bottom - pTop }];
-  for (let i = 1; i < lineRects.length; i++) {
-    const targetTop = lineRects[i].top;
-    let lo = out[i - 1].offset + 1, hi = total - 1, ans = total;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      const t = topOfChar(mid);
-      if (t != null && t >= targetTop - 1) { ans = mid; hi = mid - 1; }
-      else lo = mid + 1;
-    }
-    out.push({ offset: ans, bottom: lineRects[i].bottom - pTop });
-  }
-  return out;
-}
-
-// Vertical space a flow element really occupies, including its own vertical
-// margins AND any child margin that collapses *through* it (a wrapper with no
-// padding/border on that side does not contain the child's margin, so
-// getBoundingClientRect misses it). LaTeX adds these spaces rather than
-// collapsing them, so counting the full footprint keeps pagination from
-// overfilling a page — the measured height now matches what is actually drawn.
-function flowHeight(el: HTMLElement): number {
-  const cs = getComputedStyle(el);
-  const num = (v: string) => parseFloat(v || "0") || 0;
-  let h = el.getBoundingClientRect().height + num(cs.marginTop) + num(cs.marginBottom);
-  if (num(cs.paddingTop) === 0 && num(cs.borderTopWidth) === 0) {
-    const fc = el.firstElementChild as HTMLElement | null;
-    if (fc) h += Math.max(0, num(getComputedStyle(fc).marginTop));
-  }
-  if (num(cs.paddingBottom) === 0 && num(cs.borderBottomWidth) === 0) {
-    const lc = el.lastElementChild as HTMLElement | null;
-    if (lc) h += Math.max(0, num(getComputedStyle(lc).marginBottom));
-  }
-  return h;
-}
-
-type LineMap = Record<string, { offset: number; bottom: number }[]>;
-function lineDataUnchanged(prev: LineMap, next: LineMap): boolean {
-  const pk = Object.keys(prev), nk = Object.keys(next);
-  if (pk.length !== nk.length) return false;
-  for (const k of nk) {
-    const a = prev[k], b = next[k];
-    if (!a || a.length !== b.length) return false;
-    for (let i = 0; i < b.length; i++) {
-      if (a[i].offset !== b[i].offset || Math.abs(a[i].bottom - b[i].bottom) > 1) return false;
-    }
-  }
-  return true;
-}
-
-// Place the caret at a character offset inside a contentEditable element.
-function placeCaretAt(el: HTMLElement, offset: number) {
-  el.focus();
-  const sel = window.getSelection();
-  if (!sel) return;
-  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-  let remaining = offset, target: Text | null = null, local = 0, n: Node | null;
-  while ((n = walker.nextNode())) {
-    const len = (n.textContent ?? "").length;
-    if (remaining <= len) { target = n as Text; local = remaining; break; }
-    remaining -= len;
-  }
-  const range = document.createRange();
-  if (target) { range.setStart(target, local); range.collapse(true); }
-  else { range.selectNodeContents(el); range.collapse(false); }
-  sel.removeAllRanges();
-  sel.addRange(range);
-}
 
 // Friendly names for the delete-confirmation prompt, by node type.
 const DELETE_LABELS: Record<string, string> = {
@@ -271,67 +86,6 @@ const DELETE_LABELS: Record<string, string> = {
   figure: "figure",
   frame: "slide"
 };
-
-// A small pinned button that rides the inner edge of a sidebar / the top bar.
-// Clicking it slides that panel out of the way; when the panel is hidden the
-// button stays at the screen edge so it can be slid back into view.
-function EdgeToggle({
-  edge, open, size, collapsedSize = 0, onToggle
-}: { edge: "left" | "right" | "top"; open: boolean; size: number; collapsedSize?: number; onToggle: () => void }) {
-  const vertical = edge === "top";
-  const ease = "cubic-bezier(0.16, 1, 0.3, 1)";
-  // The panel-edge offset: full size when open, the collapsed remnant when hidden
-  // (0 for the sidebars, the short control-bar height for the top bar).
-  const off = open ? size : collapsedSize;
-  // Anchor the panel-edge side flush (so the button is never clipped off-screen
-  // when the panel is hidden) and only center on the long axis.
-  const pos: React.CSSProperties = { position: "fixed", zIndex: 55 };
-  if (edge === "left") {
-    pos.left = off; pos.top = "50%";
-    pos.transform = "translateY(-50%)"; pos.transition = `left 0.45s ${ease}`;
-  } else if (edge === "right") {
-    pos.right = off; pos.top = "50%";
-    pos.transform = "translateY(-50%)"; pos.transition = `right 0.45s ${ease}`;
-  } else {
-    pos.top = off; pos.left = "50%";
-    pos.transform = "translateX(-50%)"; pos.transition = `top 0.45s ${ease}`;
-  }
-  // Chevron points "in" (hide) when open, "out" (show) when closed.
-  const dir =
-    edge === "left" ? (open ? "left" : "right")
-    : edge === "right" ? (open ? "right" : "left")
-    : (open ? "up" : "down");
-  return (
-    <button
-      onClick={onToggle}
-      title={open ? "Hide panel" : "Show panel"}
-      aria-label={open ? "Hide panel" : "Show panel"}
-      style={{
-        ...pos,
-        width: vertical ? 42 : 20,
-        height: vertical ? 20 : 42,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--edge-bg)",
-        border: "1px solid var(--edge-border)",
-        borderRadius: 7,
-        boxShadow: "0 2px 8px rgba(20,20,50,0.16)",
-        color: "var(--ui-2nd)",
-        cursor: "pointer",
-        padding: 0
-      }}
-    >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        {dir === "left" && <polyline points="15 18 9 12 15 6" />}
-        {dir === "right" && <polyline points="9 18 15 12 9 6" />}
-        {dir === "up" && <polyline points="18 15 12 9 6 15" />}
-        {dir === "down" && <polyline points="6 9 12 15 18 9" />}
-      </svg>
-    </button>
-  );
-}
 
 function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTheme }: { sidebarsIn?: boolean; template: TemplateLayout; project?: BloxProject | null; onBack?: () => void; dark: boolean; onToggleTheme: () => void }) {
   // ── 1. All state first ──────────────────────────────────
@@ -363,8 +117,6 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [topOpen, setTopOpen] = useState(true);
-  // The free-form shape currently selected (shows its handles + toolbar).
-  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   // While true, the next click on a paragraph word attaches a footnote there.
   const [pendingFootnote, setPendingFootnote] = useState(false);
   const [documentTitle, setDocumentTitle] = useState(project?.title ?? template.title);
@@ -377,15 +129,11 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
 
   // Images uploaded via the right sidebar (preview gallery). Data URLs, so a
   // reopened project's gallery comes back intact.
-  const [images, setImages] = useState<{ id: string; src: string; name: string }[]>(
-    () => project?.images ?? []
-  );
-  // True while OS files are being dragged over the right sidebar (drop to upload).
-  const [imageDropActive, setImageDropActive] = useState(false);
-  // Source of the image currently being dragged (for the drag overlay preview).
-  const [activeDragSrc, setActiveDragSrc] = useState<string | null>(null);
-  // Id of the Blox block currently being dragged (for the drag overlay).
-  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  // Right-sidebar image gallery (uploads, drop-to-upload flag, remove).
+  const {
+    images, imageDropActive, setImageDropActive,
+    addImageFiles, uploadImage, deleteImageUpload
+  } = useImageGallery(project?.images ?? []);
 
   // The paragraph currently being typed in. Live pagination can re-flow content
   // onto another page mid-keystroke; if that paragraph re-mounts on a new page we
@@ -645,53 +393,14 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
   const footnoteNumbers = useMemo(() => footnoteNumbering(numberedDoc), [numberedDoc]);
 
   // ── Citations / bibliography ────────────────────────────
-  // entryId → its 1-based reference number (position in the bibliography).
-  const bibNumbers = useMemo(() => bibEntryNumbers(doc), [doc]);
-  // The BibTeX editor modal: "new" captures where a fresh citation will be
-  // inserted; "edit" targets an existing entry. null = closed.
-  const [citeEditor, setCiteEditor] = useState<
-    | { mode: "new"; paragraphId: string; offset: number; raw: string }
-    | { mode: "edit"; entryId: string; raw: string }
-    | null
-  >(null);
+  const {
+    bibNumbers, citeEditor, setCiteEditor,
+    openQuoteForSelection, openCiteEditorForEntry, saveCiteEditor, deleteCiteEntry, setBibStyle
+  } = useCitations(doc, setDoc);
 
-  // Selection-toolbar actions.
+  // Selection-toolbar "Footnote": attach a footnote at the selection end.
   function addFootnoteAtSelection(paragraphId: string, offset: number) {
     setDoc((prev) => addFootnoteAtOffset(prev, paragraphId, offset, crypto.randomUUID()));
-  }
-  function openQuoteForSelection(paragraphId: string, offset: number) {
-    setCiteEditor({ mode: "new", paragraphId, offset, raw: newEntryTemplate });
-  }
-  // Clicking an in-text [n] opens its entry to edit.
-  function openCiteEditorForEntry(entryId: string) {
-    const entry = getBib(doc).entries.find((e: any) => e.id === entryId);
-    if (entry) setCiteEditor({ mode: "edit", entryId, raw: entry.raw });
-  }
-  // Commit the editor: a new entry creates the bibliography (if absent), the
-  // entry, and the inline citation in one history step; an edit just updates it.
-  function saveCiteEditor(raw: string) {
-    if (!citeEditor) return;
-    if (citeEditor.mode === "new") {
-      const { paragraphId, offset } = citeEditor;
-      setDoc((prev) => {
-        const entry = newBibEntry(raw);
-        let next = ensureBibliography(prev);
-        next = addBibEntry(next, entry);
-        next = addCitationAtOffset(next, paragraphId, offset, crypto.randomUUID(), entry.id);
-        return next;
-      });
-    } else {
-      const { entryId } = citeEditor;
-      setDoc((prev) => updateBibEntry(prev, entryId, raw));
-    }
-    setCiteEditor(null);
-  }
-  function deleteCiteEntry(entryId: string) {
-    setDoc((prev) => removeBibEntry(prev, entryId));
-    setCiteEditor(null);
-  }
-  function setBibStyle(style: string) {
-    setDoc((prev) => setBibStyleTree(prev, style));
   }
 
   // Click a paragraph word while in "pick a word" mode → attach a footnote.
@@ -778,306 +487,15 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
     })
   );
 
-  // Remove an uploaded image from the sidebar gallery.
-  function deleteImageUpload(imageId: string) {
-    setImages((prev) => prev.filter((i) => i.id !== imageId));
-  }
+  // Free-form overlay shapes (selection + create / edit / delete on doc.shapes).
+  const {
+    selectedShapeId, setSelectedShapeId, updateShape, deleteShape, placeShapeFromDrag
+  } = useShapes(setDoc, layout);
 
-  // -----------------------------
-  // IMAGE UPLOAD (right sidebar gallery)
-  // -----------------------------
-  // Read one or more image files into the gallery (shared by the upload button
-  // and by dropping files onto the sidebar).
-  function addImageFiles(files: FileList | File[]) {
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith("image/")) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const url = reader.result as string;
-        setImages((prev) => [...prev, { id: crypto.randomUUID(), src: url, name: file.name }]);
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-
-  function uploadImage() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.multiple = true;
-    input.onchange = (e: any) => {
-      if (e.target.files?.length) addImageFiles(e.target.files);
-    };
-    input.click();
-  }
-
-  // -----------------------------
-  // SHAPES (free-form overlay graphics on doc.shapes)
-  // -----------------------------
-  // Apply a partial change to one shape (used for both a finished move/resize
-  // gesture and discrete style edits — each is one undo step).
-  function updateShape(id: string, patch: Partial<Shape>) {
-    setDoc((prev: any) => ({
-      ...prev,
-      shapes: (prev.shapes ?? []).map((s: Shape) => (s.id === id ? { ...s, ...patch } : s))
-    }));
-  }
-  function deleteShape(id: string) {
-    setDoc((prev: any) => ({ ...prev, shapes: (prev.shapes ?? []).filter((s: Shape) => s.id !== id) }));
-    setSelectedShapeId((cur) => (cur === id ? null : cur));
-  }
-
-  // Drop a shape Blox onto whatever page sits under the cursor at release. The
-  // final pointer position is the drag's start point plus its accumulated delta;
-  // we hit-test the rendered pages to find the target and local coordinates.
-  function placeShapeFromDrag(kind: ShapeKind, activatorEvent: any, delta: any) {
-    const coords = getEventCoordinates(activatorEvent);
-    if (!coords) return;
-    const px = coords.x + (delta?.x ?? 0);
-    const py = coords.y + (delta?.y ?? 0);
-    const pageEls = Array.from(document.querySelectorAll<HTMLElement>(".doc-area .blox-page"));
-    let page = -1;
-    let rect: DOMRect | null = null;
-    for (let i = 0; i < pageEls.length; i++) {
-      const r = pageEls[i].getBoundingClientRect();
-      if (px >= r.left && px <= r.right && py >= r.top && py <= r.bottom) { page = i; rect = r; break; }
-    }
-    if (page < 0 || !rect) return; // dropped off the pages → ignore
-
-    const DEF: Record<ShapeKind, { w: number; h: number; fill: boolean }> = {
-      line:   { w: 170, h: 0,   fill: false },
-      arrow:  { w: 170, h: 0,   fill: false },
-      rect:   { w: 150, h: 96,  fill: false },
-      circle: { w: 120, h: 120, fill: false }
-    };
-    const { w, h } = DEF[kind];
-    const clamp01 = (v: number, hi: number) => Math.min(Math.max(v, 0), Math.max(0, hi));
-    const x = clamp01(px - rect.left - w / 2, layout.pageWidth - w);
-    const y = clamp01(py - rect.top - h / 2, layout.pageHeight - h);
-    const shape: Shape = {
-      id: crypto.randomUUID(), kind, page, x, y, w, h,
-      color: "#1d1d1f", strokeWidth: 2,
-      ...(DEF[kind].fill ? { fill: "#cccccc" } : { fill: null })
-    };
-    setDoc((prev: any) => ({ ...prev, shapes: [...(prev.shapes ?? []), shape] }));
-    setSelectedShapeId(shape.id);
-  }
-
-  // Deselect a shape when clicking anywhere that isn't a shape / its toolbar.
-  useEffect(() => {
-    const onDown = (e: PointerEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && t.closest("[data-shape], [data-shape-toolbar]")) return;
-      setSelectedShapeId(null);
-    };
-    document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
-  }, []);
-
-  // Delete / Backspace removes the selected shape (unless typing in a field).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedShapeId) {
-        const a = document.activeElement as HTMLElement | null;
-        if (a && (a.isContentEditable || a.tagName === "INPUT" || a.tagName === "TEXTAREA")) return;
-        e.preventDefault();
-        deleteShape(selectedShapeId);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selectedShapeId]);
-
-  // -----------------------------
-  // DRAG END
-  // -----------------------------
-  function handleDragStart(event: any) {
-    const id = String(event.active.id);
-    setActiveDragSrc(null);
-    setActiveBlockId(null);
-    if (id.startsWith("image::")) {
-      const img = images.find((i) => i.id === id.slice("image::".length));
-      setActiveDragSrc(img?.src ?? null);
-    } else if (id.startsWith("docimg::")) {
-      const [, figId, imgId] = id.split("::");
-      setActiveDragSrc(findDocImageSrc(doc, figId, imgId));
-    } else if (BLOCK_DEFS[id]) {
-      setActiveBlockId(id);
-    }
-  }
-
-  function handleDragEnd(event: any) {
-    const { active, over } = event;
-    setActiveDragSrc(null);
-    setActiveBlockId(null);
-
-    // A free-form shape Blox: placed at the cursor on whatever page it lands on,
-    // independent of the text-flow drop zones.
-    const dragId = String(active.id);
-    if (dragId.startsWith("block::shape::")) {
-      placeShapeFromDrag(dragId.slice("block::shape::".length) as ShapeKind, event.activatorEvent, event.delta);
-      return;
-    }
-
-    // A Blox block (table / math) dropped into the document.
-    const activeBlockId = String(active.id);
-    const blockDef = BLOCK_DEFS[activeBlockId];
-    if (blockDef) {
-      const overId = over ? String(over.id) : null;
-      if (!overId) return;
-
-      // Footnote: no placement — drop anywhere to enter "pick a word" mode.
-      if (activeBlockId === "block::footnote") {
-        setPendingFootnote(true);
-        return;
-      }
-
-      // Abstract: a singleton auto-placed between the title and first section.
-      if (activeBlockId === "block::abstract") {
-        setDoc((prev) => insertPage(prev, blockDef.make()));
-        return;
-      }
-
-      // Special pages drop anywhere → auto-placed by document order (and unique).
-      if (activeBlockId.startsWith("block::page::")) {
-        setDoc((prev) => insertPage(prev, blockDef.make()));
-        return;
-      }
-
-      // Section / Subsection / Subsubsection.
-      const kind = STRUCTURAL[activeBlockId];
-      if (kind) {
-        // A section is dropped anywhere and simply appended after the last
-        // section (ordered placement keeps it ahead of the bibliography).
-        if (kind === "section") {
-          setDoc((prev) => insertOrdered(prev, newSection()));
-          return;
-        }
-
-        // Subsection / subsubsection: drop into their (only-eligible) container.
-        if (overId.startsWith("dz::")) {
-          const [, containerId, idxStr] = overId.split("::");
-          setDoc((prev) => insertStructuralAt(prev, containerId, Number(idxStr), kind));
-        }
-        return;
-      }
-
-      // Math block dropped onto a slot → insert it as a part at that position.
-      if (overId.startsWith("mathdz::") && activeBlockId.startsWith("block::math::")) {
-        const [, mathId, idxStr] = overId.split("::");
-        setDoc((prev) => insertMathItem(prev, mathId, Number(idxStr), MATH_TEMPLATES[activeBlockId]));
-        return;
-      }
-
-      // Otherwise drop it as a new block in a between-block zone.
-      if (overId.startsWith("dz::")) {
-        const [, containerId, idxStr] = overId.split("::");
-        setDoc((prev) => insertNodeAt(prev, containerId, Number(idxStr), blockDef.make()));
-      }
-      return;
-    }
-
-    const activeId = String(active.id);
-    const isSidebar = activeId.startsWith("image::");
-    const isDocImg  = activeId.startsWith("docimg::");
-
-    // ── Non-image drag: keep the existing section reordering ──
-    if (!isSidebar && !isDocImg) {
-      if (!over || activeId === String(over.id)) return;
-      const overId = String(over.id);
-      setDoc((prev) => {
-        const siblings = prev.children ?? [];
-        const oldIndex = siblings.findIndex((c: any) => c.id === activeId);
-        const newIndex = siblings.findIndex((c: any) => c.id === overId);
-        if (oldIndex === -1 || newIndex === -1) return prev;
-        const updated = [...siblings];
-        const [moved] = updated.splice(oldIndex, 1);
-        updated.splice(newIndex, 0, moved);
-        return { ...prev, children: updated };
-      });
-      return;
-    }
-
-    // ── Image drag: resolve the source and (for in-document images) origin ──
-    let originFig: string | null = null;
-    let originImg: string | null = null;
-    let src: string | null = null;
-
-    if (isSidebar) {
-      src = images.find((i) => i.id === activeId.slice("image::".length))?.src ?? null;
-    } else {
-      const [, figId, imgId] = activeId.split("::");
-      originFig = figId;
-      originImg = imgId;
-      src = findDocImageSrc(doc, figId, imgId);
-    }
-    if (!src) return;
-    const dropSrc = src;
-
-    const overId = over ? String(over.id) : null;
-
-    // Dropped outside every droppable → remove it from the document only.
-    if (!overId) {
-      if (isDocImg && originFig && originImg) {
-        const fig = originFig, img = originImg;
-        setDoc((prev) => removeFigureImage(prev, fig, img));
-      }
-      return;
-    }
-
-    // Drop into a left/right slot of a figure → add the image there, shrinking
-    // the others so everything fits across the column.
-    if (overId.startsWith("figdz::")) {
-      const [, figureId, idxStr] = overId.split("::");
-      let index = Number(idxStr);
-
-      // Reordering within the same figure: account for the removed image.
-      if (isDocImg && originFig === figureId) {
-        const fig = findFigureNode(doc, figureId);
-        const imgs = fig?.images ?? [];
-        if (imgs.length <= 1) return;                           // nothing to do
-        const fromPos = imgs.findIndex((im: any) => im.id === originImg);
-        if (fromPos === -1) return;
-        if (index === fromPos || index === fromPos + 1) return; // dropped on itself
-        if (index > fromPos) index -= 1;
-      }
-
-      const fromFig = originFig, fromImg = originImg;
-      setDoc((prev) => {
-        let tree = prev;
-        if (isDocImg && fromFig && fromImg) tree = removeFigureImage(tree, fromFig, fromImg);
-        return insertFigureImageAt(tree, figureId, index, dropSrc);
-      });
-      return;
-    }
-
-    // Drop into a between-block zone → create a new (single-image) figure.
-    if (overId.startsWith("dz::")) {
-      const [, containerId, idxStr] = overId.split("::");
-      let index = Number(idxStr);
-
-      // If moving an image whose figure will disappear from this same
-      // container before the target index, shift the index back by one.
-      if (isDocImg && originFig) {
-        const loc = locateFigure(doc, originFig);
-        const fig = findFigureNode(doc, originFig);
-        const willEmpty = (fig?.images ?? []).length <= 1;
-        if (willEmpty && loc && loc.parentId === containerId && loc.index < index) {
-          index -= 1;
-        }
-      }
-
-      const fromFig = originFig, fromImg = originImg;
-      setDoc((prev) => {
-        let tree = prev;
-        if (isDocImg && fromFig && fromImg) tree = removeFigureImage(tree, fromFig, fromImg);
-        return insertFigure(tree, containerId, index, dropSrc);
-      });
-      return;
-    }
-
-    // Dropped over some other droppable (e.g. a column) → no-op.
-  }
+  // All drag-and-drop wiring (overlay state + every drop resolution).
+  const {
+    activeDragSrc, activeBlockId, handleDragStart, handleDragEnd, handleDragCancel
+  } = useEditorDnd({ doc, setDoc, images, placeShapeFromDrag, setPendingFootnote });
 
   // -----------------------------
   // RENDER
@@ -1088,7 +506,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
       collisionDetection={dropCollision}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => { setActiveDragSrc(null); setActiveBlockId(null); }}
+      onDragCancel={handleDragCancel}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
      <div className="editor-shell" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>

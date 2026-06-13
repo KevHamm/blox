@@ -547,12 +547,14 @@ export function formatBibEntry(raw: string): string {
   const title = parseBibField(raw, "title");
   const venue = parseBibField(raw, "journal") || parseBibField(raw, "booktitle") || parseBibField(raw, "publisher");
   const year = parseBibField(raw, "year");
-  // IEEE-ish: Author, “Title,” Venue, Year. The title already carries its own
-  // trailing comma inside the quotes, so the venue follows with just a space.
+  // IEEE-ish: Author, “Title,” Venue, Year. The title carries its own trailing
+  // comma inside the quotes, so whatever follows it (venue or, if absent, year)
+  // is separated by a space — the remaining tail items by commas.
   let out = author ? author.replace(/\s+and\s+/g, ", ") : "";
-  if (title) out = out ? `${out}, “${title},”` : `“${title},”`;
-  if (venue) out = out ? `${out} ${venue}` : venue;
-  if (year) out = out ? `${out}, ${year}` : year;
+  const titlePart = title ? `“${title},”` : "";
+  if (titlePart) out = out ? `${out}, ${titlePart}` : titlePart;
+  const tail = [venue, year].filter(Boolean).join(", ");
+  if (tail) out = titlePart ? `${out} ${tail}` : out ? `${out}, ${tail}` : tail;
   return out || parseBibKey(raw) || "(empty entry)";
 }
 
