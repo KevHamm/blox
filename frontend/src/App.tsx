@@ -87,6 +87,43 @@ const DELETE_LABELS: Record<string, string> = {
   frame: "slide"
 };
 
+// Document body fonts offered in the Typography panel. `css` overrides the
+// document area's --sans; "cm" is the LaTeX default (Computer Modern via KaTeX).
+const DOC_FONTS = [
+  { id: "cm",        label: "Computer Modern", css: '"KaTeX_Main", Georgia, serif' },
+  { id: "times",     label: "Times",           css: '"Times New Roman", Times, serif' },
+  { id: "palatino",  label: "Palatino",        css: '"Palatino Linotype", "Book Antiqua", Palatino, serif' },
+  { id: "georgia",   label: "Georgia",         css: 'Georgia, "Times New Roman", serif' },
+  { id: "helvetica", label: "Helvetica",       css: 'Helvetica, Arial, sans-serif' }
+];
+const docFontCss = (id: string) => DOC_FONTS.find((f) => f.id === id)?.css ?? DOC_FONTS[0].css;
+
+// A compact labelled integer field (px) used for the 2×2 margins grid.
+function MarginField({ label, value, min, max, onChange }:
+  { label: string; value: number; min: number; max: number; onChange: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const commit = (raw: string) => {
+    const n = Math.round(Number(raw));
+    if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, n)));
+    else setText(String(value));
+  };
+  return (
+    <label className="margin-field">
+      <span className="margin-field-lbl">{label}</span>
+      <span className="margin-field-input">
+        <input
+          type="number" inputMode="numeric" value={text} min={min} max={max}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }}
+        />
+        <span className="margin-field-unit">px</span>
+      </span>
+    </label>
+  );
+}
+
 function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTheme }: { sidebarsIn?: boolean; template: TemplateLayout; project?: BloxProject | null; onBack?: () => void; dark: boolean; onToggleTheme: () => void }) {
   // ── 1. All state first ──────────────────────────────────
   // Starting content: the reopened project's tree, or fresh content for the
@@ -99,7 +136,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
   const {
     doc, setDoc,
     undo, redo, canUndo, canRedo,
-    updateTextById, updateRichText, toggleParagraphAlign, updateSectionTitle, updateFigureCaption,
+    updateTextById, updateRichText, updateSectionTitle, updateFigureCaption,
     updateMathItem, deleteMathItem, setFootnoteText, removeFootnote,
     updateListItem, addListItem, deleteListItem, setListStyle,
     addSectionAfter, updateFigureWidth,
@@ -173,6 +210,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
     lineHeight: template.lineHeight,
     columns: template.columns,
     fontSize: template.fontSize,
+    fontFamily: "cm",
     ...(project?.layout ?? {})
   }));
 
@@ -351,7 +389,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
     setHeaderHeights(prev => heightsUnchanged(prev, hh) ? prev : hh);
     setLineData     (prev => lineDataUnchanged(prev, ld) ? prev : ld);
 
-  }, [doc, layout.textWidth, layout.fontSize, layout.lineHeight, layout.columns]);
+  }, [doc, contentWidth, layout.fontSize, layout.lineHeight, layout.columns, layout.fontFamily]);
 
   // Global figure numbers, assigned in document order.
   const figureNumbers = useMemo(() => {
@@ -446,18 +484,6 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
   function applyInlineFormat(cmd: "bold" | "italic" | "underline") {
     try { document.execCommand("styleWithCSS", false, "false"); } catch { /* ignore */ }
     document.execCommand(cmd);
-  }
-
-  // Center / un-center the paragraph that holds the current selection. Alignment
-  // is a block property, so it applies to the whole paragraph, not a character
-  // range. The button's pointer press is prevented from stealing focus so the
-  // selection stays put.
-  function centerSelection() {
-    const sel = window.getSelection();
-    const anchor = sel?.anchorNode ?? null;
-    const from = anchor && anchor.nodeType === 1 ? (anchor as HTMLElement) : anchor?.parentElement ?? null;
-    const el = from?.closest("[data-para-id]") as HTMLElement | null;
-    if (el?.dataset.paraId) toggleParagraphAlign(el.dataset.paraId);
   }
 
   // Delete a block, asking first (via the custom confirm dialog) when it still
@@ -561,12 +587,25 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
       <div
         className="editor-canvas"
         style={{
+          position: "relative",
           display: "flex",
           flex: 1,
           minHeight: 0,
           overflow: "hidden"
         }}
       >
+        {/* A thin frame tracing the top + inner edges of the document "window",
+            with rounded top corners that join each sidebar's inner edge into the
+            top bar's underside — so the sidebars read as pillars supporting the
+            top bar. Spans the doc-area edges (which track sidebar collapse); the
+            bottom is left open. */}
+        {sidebarsIn && (
+          <div
+            className="doc-window-frame"
+            style={{ left: leftOpen ? 280 : 0, right: rightOpen ? 260 : 0 }}
+          />
+        )}
+
         {/* Footnote "pick a word" instruction banner. */}
         {pendingFootnote && (
           <div
@@ -602,7 +641,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
           }}
         >
         <div
-          className="ui-panel"
+          className="ui-panel sidebar-panel"
           style={{
             width: 280,
             boxSizing: "border-box",
@@ -649,25 +688,19 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
           </div>
 
           {sidebarTab === "typography" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <NumberControl
-                label="Text Width"
-                value={layout.textWidth}
-                min={Math.min(200, contentWidth)}
-                max={contentWidth}
-                step={1}
-                unit="px"
-                onChange={(v) => setLayout({ ...layout, textWidth: v })}
-              />
-
-              <NumberControl
-                label="Line Spacing"
-                value={layout.lineHeight}
-                min={1}
-                max={2.5}
-                step={0.1}
-                onChange={(v) => setLayout({ ...layout, lineHeight: v })}
-              />
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Body font (overrides the document's --sans). */}
+              <div>
+                <label>Font</label>
+                <select
+                  className="ui-select"
+                  value={layout.fontFamily}
+                  onChange={(e) => setLayout({ ...layout, fontFamily: e.target.value })}
+                  style={{ marginTop: 8, width: "100%" }}
+                >
+                  {DOC_FONTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+                </select>
+              </div>
 
               <NumberControl
                 label="Font Size"
@@ -679,8 +712,28 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
                 onChange={(v) => setLayout({ ...layout, fontSize: v })}
               />
 
+              <NumberControl
+                label="Line Spacing"
+                value={layout.lineHeight}
+                min={1}
+                max={2.5}
+                step={0.1}
+                onChange={(v) => setLayout({ ...layout, lineHeight: v })}
+              />
+
+              {/* Page margins (the whitespace around the text block). */}
               <div>
-                <label>Layout</label>
+                <label>Margins</label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
+                  <MarginField label="Top"    value={layout.padTop}    min={24} max={layout.pageHeight - layout.padBottom - 160} onChange={(v) => setLayout({ ...layout, padTop: v })} />
+                  <MarginField label="Bottom" value={layout.padBottom} min={24} max={layout.pageHeight - layout.padTop - 160}    onChange={(v) => setLayout({ ...layout, padBottom: v })} />
+                  <MarginField label="Left"   value={layout.padLeft}   min={24} max={layout.pageWidth - layout.padRight - 120}   onChange={(v) => setLayout({ ...layout, padLeft: v })} />
+                  <MarginField label="Right"  value={layout.padRight}  min={24} max={layout.pageWidth - layout.padLeft - 120}    onChange={(v) => setLayout({ ...layout, padRight: v })} />
+                </div>
+              </div>
+
+              <div>
+                <label>Columns</label>
                 <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center" }}>
                   {[1, 2].map((c) => (
                     <button
@@ -705,68 +758,6 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
                       <LayoutIcon columns={c} />
                     </button>
                   ))}
-
-                  {/* divider before the text-format buttons */}
-                  <span style={{ width: 1, height: 26, background: "var(--divider)", margin: "0 2px" }} />
-
-                  {/* Select text in a paragraph, then click to format it. */}
-                  {([
-                    { cmd: "bold" as const, label: "Bold", glyph: "B", css: { fontWeight: 700 } },
-                    { cmd: "italic" as const, label: "Italic", glyph: "I", css: { fontStyle: "italic" } },
-                    { cmd: "underline" as const, label: "Underline", glyph: "U", css: { textDecoration: "underline" } }
-                  ]).map(({ cmd, label, glyph, css }) => (
-                    <button
-                      key={cmd}
-                      title={label}
-                      aria-label={label}
-                      // Keep the paragraph selection alive (don't take focus).
-                      onMouseDown={(e) => { e.preventDefault(); applyInlineFormat(cmd); }}
-                      style={{
-                        width: 34,
-                        height: 34,
-                        padding: 0,
-                        cursor: "pointer",
-                        borderRadius: 10,
-                        border: "1px solid var(--ctrl-border)",
-                        background: "var(--ctrl-surface)",
-                        color: "var(--ui-text)",
-                        fontFamily: "var(--sans)",
-                        fontSize: 16,
-                        lineHeight: 0,
-                        transition: "border-color 0.15s ease, background 0.15s ease",
-                        ...css
-                      }}
-                    >
-                      {glyph}
-                    </button>
-                  ))}
-
-                  {/* Center the paragraph holding the selection. */}
-                  <button
-                    title="Center"
-                    aria-label="Center"
-                    onMouseDown={(e) => { e.preventDefault(); centerSelection(); }}
-                    style={{
-                      width: 34,
-                      height: 34,
-                      padding: 0,
-                      cursor: "pointer",
-                      borderRadius: 10,
-                      border: "1px solid var(--ctrl-border)",
-                      background: "var(--ctrl-surface)",
-                      color: "var(--ui-text)",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transition: "border-color 0.15s ease, background 0.15s ease"
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <line x1="4" y1="6" x2="20" y2="6" />
-                      <line x1="7" y1="12" x2="17" y2="12" />
-                      <line x1="5" y1="18" x2="19" y2="18" />
-                    </svg>
-                  </button>
                 </div>
               </div>
 
@@ -833,7 +824,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
 
 
         {/* DOCUMENT */}
-        <DroppableDocArea visible={sidebarsIn}>
+        <DroppableDocArea visible={sidebarsIn} docFont={docFontCss(layout.fontFamily)}>
                 {pages.map((cols: any[], pageIndex: number) => (
                   <Page
                     key={pageIndex}
@@ -866,12 +857,11 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
                     )}
 
                     {(() => {
-                      // The text block fills the area between the page margins,
-                      // never wider than the page itself. The slider can narrow
-                      // it further (widening the margins, LaTeX-style). Every page
+                      // The text block fills the area between the page margins
+                      // (set via the Typography panel's margin fields). Every page
                       // holds `layout.columns` equal-width columns; content has
                       // already been flowed left → right → next page.
-                      const blockWidth = Math.min(layout.textWidth, contentWidth);
+                      const blockWidth = contentWidth;
 
                       return (
                         <div style={{ display: "flex", gap: COLUMN_GAP,
@@ -905,7 +895,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
                       const fns = collectPageFootnotes(cols, footnoteNumbers);
                       if (!fns.length) return null;
                       return (
-                        <div style={{ marginTop: 20, width: Math.min(layout.textWidth, contentWidth), marginLeft: "auto", marginRight: "auto" }}>
+                        <div style={{ marginTop: 20, width: contentWidth, marginLeft: "auto", marginRight: "auto" }}>
                           <div style={{ borderTop: "1px solid #999", width: 160, marginBottom: 6 }} />
                           {fns.map(({ paragraphId, fn, number }) => {
                             // A footnote whose target word was deleted is shown in red.
@@ -974,7 +964,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
           }}
         >
         <div
-          className="ui-panel"
+          className="ui-panel sidebar-panel"
           // OS drag-and-drop image upload: dropping image files anywhere on this
           // sidebar adds them to the gallery. dragenter/over must preventDefault
           // for the drop to fire; a counter avoids flicker as the pointer crosses

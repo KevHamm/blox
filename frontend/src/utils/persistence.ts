@@ -18,6 +18,7 @@ export type ProjectLayout = {
   lineHeight: number;
   columns: number;
   fontSize: number;
+  fontFamily?: string;
 };
 
 export interface BloxProject {

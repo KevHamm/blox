@@ -54,6 +54,8 @@
   --panel-bg: rgba(255, 255, 255, 0.5);
   --panel-glint: rgba(255, 255, 255, 0.65);
   --ui-hairline: rgba(60, 30, 90, 0.1);
+  /* The document-window frame line (top bar underside + sidebar inner edges). */
+  --doc-frame-line: rgba(60, 30, 90, 0.2);
   /* Editor-control surfaces (tabs, palette blocks, buttons, glyphs, edges). All
      re-skinned under [data-theme="dark"] for the full-app dark mode. */
   --tabstrip-bg: rgba(60, 30, 90, 0.06);
@@ -123,6 +125,7 @@
   --panel-bg: rgba(22, 17, 36, 0.6);
   --panel-glint: rgba(255, 255, 255, 0.08);
   --ui-hairline: rgba(220, 210, 255, 0.1);
+  --doc-frame-line: rgba(220, 210, 255, 0.28);
   --tabstrip-bg: rgba(220, 210, 255, 0.06);
   --tab-active-bg: rgba(220, 210, 255, 0.16);
   --ctrl-surface: rgba(220, 210, 255, 0.07);
@@ -485,6 +488,47 @@ math-field::part(menu-toggle) {
   box-shadow: inset 0 1px 0 var(--panel-glint);
   color: var(--ui-text);
 }
+/* The chrome is borderless, so a frosted corner alone is invisible against the
+   shell. Instead a thin hairline frame traces the document "window": across the
+   top bar's underside and down both sidebars' inner edges, the two joining at
+   rounded top corners. The rounded corners make each sidebar's inner edge sweep
+   up into the top bar, so the sidebars read as pillars supporting it. The frame
+   is an overlay spanning the doc-area edges; top + both sides are drawn, the
+   bottom is left open (the page scrolls past it). */
+.doc-window-frame {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  pointer-events: none;
+  border: 1px solid var(--doc-frame-line);
+  border-bottom: none;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  /* Keep the supporting top corners crisp and let the side rails dissolve as
+     they fall away, so the frame accents the joint without boxing in the page. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 34%, transparent 78%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 34%, transparent 78%);
+}
+
+/* Compact px field used by the Typography → Margins 2×2 grid. */
+.margin-field { display: flex; flex-direction: column; gap: 5px; }
+.margin-field-lbl { font-size: 11px; font-weight: 500; color: var(--ui-2nd); font-family: var(--ui-font); letter-spacing: 0.01em; }
+.margin-field-input {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--ctrl-border); border-radius: 8px; padding: 5px 9px;
+  background: rgba(255, 255, 255, 0.7); transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+:root[data-theme="dark"] .margin-field-input { background: rgba(220, 210, 255, 0.06); }
+.margin-field-input:focus-within { border-color: var(--ui-accent-ring); box-shadow: 0 0 0 3px var(--ui-accent-soft); }
+.margin-field-input input {
+  width: 100%; min-width: 0; border: none; background: transparent; outline: none;
+  font-family: var(--ui-font); font-size: 13px; color: var(--ui-text); -moz-appearance: textfield;
+}
+.margin-field-input input::-webkit-outer-spin-button,
+.margin-field-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.margin-field-unit { font-size: 11px; color: var(--ui-2nd); flex: 0 0 auto; }
+
 .ui-panel h3 {
   font-family: var(--ui-display);
   font-weight: 600;
@@ -524,6 +568,10 @@ math-field::part(menu-toggle) {
 }
 .outline-swap {
   animation: outlineSwap 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Fade the page selection out at the left/right edges as it scrolls past the
+     visible area, instead of a hard cut. */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 34px, #000 calc(100% - 34px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 34px, #000 calc(100% - 34px), transparent 100%);
 }
 .outline-page {
   transition: box-shadow 0.15s ease, transform 0.1s ease;

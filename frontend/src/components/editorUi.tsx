@@ -75,7 +75,7 @@ export function DraggableImage({ img, onDelete }: any) {
    block is being dragged, so a section can be dropped anywhere in the document
    (no visible drop zone) without interfering with image "drop outside to
    remove" behaviour. */
-export function DroppableDocArea({ children, visible = true }: any) {
+export function DroppableDocArea({ children, visible = true, docFont }: any) {
   const { active } = useDndContext();
   const aid = String(active?.id ?? "");
   // These blocks have no visible insertion line — dropping anywhere in the
@@ -99,6 +99,9 @@ export function DroppableDocArea({ children, visible = true }: any) {
         padding: 40,
         overflowY: "auto",
         overscrollBehavior: "contain",
+        // The chosen body font cascades through the document by locally
+        // overriding --sans (which all document text resolves against).
+        ...(docFont ? { ["--sans" as any]: docFont } : {}),
         // Hidden (but still laid out, so the morph overlay can measure the
         // page) until the editor is revealed.
         opacity: visible ? 1 : 0,
