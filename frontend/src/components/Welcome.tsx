@@ -3,6 +3,9 @@ import type { ChangeEvent, MouseEvent } from "react";
 import gsap from "gsap";
 import { Logo, ThemeToggle } from "./chrome";
 import { PaperMockup } from "./welcome/PaperMockup";
+import { LoginModal } from "./welcome/LoginModal";
+import { LibraryPanel } from "./welcome/LibraryPanel";
+import { getLibrary } from "../utils/library";
 import { parseProject, timeAgo, type BloxProject } from "../utils/persistence";
 
 interface WelcomeProps {
@@ -12,6 +15,9 @@ interface WelcomeProps {
   autosave: BloxProject | null;
   dark: boolean;
   onToggleTheme: () => void;
+  user: string | null;
+  onLogin: (user: string, pass: string) => boolean;
+  onLogout: () => void;
 }
 
 const PRESETS = [
@@ -69,9 +75,18 @@ function TemplateGlyph({ id }: { id: string }) {
   );
 }
 
-export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleTheme }: WelcomeProps) {
+export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleTheme, user, onLogin, onLogout }: WelcomeProps) {
   const [picking, setPicking] = useState(false);
   const [designing, setDesigning] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const library = getLibrary();
+
+  // Close the sign-in modal once a login succeeds.
+  function tryLogin(u: string, p: string) {
+    const ok = onLogin(u, p);
+    if (ok) setLoginOpen(false);
+    return ok;
+  }
   const rootRef = useRef<HTMLDivElement>(null);
   const paperRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -172,8 +187,23 @@ export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleThe
         <button className="hero-brand" onClick={() => { setPicking(false); setDesigning(false); }} aria-label="BLoX home">
           <Logo flip={false} />
         </button>
-        <ThemeToggle dark={dark} onToggle={onToggleTheme} />
+        <div className="hero-topbar-right">
+          {user ? (
+            <div className="user-chip">
+              <span className="user-avatar" aria-hidden>{user.charAt(0).toUpperCase()}</span>
+              <span className="user-name">{user}</span>
+              <button className="user-logout" onClick={onLogout} title="Sign out">Sign out</button>
+            </div>
+          ) : (
+            <button className="login-btn" onClick={() => setLoginOpen(true)}>
+              L<span className="login-o">o</span>GIN
+            </button>
+          )}
+          <ThemeToggle dark={dark} onToggle={onToggleTheme} />
+        </div>
       </header>
+
+      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onLogin={tryLogin} />}
 
       <main className="welcome3-stage">
         {/* ── HERO ── */}
@@ -223,11 +253,15 @@ export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleThe
             </div>
           </div>
 
-          <div className="paper-stage">
-            <div ref={paperRef} className="paper-tilt">
-              <PaperMockup />
+          {user ? (
+            <LibraryPanel projects={library.projects} pages={library.pages} onOpen={onOpen} />
+          ) : (
+            <div className="paper-stage">
+              <div ref={paperRef} className="paper-tilt">
+                <PaperMockup />
+              </div>
             </div>
-          </div>
+          )}
         </section>
 
         {/* ── TEMPLATE PICKER ── */}

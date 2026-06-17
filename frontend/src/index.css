@@ -460,6 +460,128 @@ math-field::part(menu-toggle) {
   .hero-copy { max-width: 600px; }
 }
 @media (max-width: 720px) { .tpl-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ── Auth: LoGIN button + signed-in user chip ─────────────────────────── */
+.hero-topbar-right { display: flex; align-items: center; gap: 14px; }
+.login-btn {
+  font-family: var(--ui-display); font-weight: 600; font-size: 14px; letter-spacing: 0.05em;
+  color: var(--ui-text); background: var(--w3-card); border: 1px solid var(--w3-hair);
+  padding: 9px 17px; border-radius: 10px; cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+.login-btn:hover { border-color: var(--ui-blue); transform: translateY(-1px); box-shadow: 0 8px 20px -10px rgba(124, 58, 237, 0.5); }
+.login-o { color: var(--ui-blue); }
+.user-chip {
+  display: inline-flex; align-items: center; gap: 9px; padding: 5px 7px 5px 5px;
+  border-radius: 999px; background: var(--w3-card); border: 1px solid var(--w3-hair);
+}
+.user-avatar {
+  width: 28px; height: 28px; border-radius: 50%; background: var(--ui-accent-fill); color: #fff;
+  font-family: var(--ui-display); font-weight: 700; font-size: 13px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.user-name { font-family: var(--ui-font); font-size: 13.5px; font-weight: 600; color: var(--ui-text); }
+.user-logout {
+  font-family: var(--ui-font); font-size: 12.5px; color: var(--ui-2nd);
+  background: none; border: none; cursor: pointer; padding: 4px 9px; border-radius: 8px;
+}
+.user-logout:hover { color: var(--ui-text); background: var(--w3-soft); }
+
+/* ── Sign-in modal ────────────────────────────────────────────────────── */
+.login-overlay {
+  position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 10, 25, 0.42); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  animation: loginFade 0.2s ease;
+}
+@keyframes loginFade { from { opacity: 0; } to { opacity: 1; } }
+.login-card {
+  position: relative; width: 360px; max-width: calc(100vw - 40px);
+  background: var(--w3-card); border: 1px solid var(--w3-card-hair); border-radius: 18px;
+  padding: 32px 30px 26px; box-shadow: 0 30px 80px -24px rgba(20, 15, 40, 0.55);
+  animation: loginPop 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes loginPop { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
+.login-x {
+  position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--ui-2nd);
+  background: none; border: none; cursor: pointer;
+}
+.login-x:hover { background: var(--w3-soft); color: var(--ui-text); }
+.login-title { margin: 0; font-family: var(--ui-serif); font-optical-sizing: auto; font-weight: 500; font-size: 26px; letter-spacing: -0.01em; color: var(--ui-text); }
+.login-sub { margin: 6px 0 22px; font-size: 14px; color: var(--ui-2nd); }
+.login-field { display: block; margin-bottom: 14px; }
+.login-field span { display: block; font-family: var(--ui-font); font-size: 12.5px; font-weight: 500; color: var(--ui-2nd); margin-bottom: 6px; }
+.login-field input {
+  width: 100%; box-sizing: border-box; padding: 11px 13px; border-radius: 10px;
+  font-family: var(--ui-font); font-size: 14.5px; color: var(--ui-text);
+  background: var(--w3-soft); border: 1px solid var(--w3-hair); outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.login-field input:focus { border-color: var(--ui-blue); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16); }
+.login-err { font-size: 13px; color: var(--ui-danger-text); margin: -4px 0 12px; }
+.login-submit {
+  width: 100%; padding: 12px; border-radius: 11px; border: none; cursor: pointer; margin-top: 6px;
+  font-family: var(--ui-font); font-size: 15px; font-weight: 600; color: #fff;
+  background: var(--ui-accent-fill); box-shadow: 0 1px 2px rgba(40, 30, 60, 0.18);
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+.login-submit:hover { background: #6d28d9; transform: translateY(-1px); box-shadow: 0 10px 24px -8px rgba(124, 58, 237, 0.5); }
+.login-hint { margin-top: 16px; text-align: center; font-size: 12.5px; color: var(--ui-2nd); }
+.login-hint b { color: var(--ui-text); font-weight: 600; }
+
+/* ── Signed-in library (replaces the hero paper) ──────────────────────── */
+.library-panel { display: flex; flex-direction: column; min-width: 0; max-height: 80vh; animation: libIn 0.55s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes libIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.lib-tabs {
+  display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; align-self: flex-start; margin-bottom: 20px;
+  background: var(--w3-soft); border: 1px solid var(--w3-hair);
+}
+.lib-tab {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 9px; cursor: pointer;
+  font-family: var(--ui-display); font-weight: 600; font-size: 14px; color: var(--ui-2nd);
+  background: transparent; border: none; transition: color 0.15s ease, background 0.15s ease;
+}
+.lib-tab:hover { color: var(--ui-text); }
+.lib-tab.on { color: var(--ui-text); background: var(--w3-card); box-shadow: 0 1px 3px rgba(40, 30, 60, 0.12); }
+.lib-count { font-size: 11px; font-weight: 600; color: var(--ui-2nd); background: var(--w3-soft); border-radius: 999px; padding: 1px 7px; }
+.lib-tab.on .lib-count { background: var(--ui-accent-fill); color: #fff; }
+.lib-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px;
+  overflow-y: auto; min-height: 0; padding: 2px 8px 8px 2px;
+}
+.lib-empty { grid-column: 1 / -1; color: var(--ui-2nd); font-size: 14px; }
+.lib-card { display: flex; flex-direction: column; gap: 10px; cursor: pointer; text-align: left; background: none; border: none; padding: 0; min-width: 0; }
+.lib-thumb {
+  display: block; position: relative; width: 100%; aspect-ratio: 1 / 1.294; border-radius: 7px; overflow: hidden;
+  background: var(--w3-paper); border: 1px solid var(--w3-paper-edge);
+  box-shadow: 0 10px 26px -14px rgba(40, 30, 60, 0.42);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease;
+}
+.lib-card:hover .lib-thumb { transform: translateY(-3px); box-shadow: 0 20px 38px -16px rgba(40, 30, 60, 0.5); border-color: var(--w3-card-hover-hair); }
+.lib-cap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lib-cap-title { font-family: var(--ui-display); font-weight: 600; font-size: 13.5px; color: var(--ui-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-cap-meta { font-family: var(--ui-font); font-size: 12px; color: var(--ui-2nd); }
+
+/* Mini project preview — a simplified typeset paper. */
+.mini-paper { display: block; position: absolute; inset: 0; padding: 11% 10%; box-sizing: border-box; background: transparent; color: var(--w3-paper-ink); font-family: var(--ui-serif); container-type: inline-size; overflow: hidden; }
+.mp-title { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-align: center; font-weight: 600; font-size: 8.5cqw; line-height: 1.16; letter-spacing: -0.01em; }
+.mp-byline { display: block; width: 46%; height: 2.4cqw; margin: 5% auto 9%; border-radius: 2px; background: var(--w3-paper-edge); }
+.mp-para { display: flex; flex-direction: column; gap: 3.2cqw; margin-bottom: 8%; }
+.mp-line { display: block; height: 2.1cqw; border-radius: 2px; background: rgba(120, 110, 140, 0.22); }
+.mp-head { display: block; width: 38%; height: 3cqw; margin: 0 0 6%; border-radius: 2px; background: rgba(120, 110, 140, 0.42); }
+.mp-fig { display: flex; gap: 4cqw; justify-content: center; margin-top: 6%; }
+.mp-fig i { width: 9cqw; height: 9cqw; border-radius: 2px; display: block; }
+.mp-fig i:nth-child(1) { background: rgba(124, 58, 237, 0.88); }
+.mp-fig i:nth-child(2) { background: rgba(236, 72, 153, 0.82); }
+.mp-fig i:nth-child(3) { background: rgba(99, 102, 241, 0.82); }
+/* Mini beamer slide. */
+.mini-slide { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6cqw; padding: 12%; text-align: center; }
+.ms-title { font-family: var(--ui-display); font-weight: 700; font-size: 9cqw; line-height: 1.15; color: var(--w3-paper-ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ms-rule { width: 30%; height: 2.6cqw; border-radius: 2px; background: var(--ui-blue); }
+.ms-sub { width: 55%; height: 2.6cqw; border-radius: 2px; background: rgba(120, 110, 140, 0.3); }
+
+/* Mini design-page preview — faithful scaled render of the elements. */
+.mini-design { position: absolute; inset: 0; container-type: inline-size; overflow: hidden; }
 @media (max-width: 480px) { .tpl-grid { grid-template-columns: 1fr; } }
 
 /* Editor shell — the tint + faint dot grid sits on the outer shell (behind the

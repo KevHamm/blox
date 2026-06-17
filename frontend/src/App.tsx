@@ -1111,6 +1111,24 @@ export default function App() {
   useEffect(() => {
     if (phase === "welcome") setAutosave(loadAutosave());
   }, [phase]);
+  // Signed-in user (a stub: dev / 123). Persisted so a refresh stays signed in;
+  // when set, the welcome screen shows the user's library instead of the hero
+  // paper.
+  const [user, setUser] = useState<string | null>(() => {
+    try { return localStorage.getItem("blox-user"); } catch { return null; }
+  });
+  function login(u: string, p: string): boolean {
+    if (u === "dev" && p === "123") {
+      setUser("dev");
+      try { localStorage.setItem("blox-user", "dev"); } catch { /* ignore */ }
+      return true;
+    }
+    return false;
+  }
+  function logout() {
+    setUser(null);
+    try { localStorage.removeItem("blox-user"); } catch { /* ignore */ }
+  }
   // Dark mode for the whole app (welcome + editor chrome). Persisted and applied
   // as data-theme on <html> so scoped CSS re-skins everything; the document
   // paper itself stays white.
@@ -1257,6 +1275,9 @@ export default function App() {
             autosave={autosave}
             dark={dark}
             onToggleTheme={toggleTheme}
+            user={user}
+            onLogin={login}
+            onLogout={logout}
           />
         </div>
       )}
