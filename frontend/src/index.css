@@ -545,11 +545,19 @@ math-field::part(menu-toggle) {
 .lib-tab.on { color: var(--ui-text); background: var(--w3-card); box-shadow: 0 1px 3px rgba(40, 30, 60, 0.12); }
 .lib-count { font-size: 11px; font-weight: 600; color: var(--ui-2nd); background: var(--w3-soft); border-radius: 999px; padding: 1px 7px; }
 .lib-tab.on .lib-count { background: var(--ui-accent-fill); color: #fff; }
-.lib-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px;
-  overflow-y: auto; min-height: 0; padding: 2px 8px 8px 2px;
-}
-.lib-empty { grid-column: 1 / -1; color: var(--ui-2nd); font-size: 14px; }
+/* Scrolling body holds the collapsible class groups. */
+.lib-body { display: flex; flex-direction: column; gap: 20px; flex: 1; min-height: 0; overflow-y: auto; padding: 2px 10px 8px 2px; animation: libFade 0.35s ease; }
+@keyframes libFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.lib-group { display: flex; flex-direction: column; gap: 13px; }
+.lib-group-head { display: flex; align-items: center; gap: 9px; width: 100%; padding: 2px 0; cursor: pointer; background: none; border: none; text-align: left; }
+.lib-chevron { color: var(--ui-2nd); flex: 0 0 auto; transition: transform 0.18s ease, color 0.15s ease; }
+.lib-chevron.col { transform: rotate(-90deg); }
+.lib-group-title { font-family: var(--ui-display); font-weight: 600; font-size: 13px; letter-spacing: 0.02em; color: var(--ui-text); }
+.lib-group-count { font-size: 11px; font-weight: 600; color: var(--ui-2nd); background: var(--w3-soft); border: 1px solid var(--w3-hair); border-radius: 999px; padding: 1px 7px; }
+.lib-group-head:hover .lib-group-title { color: var(--ui-blue); }
+.lib-group-head:hover .lib-chevron { color: var(--ui-blue); }
+.lib-grid { display: grid; gap: 16px; }
+.lib-empty { color: var(--ui-2nd); font-size: 14px; }
 .lib-card { display: flex; flex-direction: column; gap: 10px; cursor: pointer; text-align: left; background: none; border: none; padding: 0; min-width: 0; }
 .lib-thumb {
   display: block; position: relative; width: 100%; aspect-ratio: 1 / 1.294; border-radius: 7px; overflow: hidden;
@@ -557,6 +565,8 @@ math-field::part(menu-toggle) {
   box-shadow: 0 10px 26px -14px rgba(40, 30, 60, 0.42);
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease;
 }
+/* Beamer slides are 4:3 landscape. */
+.lib-thumb.slide { aspect-ratio: 4 / 3; }
 .lib-card:hover .lib-thumb { transform: translateY(-3px); box-shadow: 0 20px 38px -16px rgba(40, 30, 60, 0.5); border-color: var(--w3-card-hover-hair); }
 .lib-cap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .lib-cap-title { font-family: var(--ui-display); font-weight: 600; font-size: 13.5px; color: var(--ui-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -813,25 +823,30 @@ math-field::part(menu-toggle) {
 /* Custom scrollbars for the editor side panels & document: a slim, rounded,
    inset pill that tints to the accent on hover and stays out of the way. */
 .ui-panel,
-.doc-area {
+.doc-area,
+.lib-scroll {
   scrollbar-width: thin;                       /* Firefox */
   scrollbar-color: rgba(76, 40, 120, 0.28) transparent;
 }
 :root[data-theme="dark"] .ui-panel,
-:root[data-theme="dark"] .doc-area {
+:root[data-theme="dark"] .doc-area,
+:root[data-theme="dark"] .lib-scroll {
   scrollbar-color: rgba(220, 210, 255, 0.22) transparent;
 }
 .ui-panel::-webkit-scrollbar,
-.doc-area::-webkit-scrollbar {
+.doc-area::-webkit-scrollbar,
+.lib-scroll::-webkit-scrollbar {
   width: 11px;
   height: 11px;
 }
 .ui-panel::-webkit-scrollbar-track,
-.doc-area::-webkit-scrollbar-track {
+.doc-area::-webkit-scrollbar-track,
+.lib-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 .ui-panel::-webkit-scrollbar-thumb,
-.doc-area::-webkit-scrollbar-thumb {
+.doc-area::-webkit-scrollbar-thumb,
+.lib-scroll::-webkit-scrollbar-thumb {
   background: rgba(76, 40, 120, 0.28);
   border-radius: 999px;
   border: 3px solid transparent;               /* inset the pill from the edge */
@@ -839,27 +854,32 @@ math-field::part(menu-toggle) {
   transition: background 0.15s ease;
 }
 .ui-panel:hover::-webkit-scrollbar-thumb,
-.doc-area:hover::-webkit-scrollbar-thumb {
+.doc-area:hover::-webkit-scrollbar-thumb,
+.lib-scroll:hover::-webkit-scrollbar-thumb {
   background: rgba(76, 40, 120, 0.42);
   background-clip: padding-box;
 }
 :root[data-theme="dark"] .ui-panel::-webkit-scrollbar-thumb,
-:root[data-theme="dark"] .doc-area::-webkit-scrollbar-thumb {
+:root[data-theme="dark"] .doc-area::-webkit-scrollbar-thumb,
+:root[data-theme="dark"] .lib-scroll::-webkit-scrollbar-thumb {
   background: rgba(220, 210, 255, 0.2);
   background-clip: padding-box;
 }
 :root[data-theme="dark"] .ui-panel:hover::-webkit-scrollbar-thumb,
-:root[data-theme="dark"] .doc-area:hover::-webkit-scrollbar-thumb {
+:root[data-theme="dark"] .doc-area:hover::-webkit-scrollbar-thumb,
+:root[data-theme="dark"] .lib-scroll:hover::-webkit-scrollbar-thumb {
   background: rgba(220, 210, 255, 0.32);
   background-clip: padding-box;
 }
 .ui-panel::-webkit-scrollbar-thumb:hover,
-.doc-area::-webkit-scrollbar-thumb:hover {
+.doc-area::-webkit-scrollbar-thumb:hover,
+.lib-scroll::-webkit-scrollbar-thumb:hover {
   background: var(--ui-blue);
   background-clip: padding-box;
 }
 .ui-panel::-webkit-scrollbar-corner,
-.doc-area::-webkit-scrollbar-corner {
+.doc-area::-webkit-scrollbar-corner,
+.lib-scroll::-webkit-scrollbar-corner {
   background: transparent;
 }
 .ui-panel h4 {
