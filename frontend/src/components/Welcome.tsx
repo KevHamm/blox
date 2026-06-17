@@ -8,6 +8,7 @@ import { parseProject, timeAgo, type BloxProject } from "../utils/persistence";
 interface WelcomeProps {
   onStart: (preset?: string, rect?: DOMRect) => void;
   onOpen: (project: BloxProject, rect?: DOMRect) => void;
+  onDesign: (kind: string, rect?: DOMRect) => void;
   autosave: BloxProject | null;
   dark: boolean;
   onToggleTheme: () => void;
@@ -20,6 +21,13 @@ const PRESETS = [
   { id: "beamer",  label: "Beamer",  desc: "A slide deck built from frames." },
   { id: "book",    label: "Book",    desc: "Multi-chapter with front and back matter." },
   { id: "wip",     label: "Sandbox", desc: "A long document to exercise pagination." }
+];
+
+// Free-form "design a page" types. Only the cover page is live today.
+const PAGE_TYPES = [
+  { id: "cover",        label: "Cover page",      desc: "A title / cover page — place text, logos and shapes anywhere.", enabled: true },
+  { id: "bibliography", label: "Bibliography",    desc: "A custom references page.",      enabled: false },
+  { id: "section",      label: "Section divider", desc: "A divider between sections.",    enabled: false }
 ];
 
 const META = ["No syntax", "True-to-size pages", "Compilable LaTeX export"];
@@ -61,11 +69,13 @@ function TemplateGlyph({ id }: { id: string }) {
   );
 }
 
-export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: WelcomeProps) {
+export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleTheme }: WelcomeProps) {
   const [picking, setPicking] = useState(false);
+  const [designing, setDesigning] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const paperRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const designRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const openRectRef = useRef<DOMRect | undefined>(undefined);
   const errTimer = useRef<number | undefined>(undefined);
@@ -124,6 +134,16 @@ export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: Welc
     return () => ctx.revert();
   }, [picking, reduce]);
 
+  // ── Design-type picker reveal — same one-unit fade as the template grid. ─
+  useEffect(() => {
+    if (!designing || reduce || !designRef.current) return;
+    const ctx = gsap.context(() => {
+      gsap.from(".picker-head", { y: 10, opacity: 0, duration: 0.55, ease: "power3.out" });
+      gsap.from(".tpl-grid", { y: 16, opacity: 0, duration: 0.65, ease: "power3.out", delay: 0.05 });
+    }, designRef);
+    return () => ctx.revert();
+  }, [designing, reduce]);
+
   function showOpenError(msg: string) {
     setOpenError(msg);
     window.clearTimeout(errTimer.current);
@@ -149,7 +169,7 @@ export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: Welc
       <input ref={fileRef} type="file" accept=".blox,application/json" style={{ display: "none" }} onChange={handleFileChosen} />
 
       <header className="hero-topbar">
-        <button className="hero-brand" onClick={() => setPicking(false)} aria-label="BLoX home">
+        <button className="hero-brand" onClick={() => { setPicking(false); setDesigning(false); }} aria-label="BLoX home">
           <Logo flip={false} />
         </button>
         <ThemeToggle dark={dark} onToggle={onToggleTheme} />
@@ -157,7 +177,7 @@ export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: Welc
 
       <main className="welcome3-stage">
         {/* ── HERO ── */}
-        <section className="hero" data-hidden={picking} aria-hidden={picking}>
+        <section className="hero" data-hidden={picking || designing} aria-hidden={picking || designing}>
           <div className="hero-copy">
             <div className="hero-eyebrow">
               <span className="hero-eyebrow-mark" />Visual&nbsp;LaTeX&nbsp;editor
@@ -178,6 +198,7 @@ export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: Welc
                 New document
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
               </button>
+              <button className="w3-btn w3-ghost" onClick={() => setDesigning(true)}>Design a page</button>
               <button className="w3-btn w3-ghost" onClick={openPicker}>Open project</button>
             </div>
 
@@ -241,7 +262,56 @@ export function Welcome({ onStart, onOpen, autosave, dark, onToggleTheme }: Welc
             ))}
           </div>
         </section>
+
+        {/* ── DESIGN-A-PAGE PICKER ── */}
+        <section ref={designRef} className="picker" data-hidden={!designing} aria-hidden={!designing}>
+          <div className="picker-head">
+            <button className="picker-back" onClick={() => setDesigning(false)} aria-label="Back">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+            </button>
+            <div>
+              <h2 className="picker-title">Design a page</h2>
+              <p className="picker-sub">Place anything anywhere — text, images and shapes — on a single page.</p>
+            </div>
+          </div>
+
+          <div className="tpl-grid">
+            {PAGE_TYPES.map((p) => (
+              <button
+                key={p.id}
+                className="tpl-card"
+                disabled={!p.enabled}
+                tabIndex={designing && p.enabled ? 0 : -1}
+                onClick={(e) => { if (p.enabled) onDesign(p.id, e.currentTarget.getBoundingClientRect()); }}
+              >
+                <span className="tpl-glyph"><PageTypeGlyph id={p.id} /></span>
+                <span className="tpl-text">
+                  <span className="tpl-label">{p.label}{!p.enabled && <span className="tpl-soon">Soon</span>}</span>
+                  <span className="tpl-desc">{p.desc}</span>
+                </span>
+                {p.enabled && (
+                  <span className="tpl-go" aria-hidden>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
       </main>
     </div>
+  );
+}
+
+// Minimal line-art per design-page type.
+function PageTypeGlyph({ id }: { id: string }) {
+  const s = { fill: "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  return (
+    <svg viewBox="0 0 36 48" width="30" height="40" aria-hidden>
+      <rect x="3" y="3" width="30" height="42" rx="2.5" {...s} />
+      {id === "cover" && <><rect x="9" y="14" width="18" height="9" rx="1" {...s} /><line x1="11" y1="30" x2="25" y2="30" {...s} /><line x1="13" y1="35" x2="23" y2="35" {...s} /></>}
+      {id === "bibliography" && <>{[16, 21, 26, 31, 36].map((y, i) => <line key={i} x1="9" y1={y} x2={i % 2 ? 22 : 27} y2={y} {...s} />)}</>}
+      {id === "section" && <><line x1="9" y1="24" x2="27" y2="24" {...s} /><rect x="13" y="20" width="10" height="8" rx="1" {...s} /></>}
+    </svg>
   );
 }

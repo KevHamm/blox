@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from backend.exporter import document_to_latex, export_bundle
+from backend.exporter import document_to_latex, export_bundle, design_to_latex, export_design_bundle
 
 
 app = FastAPI()
@@ -15,6 +15,11 @@ class ExportPayload(BaseModel):
     data: dict
     # Editor state living outside the doc tree: cls / title / columns / fontSizePx.
     meta: Optional[dict] = None
+
+class CoverPayload(BaseModel):
+    # A free-form design page (the "Design a page" cover editor) + its title.
+    design: dict
+    title: Optional[str] = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,4 +48,25 @@ def export_zip(payload: ExportPayload):
         content=buf.getvalue(),
         media_type="application/zip",
         headers={"Content-Disposition": 'attachment; filename="document.zip"'},
+    )
+
+
+@app.post("/export-cover", response_class=PlainTextResponse)
+def export_cover(payload: CoverPayload):
+    return design_to_latex(payload.design, payload.title)
+
+
+@app.post("/export-cover-zip")
+def export_cover_zip(payload: CoverPayload):
+    """The cover .tex plus every placed image decoded to a real file, zipped."""
+    tex, assets = export_design_bundle(payload.design, payload.title)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("cover.tex", tex)
+        for name, data in assets:
+            z.writestr(name, data)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="cover.zip"'},
     )

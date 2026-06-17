@@ -15,11 +15,14 @@ import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
 import {
   buildProject,
+  buildDesignProject,
   downloadProject,
   saveAutosave,
   loadAutosave,
   type BloxProject
 } from "./utils/persistence";
+import { CoverDesigner } from "./components/design/CoverDesigner";
+import { blankDesign } from "./types/design";
 
 import {
   DndContext,
@@ -45,6 +48,7 @@ import {
   PAGE_HEIGHT
 } from "./utils/pageConfig";
 import { templateFor, templateDoc, type TemplateLayout } from "./utils/templates";
+import { DOC_FONTS, docFontCss } from "./utils/fonts";
 import {
   addFootnoteToWord,
   addFootnoteAtOffset,
@@ -86,17 +90,6 @@ const DELETE_LABELS: Record<string, string> = {
   figure: "figure",
   frame: "slide"
 };
-
-// Document body fonts offered in the Typography panel. `css` overrides the
-// document area's --sans; "cm" is the LaTeX default (Computer Modern via KaTeX).
-const DOC_FONTS = [
-  { id: "cm",        label: "Computer Modern", css: '"KaTeX_Main", Georgia, serif' },
-  { id: "times",     label: "Times",           css: '"Times New Roman", Times, serif' },
-  { id: "palatino",  label: "Palatino",        css: '"Palatino Linotype", "Book Antiqua", Palatino, serif' },
-  { id: "georgia",   label: "Georgia",         css: 'Georgia, "Times New Roman", serif' },
-  { id: "helvetica", label: "Helvetica",       css: 'Helvetica, Arial, sans-serif' }
-];
-const docFontCss = (id: string) => DOC_FONTS.find((f) => f.id === id)?.css ?? DOC_FONTS[0].css;
 
 // A compact labelled integer field (px) used for the 2×2 margins grid.
 function MarginField({ label, value, min, max, onChange }:
@@ -1109,6 +1102,9 @@ export default function App() {
   // A saved project being reopened (from a .blox file or the autosave slot);
   // null means the editor starts from the template's fresh content.
   const [project, setProject] = useState<BloxProject | null>(null);
+  // Which editor the session uses: the flowing document editor or the free-form
+  // page designer ("Design a page").
+  const [mode, setMode] = useState<"doc" | "design">("doc");
   // The autosaved session offered on the welcome screen, re-read every time the
   // welcome screen shows (it changes while editing).
   const [autosave, setAutosave] = useState<BloxProject | null>(null);
@@ -1140,13 +1136,22 @@ export default function App() {
 
   function start(preset?: string, rect?: DOMRect) {
     setProject(null);
+    setMode("doc");
     setTemplate(templateFor(preset));
     beginSession(rect);
   }
 
-  // Reopen a saved project: same morph, but the editor seeds from the project.
+  // Open the free-form page designer on a fresh page of the chosen kind.
+  function startDesign(kind: string, rect?: DOMRect) {
+    setProject(buildDesignProject("Cover Page", blankDesign(kind === "cover" ? "cover" : "cover")));
+    setMode("design");
+    beginSession(rect);
+  }
+
+  // Reopen a saved project: same morph, routed to the editor its kind needs.
   function openProject(p: BloxProject, rect?: DOMRect) {
     setProject(p);
+    setMode(p.kind === "design" ? "design" : "doc");
     setTemplate(templateFor(p.cls));
     beginSession(rect);
   }
@@ -1215,7 +1220,15 @@ export default function App() {
 
   return (
     <>
-      {showEditor && (
+      {showEditor && (mode === "design" ? (
+        <CoverDesigner
+          sidebarsIn={phase === "editor"}
+          project={project}
+          onBack={goBack}
+          dark={dark}
+          onToggleTheme={toggleTheme}
+        />
+      ) : (
         <Editor
           sidebarsIn={phase === "editor"}
           template={template}
@@ -1224,7 +1237,7 @@ export default function App() {
           dark={dark}
           onToggleTheme={toggleTheme}
         />
-      )}
+      ))}
 
       {phase !== "editor" && (
         <div
@@ -1240,6 +1253,7 @@ export default function App() {
           <Welcome
             onStart={start}
             onOpen={openProject}
+            onDesign={startDesign}
             autosave={autosave}
             dark={dark}
             onToggleTheme={toggleTheme}

@@ -4,6 +4,7 @@
 // figure images ride along inside it as data URLs) and the right-sidebar image
 // gallery. The same object is autosaved to localStorage while editing.
 import type { DocumentNode } from "../types/document";
+import type { DesignPage } from "../types/design";
 
 export type ProjectImage = { id: string; src: string; name: string };
 
@@ -25,11 +26,17 @@ export interface BloxProject {
   app: "blox";
   version: 1;
   savedAt: string; // ISO timestamp
-  cls: string;     // template class (article / report / letter / beamer / book / wip)
+  // "doc" (the flowing document editor) or "design" (the free-form page
+  // designer). Absent on older files, which are always documents.
+  kind?: "doc" | "design";
+  cls: string;     // template class (article / report / letter / beamer / book / wip); "coverpage" for designs
   title: string;
-  layout: ProjectLayout;
-  doc: DocumentNode;
-  images: ProjectImage[];
+  // Document projects carry these; design projects carry `design` instead.
+  layout?: ProjectLayout;
+  doc?: DocumentNode;
+  images?: ProjectImage[];
+  // Free-form design page (only on design projects).
+  design?: DesignPage;
 }
 
 const AUTOSAVE_KEY = "blox-autosave";
@@ -41,17 +48,35 @@ export function buildProject(
   doc: DocumentNode,
   images: ProjectImage[]
 ): BloxProject {
-  return { app: "blox", version: 1, savedAt: new Date().toISOString(), cls, title, layout, doc, images };
+  return { app: "blox", version: 1, savedAt: new Date().toISOString(), kind: "doc", cls, title, layout, doc, images };
+}
+
+/** A free-form design-page project (e.g. a designed cover page). */
+export function buildDesignProject(title: string, design: DesignPage): BloxProject {
+  return { app: "blox", version: 1, savedAt: new Date().toISOString(), kind: "design", cls: "coverpage", title, design };
 }
 
 /** Parse + validate project JSON. Throws on anything that isn't a Blox project. */
 export function parseProject(text: string): BloxProject {
   const p = JSON.parse(text);
-  if (!p || p.app !== "blox" || typeof p.cls !== "string" ||
-      !p.doc || typeof p.doc !== "object" || !Array.isArray(p.doc.children)) {
+  if (!p || p.app !== "blox") throw new Error("Not a Blox project file");
+  p.title = typeof p.title === "string" ? p.title : "";
+
+  // Design project: validate the free-form page payload.
+  if (p.kind === "design" || (p.design && typeof p.design === "object")) {
+    if (!p.design || typeof p.design !== "object" || !Array.isArray(p.design.elements)) {
+      throw new Error("Not a Blox project file");
+    }
+    p.kind = "design";
+    p.cls = typeof p.cls === "string" ? p.cls : "coverpage";
+    return p as BloxProject;
+  }
+
+  // Document project (default / legacy files).
+  if (typeof p.cls !== "string" || !p.doc || typeof p.doc !== "object" || !Array.isArray(p.doc.children)) {
     throw new Error("Not a Blox project file");
   }
-  p.title = typeof p.title === "string" ? p.title : "";
+  p.kind = "doc";
   p.layout = p.layout && typeof p.layout === "object" ? p.layout : {};
   p.images = Array.isArray(p.images) ? p.images : [];
   return p as BloxProject;

@@ -595,3 +595,130 @@ def export_bundle(doc, meta=None, bundle_assets=True):
 def document_to_latex(doc, meta=None) -> str:
     tex, _ = export_bundle(doc, meta, bundle_assets=False)
     return tex
+
+
+# --- Free-form design pages (the "Design a page" cover editor) -----------
+# A design page places elements (text / image / rect / line) at absolute pixel
+# coordinates from the page's top-left corner. We mirror the overlay-shape
+# machinery: geometry sizes the paper to the page, eso-pic's per-page foreground
+# hook drops a TikZ overlay anchored at the page's lower-left corner, and every
+# element is converted to bp coordinates (1 px = 0.75 bp, page chosen at 96 dpi).
+
+# DOC_FONTS id → a PSNFSS family code that ships with base LaTeX (no extra
+# package). Georgia has no LaTeX equivalent, so it falls back to Times; Computer
+# Modern is the default family (None ⇒ leave the family alone).
+_DESIGN_FONT = {"times": "ptm", "palatino": "ppl", "helvetica": "phv", "georgia": "ptm", "cm": None}
+
+
+def _esc_plain(text: str) -> str:
+    """Escape text for a TikZ node body, turning newlines into forced breaks."""
+    out = []
+    for ch in (text or ""):
+        out.append("\\\\ " if ch == "\n" else _esc_char(ch))
+    return "".join(out)
+
+
+def _design_el_tikz(el, page_h_bp: float, index: int, assets) -> str:
+    x, y = _num(el.get("x")), _num(el.get("y"))
+    w, h = _num(el.get("w")), _num(el.get("h"))
+    X = round(x * _BP, 2)
+    Y_top = round(page_h_bp - y * _BP, 2)
+    Wbp, Hbp = round(w * _BP, 2), round(h * _BP, 2)
+    kind = el.get("kind")
+
+    if kind == "rect":
+        opts = []
+        if el.get("fill"):
+            opts.append(f"fill={_color_name(el['fill'])}")
+        sw = _num(el.get("strokeWidth"))
+        if sw > 0:
+            opts += [f"draw={_color_name(el.get('stroke', '#111111'))}", f"line width={round(sw * _BP, 2)}bp"]
+        if not opts:
+            opts.append("draw=none")
+        return f"\\draw[{', '.join(opts)}] ({X},{round(Y_top - Hbp, 2)}) rectangle ({round(X + Wbp, 2)},{Y_top});"
+
+    if kind == "line":
+        sw = max(_num(el.get("strokeWidth")) or 1.0, 0.1)
+        return (f"\\draw[draw={_color_name(el.get('stroke', '#111111'))}, line width={round(sw * _BP, 2)}bp] "
+                f"({X},{Y_top}) -- ({round(X + Wbp, 2)},{round(Y_top - Hbp, 2)});")
+
+    if kind == "image":
+        name = f"image-{index + 1}"
+        data, ext = (None, None) if assets is None else _decode_image(el.get("src"))
+        if data is not None:
+            fname = f"{name}.{ext}"
+            assets.append((fname, data))
+        else:
+            fname = name  # placeholder the user supplies next to the .tex
+        inc = f"\\includegraphics[width={Wbp}bp,height={Hbp}bp]{{{fname}}}"
+        return f"\\node[anchor=north west, inner sep=0pt] at ({X},{Y_top}) {{{inc}}};"
+
+    # text
+    align = {"left": "left", "center": "center", "right": "right"}.get(el.get("align", "left"), "left")
+    fs = round(max(_num(el.get("fontSize")) or 24.0, 1.0) * _BP, 2)
+    bl = round(fs * 1.2, 2)
+    fam = _DESIGN_FONT.get(el.get("fontFamily", "cm"))
+    font_cmd = (f"\\fontfamily{{{fam}}}" if fam else "") + f"\\fontsize{{{fs}}}{{{bl}}}\\selectfont"
+    body = _esc_plain(el.get("text", ""))
+    if el.get("underline"):
+        body = r"\underline{" + body + "}"
+    if el.get("italic"):
+        body = r"\textit{" + body + "}"
+    if el.get("bold"):
+        body = r"\textbf{" + body + "}"
+    return (f"\\node[anchor=north west, text width={Wbp}bp, align={align}, inner sep=0pt, "
+            f"text={_color_name(el.get('color', '#111111'))}, font={{{font_cmd}}}] "
+            f"at ({X},{Y_top}) {{{body}}};")
+
+
+def export_design_bundle(design, title=None, bundle_assets=True):
+    """Serialise a design page → ``(tex, assets)`` — a one-page, compilable
+    titlepage whose elements are positioned by a single TikZ overlay."""
+    design = design or {}
+    elements = design.get("elements", []) or []
+    pw = _num(design.get("pageWidth")) or 816.0
+    ph = _num(design.get("pageHeight")) or 1056.0
+    pw_bp, ph_bp = round(pw * _BP, 2), round(ph * _BP, 2)
+    bg = design.get("bg") or "#ffffff"
+
+    colors = {_color_name(bg): bg.lstrip("#").upper()}
+    for el in elements:
+        for key in ("color", "fill", "stroke"):
+            c = el.get(key)
+            if c:
+                colors[_color_name(c)] = c.lstrip("#").upper()
+    color_lines = [f"\\definecolor{{{name}}}{{HTML}}{{{hexv}}}" for name, hexv in sorted(colors.items())]
+
+    assets = []
+    draws = [f"\\fill[{_color_name(bg)}] (0,0) rectangle ({pw_bp},{ph_bp});"]
+    for i, el in enumerate(elements):
+        if not el.get("kind"):
+            continue
+        draws.append(_design_el_tikz(el, ph_bp, i, assets if bundle_assets else None))
+
+    hook = ["\\AddToShipoutPictureFG{%", "  \\AtPageLowerLeft{%", "    \\begin{tikzpicture}[overlay,x=1bp,y=1bp]"]
+    hook += ["      " + d for d in draws]
+    hook += ["    \\end{tikzpicture}}%", "}"]
+
+    preamble = [
+        "\\documentclass{article}",
+        "\\usepackage[utf8]{inputenc}",
+        f"\\usepackage[paperwidth={pw_bp}bp,paperheight={ph_bp}bp,margin=0pt]{{geometry}}",
+        "\\usepackage{graphicx}",
+        "\\usepackage{xcolor}",
+        "\\usepackage{tikz}",
+        "\\usetikzlibrary{arrows.meta}",
+        "\\usepackage{eso-pic}",
+        "\\pagestyle{empty}",
+    ]
+    preamble += color_lines
+    preamble += hook
+
+    body = ["\\begin{document}", "\\null", "\\end{document}"]
+    tex = "\n".join(preamble) + "\n\n" + "\n".join(body) + "\n"
+    return tex, assets
+
+
+def design_to_latex(design, title=None) -> str:
+    tex, _ = export_design_bundle(design, title, bundle_assets=False)
+    return tex
