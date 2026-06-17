@@ -206,6 +206,10 @@ export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleThe
       {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onLogin={tryLogin} />}
 
       <main className="welcome3-stage">
+        {user ? (
+          <LibraryPanel projects={library.projects} pages={library.pages} onOpen={onOpen} onStart={onStart} />
+        ) : (
+        <>
         {/* ── HERO ── */}
         <section className="hero" data-hidden={picking || designing} aria-hidden={picking || designing}>
           <div className="hero-copy">
@@ -253,15 +257,11 @@ export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleThe
             </div>
           </div>
 
-          {user ? (
-            <LibraryPanel projects={library.projects} pages={library.pages} onOpen={onOpen} />
-          ) : (
-            <div className="paper-stage">
-              <div ref={paperRef} className="paper-tilt">
-                <PaperMockup />
-              </div>
+          <div className="paper-stage">
+            <div ref={paperRef} className="paper-tilt">
+              <PaperMockup />
             </div>
-          )}
+          </div>
         </section>
 
         {/* ── TEMPLATE PICKER ── */}
@@ -332,6 +332,8 @@ export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleThe
             ))}
           </div>
         </section>
+        </>
+        )}
       </main>
     </div>
   );

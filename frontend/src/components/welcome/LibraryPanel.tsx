@@ -8,122 +8,220 @@ const CLASS_LABEL: Record<string, string> = {
   beamer: "Beamer", article: "Article", report: "Report",
   book: "Book", letter: "Letter", wip: "Sandbox"
 };
-const CLASS_ORDER = ["beamer", "article", "report", "book", "letter", "wip"];
-const classOrder = (cls: string) => { const i = CLASS_ORDER.indexOf(cls); return i < 0 ? 99 : i; };
 const byRecent = (a: BloxProject, b: BloxProject) => Date.parse(b.savedAt) - Date.parse(a.savedAt);
 
-// A collapsible class section. Beamer slides are 4:3 landscape, so that group
-// renders fewer, wider cards; everything else is portrait, three across.
-type Group = { key: string; label: string; items: BloxProject[]; slide: boolean; cols: number };
+// A4 / US-Letter document types offered by "Start from empty". (Beamer skips
+// this step and goes straight to the editor.)
+const DOC_TYPES = [
+  { cls: "report", label: "Report", desc: "Title page, chapters & sections." },
+  { cls: "article", label: "Article", desc: "A single-column paper." },
+  { cls: "book", label: "Book", desc: "Multi-chapter, front & back matter." }
+];
 
-function projectGroups(projects: BloxProject[]): Group[] {
-  const by = new Map<string, BloxProject[]>();
-  for (const p of projects) {
-    const k = p.cls || "article";
-    if (!by.has(k)) by.set(k, []);
-    by.get(k)!.push(p);
-  }
-  return [...by.entries()]
-    .sort((a, b) => classOrder(a[0]) - classOrder(b[0]))
-    .map(([cls, items]) => ({
-      key: cls, label: CLASS_LABEL[cls] ?? cls,
-      items: items.slice().sort(byRecent),
-      slide: cls === "beamer", cols: cls === "beamer" ? 2 : 3
-    }));
-}
-
-function pageGroups(pages: BloxProject[]): Group[] {
-  if (!pages.length) return [];
-  return [{ key: "cover", label: "Cover pages", items: pages.slice().sort(byRecent), slide: false, cols: 3 }];
-}
-
-// The signed-in welcome panel: tabs to switch between previews of saved Projects
-// (flowing documents, grouped by class) and Pages (free-form design pages). Each
-// class section is collapsible; clicking a preview reopens it via onOpen.
+// The signed-in workspace: a centered page with quick-access "Last edited" at
+// the top and the user's projects below — A4/US documents and Beamer
+// presentations (each fronted by a New project / Import button stack), then the
+// design Pages. "New project" slides the listing aside for the create flow.
 export function LibraryPanel({
-  projects, pages, onOpen
+  projects, pages, onOpen, onStart
 }: {
   projects: BloxProject[];
   pages: BloxProject[];
   onOpen: (project: BloxProject, rect?: DOMRect) => void;
+  onStart: (cls: string, rect?: DOMRect) => void;
 }) {
-  const [tab, setTab] = useState<"projects" | "pages">("projects");
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const groups = tab === "projects" ? projectGroups(projects) : pageGroups(pages);
+  const a4 = projects.filter((p) => p.cls !== "beamer").slice().sort(byRecent);
+  const beamer = projects.filter((p) => p.cls === "beamer").slice().sort(byRecent);
+  const recent = [...projects, ...pages].slice().sort(byRecent).slice(0, 6);
 
-  const toggle = (key: string) => setCollapsed((prev) => {
-    const id = `${tab}:${key}`;
-    const next = new Set(prev);
-    next.has(id) ? next.delete(id) : next.add(id);
-    return next;
-  });
+  // Create flow: browse → new (Start from empty / Browse templates) → templates
+  // (A4/US type choice). Beamer's "Start from empty" jumps straight to the editor.
+  const [flow, setFlow] = useState<"browse" | "new" | "templates">("browse");
+  const [flowKind, setFlowKind] = useState<"doc" | "beamer">("doc");
+  const flowIndex = flow === "browse" ? 0 : flow === "new" ? 1 : 2;
+
+  const rectOf = (e: React.MouseEvent) => e.currentTarget.getBoundingClientRect();
+  function openNew(kind: "doc" | "beamer") { setFlowKind(kind); setFlow("new"); }
+  function startEmpty(e: React.MouseEvent) {
+    if (flowKind === "beamer") onStart("beamer", rectOf(e));
+    else setFlow("templates");
+  }
 
   return (
-    <div className="library-panel">
-      <div className="lib-tabs" role="tablist">
-        <button role="tab" aria-selected={tab === "projects"} className={`lib-tab${tab === "projects" ? " on" : ""}`} onClick={() => setTab("projects")}>
-          Projects<span className="lib-count">{projects.length}</span>
-        </button>
-        <button role="tab" aria-selected={tab === "pages"} className={`lib-tab${tab === "pages" ? " on" : ""}`} onClick={() => setTab("pages")}>
-          Pages<span className="lib-count">{pages.length}</span>
-        </button>
-      </div>
+    <div className="workspace">
+      {/* Quick access — most recently edited items. */}
+      <section className="ws-recent">
+        <h2 className="ws-h">Last edited</h2>
+        <div className="ws-recent-row lib-scroll">
+          {recent.map((item) => <RecentCard key={item.savedAt + (item.title || "")} item={item} onOpen={onOpen} />)}
+        </div>
+      </section>
 
-      <div className="lib-body lib-scroll" key={tab}>
-        {groups.length === 0 && <div className="lib-empty">Nothing here yet.</div>}
-        {groups.map((g) => {
-          const isCol = collapsed.has(`${tab}:${g.key}`);
-          return (
-            <section className="lib-group" key={g.key}>
-              <button className="lib-group-head" onClick={() => toggle(g.key)} aria-expanded={!isCol}>
-                <svg className={`lib-chevron${isCol ? " col" : ""}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-                <span className="lib-group-title">{g.label}</span>
-                <span className="lib-group-count">{g.items.length}</span>
-              </button>
-              {!isCol && (
-                <div className={`lib-grid${g.slide ? " slide" : ""}`} style={{ gridTemplateColumns: `repeat(${g.cols}, minmax(0, 1fr))` }}>
-                  {g.items.map((item) => (
-                    <LibCard key={item.savedAt + (item.title || "")} item={item} tab={tab} slide={g.slide} onOpen={onOpen} />
-                  ))}
+      {/* The listing slides aside (track) for the create flow. */}
+      <div className="ws-flow">
+        <div className="ws-track" style={{ transform: `translateX(-${flowIndex * 100}%)` }}>
+          {/* 0 — the project listing */}
+          <div className="ws-panel ws-browse lib-scroll" aria-hidden={flow !== "browse"}>
+            <Section title="Documents">
+              <div className="ws-grid">
+                <NewStack onNew={() => openNew("doc")} />
+                {a4.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={onOpen} />)}
+              </div>
+            </Section>
+            <Section title="Presentations">
+              <div className="ws-grid slide">
+                <NewStack slide onNew={() => openNew("beamer")} />
+                {beamer.map((p) => <ItemCard key={p.savedAt + p.title} item={p} slide onOpen={onOpen} />)}
+              </div>
+            </Section>
+            {pages.length > 0 && (
+              <Section title="Pages">
+                <div className="ws-grid">
+                  {pages.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={onOpen} />)}
                 </div>
-              )}
-            </section>
-          );
-        })}
+              </Section>
+            )}
+          </div>
+
+          {/* 1 — start options */}
+          <div className="ws-panel ws-center" aria-hidden={flow !== "new"}>
+            <div className="ws-flowcard">
+              <button className="ws-back" onClick={() => setFlow("browse")} aria-label="Back">
+                <Chevron /> Back
+              </button>
+              <h2 className="ws-flow-title">New {flowKind === "beamer" ? "presentation" : "project"}</h2>
+              <p className="ws-flow-sub">How would you like to start?</p>
+              <div className="ws-options">
+                <button className="ws-option" onClick={startEmpty}>
+                  <span className="ws-option-h">Start from empty</span>
+                  <span className="ws-option-d">{flowKind === "beamer" ? "A blank slide deck." : "A blank document — you pick the type."}</span>
+                </button>
+                <button className="ws-option" disabled>
+                  <span className="ws-option-h">Browse templates</span>
+                  <span className="ws-option-d">Coming soon.</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 2 — A4/US document type */}
+          <div className="ws-panel ws-center" aria-hidden={flow !== "templates"}>
+            <div className="ws-flowcard">
+              <button className="ws-back" onClick={() => setFlow("new")} aria-label="Back">
+                <Chevron /> Back
+              </button>
+              <h2 className="ws-flow-title">Choose a document type</h2>
+              <p className="ws-flow-sub">All are A4 / US-Letter sized.</p>
+              <div className="ws-typerow">
+                {DOC_TYPES.map((t) => (
+                  <button key={t.cls} className="ws-type" onClick={(e) => onStart(t.cls, rectOf(e))}>
+                    <span className="ws-type-thumb"><TypeGlyph cls={t.cls} /></span>
+                    <span className="ws-type-label">{t.label}</span>
+                    <span className="ws-type-desc">{t.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function LibCard({
-  item, tab, slide, onOpen
-}: {
-  item: BloxProject; tab: "projects" | "pages"; slide: boolean;
-  onOpen: (project: BloxProject, rect?: DOMRect) => void;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="ws-section">
+      <h2 className="ws-h">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+// The stacked New project (top) / Import (bottom) buttons — each half the height
+// of a document thumbnail, the full thumbnail width. Sits in the grid's first
+// cell, so `slide` matches the beamer thumbnails' 4:3 box.
+function NewStack({ slide, onNew }: { slide?: boolean; onNew: () => void }) {
+  return (
+    <div className={`ws-newstack${slide ? " slide" : ""}`}>
+      <button className="ws-newbtn primary" onClick={onNew}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        New project
+      </button>
+      <button className="ws-newbtn ghost" disabled title="Coming soon">Import</button>
+    </div>
+  );
+}
+
+function ItemCard({ item, slide, onOpen }: { item: BloxProject; slide?: boolean; onOpen: (p: BloxProject, rect?: DOMRect) => void }) {
+  const design = item.kind === "design" ? item.design : undefined;
   return (
     <button
       className="lib-card"
       title={`Open “${item.title || "Untitled"}”`}
-      onClick={(e) => onOpen(item, e.currentTarget.getBoundingClientRect())}
+      onClick={(e) => { const t = e.currentTarget.querySelector(".lib-thumb"); onOpen(item, (t ?? e.currentTarget).getBoundingClientRect()); }}
     >
-      <span className={`lib-thumb${slide ? " slide" : ""}`} style={tab === "pages" && item.design ? { background: item.design.bg } : undefined}>
-        {tab === "projects" ? <ProjectThumb project={item} /> : item.design && <PageThumb design={item.design} />}
+      <span className={`lib-thumb${slide ? " slide" : ""}`} style={design ? { background: design.bg } : undefined}>
+        {design ? <PageThumb design={design} /> : <ProjectThumb project={item} />}
       </span>
       <span className="lib-cap">
         <span className="lib-cap-title">{item.title || "Untitled"}</span>
-        <span className="lib-cap-meta">
-          {tab === "projects" ? (CLASS_LABEL[item.cls] ?? "Document") : "Cover page"} · {timeAgo(item.savedAt)}
-        </span>
+        <span className="lib-cap-meta">{design ? "Cover page" : (CLASS_LABEL[item.cls] ?? "Document")} · {timeAgo(item.savedAt)}</span>
       </span>
     </button>
   );
 }
 
+// A compact, fixed-height card for the "Last edited" strip (mixed aspect ratios
+// align by height).
+function RecentCard({ item, onOpen }: { item: BloxProject; onOpen: (p: BloxProject, rect?: DOMRect) => void }) {
+  const design = item.kind === "design" ? item.design : undefined;
+  const slide = item.kind !== "design" && item.cls === "beamer";
+  return (
+    <button
+      className="ws-recent-card"
+      title={`Open “${item.title || "Untitled"}”`}
+      onClick={(e) => { const t = e.currentTarget.querySelector(".lib-thumb"); onOpen(item, (t ?? e.currentTarget).getBoundingClientRect()); }}
+    >
+      <span className={`lib-thumb${slide ? " slide" : ""}`} style={design ? { background: design.bg } : undefined}>
+        {design ? <PageThumb design={design} /> : <ProjectThumb project={item} />}
+      </span>
+      <span className="ws-recent-title">{item.title || "Untitled"}</span>
+      <span className="ws-recent-when">{timeAgo(item.savedAt)}</span>
+    </button>
+  );
+}
+
+function Chevron() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="15 6 9 12 15 18" /></svg>;
+}
+
+function TypeGlyph({ cls }: { cls: string }) {
+  const s = { fill: "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  if (cls === "book") {
+    return (
+      <svg viewBox="0 0 40 40" width="30" height="30" aria-hidden>
+        <path d="M20 8c-3.5-2.2-7.5-2.2-12-1.1v24c4.5-1.1 8.5-1.1 12 1.1 3.5-2.2 7.5-2.2 12-1.1v-24c-4.5-1.1-8.5-1.1-12 1.1Z" {...s} />
+        <line x1="20" y1="8" x2="20" y2="32" {...s} />
+      </svg>
+    );
+  }
+  const rows: Record<string, [number, number][]> = {
+    article: [[10, 17], [10, 21], [10, 25], [10, 29], [10, 33]],
+    report: [[10, 19], [10, 24], [10, 28], [10, 32], [10, 36]]
+  };
+  const r = rows[cls] ?? rows.article;
+  return (
+    <svg viewBox="0 0 36 48" width="28" height="36" aria-hidden>
+      <rect x="3" y="3" width="30" height="42" rx="2.5" {...s} />
+      {cls === "report" && <rect x="10" y="9" width="14" height="5" rx="1" {...s} />}
+      {r.map(([x, y], i) => <line key={i} x1={x} y1={y} x2={x + 16} y2={y} {...s} opacity={0.7} />)}
+    </svg>
+  );
+}
+
 // A simplified typeset-paper preview, echoing the welcome hero paper. Beamer
-// projects render as a 4:3 title slide instead of a portrait page.
+// projects render as a 4:3 title slide.
 function ProjectThumb({ project }: { project: BloxProject }) {
   if (project.cls === "beamer") {
     return (
@@ -146,9 +244,7 @@ function ProjectThumb({ project }: { project: BloxProject }) {
   );
 }
 
-// A faithful, scaled-down render of a design page: each absolutely-positioned
-// element placed by percentage of the page, text sized in cqw so it scales with
-// the thumbnail. The sheet is a container (container-type: inline-size).
+// A faithful, scaled-down render of a design page.
 function PageThumb({ design }: { design: DesignPage }) {
   const { pageWidth: W, pageHeight: H, elements } = design;
   const pc = (v: number, total: number) => `${(v / total) * 100}%`;
@@ -187,7 +283,6 @@ function Element({ el, W, H, pc }: { el: DesignElement; W: number; H: number; pc
       boxSizing: "border-box"
     }} />;
   }
-  // line — drawn as a thin bar (seed lines are horizontal rules).
   return <span style={{
     ...box, height: `${Math.max((el.strokeWidth ?? 2) / H * 100, 0.4)}%`,
     background: el.stroke ?? "#111", display: "block", minHeight: "1px"
