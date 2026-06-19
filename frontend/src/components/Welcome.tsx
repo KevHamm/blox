@@ -1,12 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ChangeEvent, MouseEvent } from "react";
 import gsap from "gsap";
 import { Logo, ThemeToggle } from "./chrome";
 import { PaperMockup } from "./welcome/PaperMockup";
 import { LoginModal } from "./welcome/LoginModal";
 import { LibraryPanel } from "./welcome/LibraryPanel";
 import { getLibrary } from "../utils/library";
-import { parseProject, timeAgo, type BloxProject } from "../utils/persistence";
+import { type BloxProject } from "../utils/persistence";
 
 interface WelcomeProps {
   onStart: (preset?: string, rect?: DOMRect) => void;
@@ -75,7 +74,7 @@ function TemplateGlyph({ id }: { id: string }) {
   );
 }
 
-export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleTheme, user, onLogin, onLogout }: WelcomeProps) {
+export function Welcome({ onStart, onOpen, onDesign, dark, onToggleTheme, user, onLogin, onLogout }: WelcomeProps) {
   const [picking, setPicking] = useState(false);
   const [designing, setDesigning] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -91,10 +90,6 @@ export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleThe
   const paperRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const designRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const openRectRef = useRef<DOMRect | undefined>(undefined);
-  const errTimer = useRef<number | undefined>(undefined);
-  const [openError, setOpenError] = useState<string | null>(null);
 
   const reduce = useRef(
     typeof window !== "undefined" &&
@@ -159,45 +154,19 @@ export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleThe
     return () => ctx.revert();
   }, [designing, reduce]);
 
-  function showOpenError(msg: string) {
-    setOpenError(msg);
-    window.clearTimeout(errTimer.current);
-    errTimer.current = window.setTimeout(() => setOpenError(null), 5000);
-  }
-  async function handleFileChosen(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    try {
-      onOpen(parseProject(await file.text()), openRectRef.current);
-    } catch {
-      showOpenError("That file doesn’t look like a Blox project (.blox).");
-    }
-  }
-  function openPicker(e: MouseEvent<HTMLButtonElement>) {
-    openRectRef.current = e.currentTarget.getBoundingClientRect();
-    fileRef.current?.click();
-  }
-
   return (
     <div ref={rootRef} className="welcome3">
-      <input ref={fileRef} type="file" accept=".blox,application/json" style={{ display: "none" }} onChange={handleFileChosen} />
-
       <header className="hero-topbar">
         <button className="hero-brand" onClick={() => { setPicking(false); setDesigning(false); }} aria-label="BLoX home">
           <Logo flip={false} />
         </button>
         <div className="hero-topbar-right">
-          {user ? (
+          {user && (
             <div className="user-chip">
               <span className="user-avatar" aria-hidden>{user.charAt(0).toUpperCase()}</span>
               <span className="user-name">{user}</span>
               <button className="user-logout" onClick={onLogout} title="Sign out">Sign out</button>
             </div>
-          ) : (
-            <button className="login-btn" onClick={() => setLoginOpen(true)}>
-              L<span className="login-o">o</span>GIN
-            </button>
           )}
           <ThemeToggle dark={dark} onToggle={onToggleTheme} />
         </div>
@@ -207,7 +176,7 @@ export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleThe
 
       <main className="welcome3-stage">
         {user ? (
-          <LibraryPanel projects={library.projects} pages={library.pages} onOpen={onOpen} onStart={onStart} />
+          <LibraryPanel projects={library.projects} pages={library.pages} onOpen={onOpen} onStart={onStart} onDesign={onDesign} />
         ) : (
         <>
         {/* ── HERO ── */}
@@ -228,32 +197,16 @@ export function Welcome({ onStart, onOpen, onDesign, autosave, dark, onToggleThe
             </p>
 
             <div className="hero-actions">
-              <button className="w3-btn w3-primary" onClick={() => setPicking(true)}>
-                New document
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+              <button className="login-btn hero-login" onClick={() => setLoginOpen(true)}>
+                L<span className="login-o">o</span>GIN
               </button>
-              <button className="w3-btn w3-ghost" onClick={() => setDesigning(true)}>Design a page</button>
-              <button className="w3-btn w3-ghost" onClick={openPicker}>Open project</button>
+              <button className="w3-btn w3-ghost" disabled>How it works</button>
             </div>
 
             <div className="hero-foot">
-              {openError ? (
-                <span className="hero-error">{openError}</span>
-              ) : autosave ? (
-                <button
-                  className="hero-resume"
-                  onClick={(e) => onOpen(autosave, e.currentTarget.getBoundingClientRect())}
-                  title="Restore the autosaved session"
-                >
-                  <span className="hero-resume-dot" />
-                  Resume “{autosave.title || "Untitled"}”
-                  <span className="hero-resume-when">· {timeAgo(autosave.savedAt)}</span>
-                </button>
-              ) : (
-                <ul className="hero-meta">
-                  {META.map((m, i) => <li key={m}>{i > 0 && <span className="hero-meta-sep" />}{m}</li>)}
-                </ul>
-              )}
+              <ul className="hero-meta">
+                {META.map((m, i) => <li key={m}>{i > 0 && <span className="hero-meta-sep" />}{m}</li>)}
+              </ul>
             </div>
           </div>
 

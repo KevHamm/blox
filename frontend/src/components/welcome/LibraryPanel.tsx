@@ -10,72 +10,68 @@ const CLASS_LABEL: Record<string, string> = {
 };
 const byRecent = (a: BloxProject, b: BloxProject) => Date.parse(b.savedAt) - Date.parse(a.savedAt);
 
-// A4 / US-Letter document types offered by "Start from empty". (Beamer skips
-// this step and goes straight to the editor.)
+// A4 / US-Letter document types offered by "Start from empty". (Beamer and Page
+// skip this step.)
 const DOC_TYPES = [
   { cls: "report", label: "Report", desc: "Title page, chapters & sections." },
   { cls: "article", label: "Article", desc: "A single-column paper." },
   { cls: "book", label: "Book", desc: "Multi-chapter, front & back matter." }
 ];
 
-// The signed-in workspace: a centered page with quick-access "Last edited" at
-// the top and the user's projects below — A4/US documents and Beamer
-// presentations (each fronted by a New project / Import button stack), then the
-// design Pages. "New project" slides the listing aside for the create flow.
+type FlowKind = "doc" | "beamer" | "page";
+
+// The signed-in workspace: a centered page of the user's projects — A4/US
+// documents and Beamer presentations, then design Pages. Each section's title
+// row carries the New project / Import buttons; "New project" slides the listing
+// aside for the create flow.
 export function LibraryPanel({
-  projects, pages, onOpen, onStart
+  projects, pages, onOpen, onStart, onDesign
 }: {
   projects: BloxProject[];
   pages: BloxProject[];
   onOpen: (project: BloxProject, rect?: DOMRect) => void;
   onStart: (cls: string, rect?: DOMRect) => void;
+  onDesign: (kind: string, rect?: DOMRect) => void;
 }) {
   const a4 = projects.filter((p) => p.cls !== "beamer").slice().sort(byRecent);
   const beamer = projects.filter((p) => p.cls === "beamer").slice().sort(byRecent);
-  const recent = [...projects, ...pages].slice().sort(byRecent).slice(0, 6);
 
   // Create flow: browse → new (Start from empty / Browse templates) → templates
-  // (A4/US type choice). Beamer's "Start from empty" jumps straight to the editor.
+  // (A4/US type choice). Beamer & Page jump straight to their editor.
   const [flow, setFlow] = useState<"browse" | "new" | "templates">("browse");
-  const [flowKind, setFlowKind] = useState<"doc" | "beamer">("doc");
+  const [flowKind, setFlowKind] = useState<FlowKind>("doc");
   const flowIndex = flow === "browse" ? 0 : flow === "new" ? 1 : 2;
 
   const rectOf = (e: React.MouseEvent) => e.currentTarget.getBoundingClientRect();
-  function openNew(kind: "doc" | "beamer") { setFlowKind(kind); setFlow("new"); }
+  function openNew(kind: FlowKind) { setFlowKind(kind); setFlow("new"); }
   function startEmpty(e: React.MouseEvent) {
     if (flowKind === "beamer") onStart("beamer", rectOf(e));
+    else if (flowKind === "page") onDesign("cover", rectOf(e));
     else setFlow("templates");
   }
+  const flowNoun = flowKind === "beamer" ? "presentation" : flowKind === "page" ? "page" : "project";
+  const emptyDesc = flowKind === "beamer" ? "A blank slide deck."
+    : flowKind === "page" ? "A blank page to design freely."
+    : "A blank document — you pick the type.";
 
   return (
     <div className="workspace">
-      {/* Quick access — most recently edited items. */}
-      <section className="ws-recent">
-        <h2 className="ws-h">Last edited</h2>
-        <div className="ws-recent-row lib-scroll">
-          {recent.map((item) => <RecentCard key={item.savedAt + (item.title || "")} item={item} onOpen={onOpen} />)}
-        </div>
-      </section>
-
-      {/* The listing slides aside (track) for the create flow. */}
       <div className="ws-flow">
         <div className="ws-track" style={{ transform: `translateX(-${flowIndex * 100}%)` }}>
           {/* 0 — the project listing */}
-          <div className="ws-panel ws-browse lib-scroll" aria-hidden={flow !== "browse"}>
-            <Section title="Documents">
+          <div className="ws-browse lib-scroll ws-panel" aria-hidden={flow !== "browse"}>
+            <Section title="Documents" onNew={() => openNew("doc")}>
               <div className="ws-grid">
-                <NewStack onNew={() => openNew("doc")} />
                 {a4.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={onOpen} />)}
               </div>
             </Section>
-            <Section title="Presentations">
+            <Section title="Presentations" onNew={() => openNew("beamer")}>
               <div className="ws-grid slide">
-                <NewStack slide onNew={() => openNew("beamer")} />
                 {beamer.map((p) => <ItemCard key={p.savedAt + p.title} item={p} slide onOpen={onOpen} />)}
               </div>
             </Section>
             {pages.length > 0 && (
-              <Section title="Pages">
+              <Section title="Pages" onNew={() => openNew("page")}>
                 <div className="ws-grid">
                   {pages.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={onOpen} />)}
                 </div>
@@ -89,12 +85,12 @@ export function LibraryPanel({
               <button className="ws-back" onClick={() => setFlow("browse")} aria-label="Back">
                 <Chevron /> Back
               </button>
-              <h2 className="ws-flow-title">New {flowKind === "beamer" ? "presentation" : "project"}</h2>
+              <h2 className="ws-flow-title">New {flowNoun}</h2>
               <p className="ws-flow-sub">How would you like to start?</p>
               <div className="ws-options">
                 <button className="ws-option" onClick={startEmpty}>
                   <span className="ws-option-h">Start from empty</span>
-                  <span className="ws-option-d">{flowKind === "beamer" ? "A blank slide deck." : "A blank document — you pick the type."}</span>
+                  <span className="ws-option-d">{emptyDesc}</span>
                 </button>
                 <button className="ws-option" disabled>
                   <span className="ws-option-h">Browse templates</span>
@@ -129,27 +125,22 @@ export function LibraryPanel({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// A section: title row (with New project / Import) + a grid of cards.
+function Section({ title, onNew, children }: { title: string; onNew: () => void; children: React.ReactNode }) {
   return (
     <section className="ws-section">
-      <h2 className="ws-h">{title}</h2>
+      <div className="ws-section-head">
+        <h2 className="ws-h">{title}</h2>
+        <div className="ws-section-actions">
+          <button className="ws-headbtn primary" onClick={onNew}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            New project
+          </button>
+          <button className="ws-headbtn ghost" disabled title="Coming soon">Import</button>
+        </div>
+      </div>
       {children}
     </section>
-  );
-}
-
-// The stacked New project (top) / Import (bottom) buttons — each half the height
-// of a document thumbnail, the full thumbnail width. Sits in the grid's first
-// cell, so `slide` matches the beamer thumbnails' 4:3 box.
-function NewStack({ slide, onNew }: { slide?: boolean; onNew: () => void }) {
-  return (
-    <div className={`ws-newstack${slide ? " slide" : ""}`}>
-      <button className="ws-newbtn primary" onClick={onNew}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-        New project
-      </button>
-      <button className="ws-newbtn ghost" disabled title="Coming soon">Import</button>
-    </div>
   );
 }
 
@@ -168,26 +159,6 @@ function ItemCard({ item, slide, onOpen }: { item: BloxProject; slide?: boolean;
         <span className="lib-cap-title">{item.title || "Untitled"}</span>
         <span className="lib-cap-meta">{design ? "Cover page" : (CLASS_LABEL[item.cls] ?? "Document")} · {timeAgo(item.savedAt)}</span>
       </span>
-    </button>
-  );
-}
-
-// A compact, fixed-height card for the "Last edited" strip (mixed aspect ratios
-// align by height).
-function RecentCard({ item, onOpen }: { item: BloxProject; onOpen: (p: BloxProject, rect?: DOMRect) => void }) {
-  const design = item.kind === "design" ? item.design : undefined;
-  const slide = item.kind !== "design" && item.cls === "beamer";
-  return (
-    <button
-      className="ws-recent-card"
-      title={`Open “${item.title || "Untitled"}”`}
-      onClick={(e) => { const t = e.currentTarget.querySelector(".lib-thumb"); onOpen(item, (t ?? e.currentTarget).getBoundingClientRect()); }}
-    >
-      <span className={`lib-thumb${slide ? " slide" : ""}`} style={design ? { background: design.bg } : undefined}>
-        {design ? <PageThumb design={design} /> : <ProjectThumb project={item} />}
-      </span>
-      <span className="ws-recent-title">{item.title || "Untitled"}</span>
-      <span className="ws-recent-when">{timeAgo(item.savedAt)}</span>
     </button>
   );
 }

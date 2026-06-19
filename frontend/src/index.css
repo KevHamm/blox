@@ -145,6 +145,9 @@
   --w3-bg-a: #0e0d12;
   --w3-bg-b: #08070b;
   --w3-glow: rgba(146, 116, 240, 0.16);
+  --w3-glow-a: rgba(139, 92, 246, 0.16);
+  --w3-glow-b: rgba(236, 72, 153, 0.1);
+  --w3-dot: rgba(200, 180, 255, 0.05);
   --w3-hair: rgba(232, 228, 248, 0.13);
   --w3-card: rgba(22, 21, 28, 0.66);
   --w3-card-hair: rgba(232, 228, 248, 0.1);
@@ -278,6 +281,9 @@ math-field::part(menu-toggle) {
   --w3-bg-a: #faf9f7;
   --w3-bg-b: #f1f0ec;
   --w3-glow: rgba(124, 58, 237, 0.1);
+  --w3-glow-a: rgba(124, 58, 237, 0.09);
+  --w3-glow-b: rgba(236, 72, 153, 0.055);
+  --w3-dot: rgba(60, 30, 90, 0.045);
   --w3-hair: rgba(34, 22, 54, 0.12);
   --w3-card: #ffffff;
   --w3-card-hair: rgba(34, 22, 54, 0.1);
@@ -292,12 +298,18 @@ math-field::part(menu-toggle) {
 
   position: relative; width: 100%; min-height: 100vh; overflow: hidden;
   font-family: var(--ui-font); color: var(--ui-text);
-  background: linear-gradient(180deg, var(--w3-bg-a), var(--w3-bg-b));
+  /* A restrained workspace backdrop: a faint dot grid for texture over a soft
+     vertical wash — quiet enough not to compete with the documents. */
+  background:
+    radial-gradient(var(--w3-dot) 1px, transparent 1.6px) 0 0 / 23px 23px,
+    linear-gradient(180deg, var(--w3-bg-a), var(--w3-bg-b));
 }
-/* a single, very soft glow behind the paper */
+/* Two soft, diagonal brand glows anchored to opposite corners. */
 .welcome3::before {
   content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background: radial-gradient(44% 48% at 74% 42%, var(--w3-glow), transparent 70%);
+  background:
+    radial-gradient(58% 50% at 8% -6%, var(--w3-glow-a), transparent 62%),
+    radial-gradient(54% 52% at 102% 104%, var(--w3-glow-b), transparent 58%);
 }
 /* the faintest grain */
 .welcome3::after {
@@ -366,7 +378,11 @@ math-field::part(menu-toggle) {
 .w3-primary svg { transition: transform 0.2s ease; }
 .w3-primary:hover svg { transform: translateX(2px); }
 .w3-ghost { color: var(--ui-text); background: transparent; border: 1px solid var(--w3-hair); }
-.w3-ghost:hover { border-color: var(--ui-text); background: var(--w3-soft); }
+.w3-ghost:hover:not(:disabled) { border-color: var(--ui-text); background: var(--w3-soft); }
+.w3-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* The sign-in button promoted to the hero's primary action. */
+.hero-login { padding: 12px 24px; font-size: 15.5px; letter-spacing: 0.06em; border-radius: 11px; }
 
 .hero-foot { margin-top: 28px; min-height: 24px; }
 .hero-meta { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--ui-2nd); font-weight: 400; }
@@ -601,16 +617,7 @@ math-field::part(menu-toggle) {
   animation: wsEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes wsEnter { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-.ws-h { margin: 0 0 14px; font-family: var(--ui-display); font-weight: 600; font-size: 14px; letter-spacing: 0.02em; color: var(--ui-text); }
-
-/* Last edited strip. */
-.ws-recent { flex: 0 0 auto; margin-bottom: 24px; }
-.ws-recent-row { display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; padding-bottom: 8px; }
-.ws-recent-card { flex: 0 0 auto; display: flex; flex-direction: column; gap: 7px; cursor: pointer; background: none; border: none; padding: 0; text-align: left; }
-.ws-recent-card .lib-thumb { width: auto; height: 132px; }
-.ws-recent-card:hover .lib-thumb { transform: translateY(-3px); box-shadow: 0 20px 38px -16px rgba(40, 30, 60, 0.5); border-color: var(--w3-card-hover-hair); }
-.ws-recent-title { font-family: var(--ui-display); font-weight: 600; font-size: 12.5px; color: var(--ui-text); max-width: 168px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ws-recent-when { font-family: var(--ui-font); font-size: 11px; color: var(--ui-2nd); margin-top: -3px; }
+.ws-h { margin: 0; font-family: var(--ui-display); font-weight: 600; font-size: 14px; letter-spacing: 0.02em; color: var(--ui-text); }
 
 /* The listing slides aside (track) for the create flow. */
 .ws-flow { flex: 1; min-height: 0; overflow: hidden; position: relative; }
@@ -624,18 +631,20 @@ math-field::part(menu-toggle) {
 .ws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(166px, 1fr)); gap: 22px; align-items: start; }
 .ws-grid.slide { grid-template-columns: repeat(auto-fill, minmax(246px, 1fr)); }
 
-/* New project / Import stack — each button half the height of a thumbnail. */
-.ws-newstack { width: 100%; aspect-ratio: 1 / 1.294; display: flex; flex-direction: column; gap: 9px; }
-.ws-newstack.slide { aspect-ratio: 4 / 3; }
-.ws-newbtn {
-  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  border-radius: 10px; cursor: pointer; font-family: var(--ui-font); font-weight: 600; font-size: 13.5px;
-  transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease, box-shadow 0.2s ease;
+/* Section title row — title on the left, New project / Import on the right.
+   The buttons rest semi-transparent and become solid on hover. */
+.ws-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.ws-section-actions { display: flex; align-items: center; gap: 8px; }
+.ws-headbtn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 8px; cursor: pointer;
+  font-family: var(--ui-font); font-weight: 600; font-size: 12.5px; opacity: 0.55;
+  transition: opacity 0.18s ease, background 0.18s ease, transform 0.12s ease, box-shadow 0.2s ease;
 }
-.ws-newbtn.primary { color: #fff; background: var(--ui-accent-fill); border: none; box-shadow: 0 1px 2px rgba(40, 30, 60, 0.18); }
-.ws-newbtn.primary:hover { background: #6d28d9; transform: translateY(-1px); box-shadow: 0 10px 22px -8px rgba(124, 58, 237, 0.5); }
-.ws-newbtn.ghost { color: var(--ui-2nd); background: var(--w3-soft); border: 1px dashed var(--w3-hair); }
-.ws-newbtn:disabled { cursor: not-allowed; opacity: 0.55; }
+.ws-headbtn:hover:not(:disabled) { opacity: 1; transform: translateY(-1px); }
+.ws-headbtn.primary { color: #fff; background: var(--ui-accent-fill); border: 1px solid transparent; box-shadow: 0 1px 2px rgba(40, 30, 60, 0.18); }
+.ws-headbtn.primary:hover { background: #6d28d9; box-shadow: 0 8px 18px -8px rgba(124, 58, 237, 0.5); }
+.ws-headbtn.ghost { color: var(--ui-text); background: var(--w3-soft); border: 1px solid var(--w3-hair); }
+.ws-headbtn:disabled { cursor: not-allowed; opacity: 0.32; }
 
 /* Create-flow cards. */
 .ws-flowcard { position: relative; width: min(620px, 100%); text-align: center; padding: 8px; }
