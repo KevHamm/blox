@@ -625,6 +625,12 @@ math-field::part(menu-toggle) {
 .ws-tab:hover { color: var(--ui-text); }
 .ws-tab.on { color: var(--ui-text); background: var(--w3-card); box-shadow: 0 1px 3px rgba(40, 30, 60, 0.12); }
 
+/* A lighter, pill-shaped toggle inside the Templates tab: My templates / Browse. */
+.ws-subtabs { display: inline-flex; gap: 4px; padding: 3px; border-radius: 10px; margin: 0 0 18px; background: var(--w3-soft); border: 1px solid var(--w3-hair); }
+.ws-subtab { display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-family: var(--ui-display); font-weight: 600; font-size: 13px; color: var(--ui-2nd); background: transparent; border: none; transition: color 0.15s ease, background 0.15s ease; }
+.ws-subtab:hover { color: var(--ui-text); }
+.ws-subtab.on { color: var(--ui-text); background: var(--w3-card); box-shadow: 0 1px 3px rgba(40, 30, 60, 0.12); }
+
 /* The own-projects listing slides aside (track) for the create flow; the
    templates tab is a plain scrolling list. */
 .ws-flow { flex: 1; min-height: 0; overflow: hidden; position: relative; }
@@ -725,6 +731,7 @@ math-field::part(menu-toggle) {
 .lib-card:hover .lib-heart { opacity: 1; transform: scale(1); }
 .lib-heart:hover { background: rgba(20, 16, 32, 0.62); }
 .lib-heart.on { opacity: 1; transform: scale(1); color: #fb6f92; }
+.lib-del:hover { background: rgba(225, 29, 99, 0.82); color: #fff; }
 .lib-actions {
   position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   padding: 14px; background: rgba(18, 14, 30, 0.34); opacity: 0; transition: opacity 0.18s ease;
@@ -1162,6 +1169,13 @@ math-field::part(menu-toggle) {
 .ui-btn.danger:hover {
   filter: brightness(1.06);
   transform: translateY(-1px);
+}
+/* Transient "saved" confirmation (e.g. Save as template). */
+.ui-btn.ok {
+  color: #fff;
+  background: linear-gradient(120deg, #16a34a, #15803d);
+  border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 20px rgba(21, 128, 61, 0.32);
 }
 /* Keyboard focus: an accent halo (outline only — never shifts layout). */
 .ui-btn:focus-visible,

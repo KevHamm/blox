@@ -4,6 +4,7 @@ import { DesignElementView } from "./DesignElementView";
 import { useDesign } from "../../hooks/useDesign";
 import { blankDesign, LETTER, A4, type DesignPage } from "../../types/design";
 import { buildDesignProject, downloadProject, saveAutosave, type BloxProject } from "../../utils/persistence";
+import { addUserTemplate } from "../../utils/userTemplates";
 import { exportCover } from "../../utils/exportCover";
 import { confirmDialog } from "../ConfirmDialog";
 
@@ -40,6 +41,11 @@ export function CoverDesigner({
     selectedId, setSelectedId, addElement, addImage, updateElement, deleteElement, setBg, setPageSize
   } = useDesign(initial);
   const [title, setTitle] = useState(project?.title ?? "Cover Page");
+  const [savedTpl, setSavedTpl] = useState(false);
+  const tplTimer = useRef<number | undefined>(undefined);
+  // Stable identity for this session's saved template, so re-saving the same
+  // page (tweak → save again) updates the one entry instead of piling up copies.
+  const tplSavedAt = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Debounced autosave into the single session slot (same slot the document
@@ -54,6 +60,17 @@ export function CoverDesigner({
   function saveProject() {
     downloadProject(buildDesignProject(title, design));
   }
+  // Save the current page to the signed-in user's own Templates (the "My
+  // templates" source in the Templates tab). Shows a brief "Saved" confirmation.
+  function saveAsTemplate() {
+    const savedAt = tplSavedAt.current ?? new Date().toISOString();
+    tplSavedAt.current = savedAt;
+    addUserTemplate({ ...buildDesignProject(title, design), savedAt });
+    setSavedTpl(true);
+    window.clearTimeout(tplTimer.current);
+    tplTimer.current = window.setTimeout(() => setSavedTpl(false), 1900);
+  }
+  useEffect(() => () => window.clearTimeout(tplTimer.current), []);
   function doExport() {
     exportCover(design, title).catch(() =>
       confirmDialog({
@@ -104,6 +121,9 @@ export function CoverDesigner({
         </div>
 
         <ThemeToggle dark={dark} onToggle={onToggleTheme} />
+        <button className={`ui-btn${savedTpl ? " ok" : ""}`} onClick={saveAsTemplate} title="Save this page to your Templates">
+          {savedTpl ? "Saved to Templates ✓" : "Save as template"}
+        </button>
         <button className="ui-btn" onClick={saveProject} title="Download this page as a .blox file">Save</button>
         <button className="ui-btn primary" onClick={doExport}>Export LaTeX</button>
       </div>

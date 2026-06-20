@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useReducer, useState } from "react";
 import type { BloxProject } from "../../utils/persistence";
 import { timeAgo } from "../../utils/persistence";
 import { getTemplates } from "../../utils/library";
 import { getMyProjects, addToMyProjects } from "../../utils/myProjects";
+import { getUserTemplates, removeUserTemplate } from "../../utils/userTemplates";
 import { useFavorites, favKey } from "../../utils/favorites";
 import { DesignPreview } from "./DesignPreview";
 import { HeartIcon } from "./ViewerBar";
@@ -33,6 +34,9 @@ export function LibraryPanel({
   onView: (list: BloxProject[], index: number) => void;
 }) {
   const { isFav, toggle } = useFavorites();
+  // Re-read the user's own templates after a remove (a bump forces a re-render).
+  const [, bumpTpl] = useReducer((n: number) => n + 1, 0);
+  const userTemplates = getUserTemplates();
   const mine = getMyProjects();
   const a4 = mine.projects.filter((p) => p.cls !== "beamer").slice().sort(byRecent);
   const beamer = mine.projects.filter((p) => p.cls === "beamer").slice().sort(byRecent);
@@ -45,6 +49,9 @@ export function LibraryPanel({
   const favCount = fav.documents.length + fav.presentations.length + fav.pages.length;
 
   const [tab, setTab] = useState<"mine" | "favorites" | "templates">("mine");
+  // Within the Templates tab: the user's own saved templates vs. the seeded
+  // catalogue to browse. Default to "mine" once they've saved any.
+  const [tplSource, setTplSource] = useState<"mine" | "browse">(() => getUserTemplates().length ? "mine" : "browse");
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [shown, setShown] = useState<Record<SectionKey, number>>({ documents: PAGE_SIZE, presentations: PAGE_SIZE, pages: PAGE_SIZE });
 
@@ -200,9 +207,39 @@ export function LibraryPanel({
         </div>
       ) : (
         <div className="ws-list lib-scroll">
-          {templateSection("documents", "Documents", tpl.documents)}
-          {templateSection("presentations", "Presentations", tpl.presentations, true)}
-          {templateSection("pages", "Pages", tpl.pages)}
+          <div className="ws-subtabs" role="tablist" aria-label="Template source">
+            <button role="tab" aria-selected={tplSource === "mine"} className={`ws-subtab${tplSource === "mine" ? " on" : ""}`} onClick={() => setTplSource("mine")}>
+              My templates{userTemplates.length > 0 && <span className="ws-tab-n">{userTemplates.length}</span>}
+            </button>
+            <button role="tab" aria-selected={tplSource === "browse"} className={`ws-subtab${tplSource === "browse" ? " on" : ""}`} onClick={() => setTplSource("browse")}>Browse templates</button>
+          </div>
+
+          {tplSource === "browse" ? (
+            <>
+              {templateSection("documents", "Documents", tpl.documents)}
+              {templateSection("presentations", "Presentations", tpl.presentations, true)}
+              {templateSection("pages", "Pages", tpl.pages)}
+            </>
+          ) : userTemplates.length === 0 ? (
+            <div className="ws-empty">
+              <BookmarkIcon />
+              <p>You haven't saved any templates yet. Open the page designer, craft a page, and hit <strong>Save as template</strong> to keep it here.</p>
+              <button className="ws-headbtn ghost" onClick={() => setTplSource("browse")}>Browse templates instead</button>
+            </div>
+          ) : (
+            <Section title="My page templates" collapsed={isCol("mytemplates")} onToggle={() => toggleCol("mytemplates")}>
+              <div className="ws-grid">
+                {userTemplates.map((item, i) => (
+                  <ItemCard
+                    key={item.savedAt + item.title} item={item} template owned
+                    onView={() => onView(userTemplates, i)}
+                    onOpenInEditor={(rect) => useTemplate(item, rect)}
+                    onRemove={() => { removeUserTemplate(item); bumpTpl(); }}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
         </div>
       )}
     </div>
@@ -239,11 +276,11 @@ function NewImport({ onNew }: { onNew: () => void }) {
 }
 
 function ItemCard({
-  item, slide, template, isFav, onToggleFav, onView, onOpenInEditor, onOpen
+  item, slide, template, owned, isFav, onToggleFav, onView, onOpenInEditor, onOpen, onRemove
 }: {
-  item: BloxProject; slide?: boolean; template?: boolean;
+  item: BloxProject; slide?: boolean; template?: boolean; owned?: boolean;
   isFav?: boolean; onToggleFav?: () => void; onView?: () => void;
-  onOpenInEditor?: (rect: DOMRect) => void; onOpen?: (rect: DOMRect) => void;
+  onOpenInEditor?: (rect: DOMRect) => void; onOpen?: (rect: DOMRect) => void; onRemove?: () => void;
 }) {
   const design = item.kind === "design" ? item.design : undefined;
   const typeLabel = design ? "Cover page" : (CLASS_LABEL[item.cls] ?? "Document");
@@ -263,10 +300,17 @@ function ItemCard({
         {design ? <DesignPreview design={design} /> : <ProjectThumb project={item} />}
         {template && (
           <>
-            <button className={`lib-heart${isFav ? " on" : ""}`} title={isFav ? "Remove from favorites" : "Save as favorite"}
-              onClick={(e) => { e.stopPropagation(); onToggleFav?.(); }}>
-              <HeartIcon filled={isFav} size={16} />
-            </button>
+            {owned ? (
+              <button className="lib-heart lib-del" title="Remove from your templates"
+                onClick={(e) => { e.stopPropagation(); onRemove?.(); }}>
+                <TrashIcon />
+              </button>
+            ) : (
+              <button className={`lib-heart${isFav ? " on" : ""}`} title={isFav ? "Remove from favorites" : "Save as favorite"}
+                onClick={(e) => { e.stopPropagation(); onToggleFav?.(); }}>
+                <HeartIcon filled={isFav} size={16} />
+              </button>
+            )}
             <div className="lib-actions" onClick={(e) => e.stopPropagation()}>
               <button className="lib-act primary" onClick={(e) => onOpenInEditor?.(e.currentTarget.getBoundingClientRect())}>Open in editor</button>
               <button className="lib-act" onClick={() => onView?.()}>View</button>
@@ -284,6 +328,14 @@ function ItemCard({
 
 function Chevron() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="15 6 9 12 15 18" /></svg>;
+}
+
+function BookmarkIcon() {
+  return <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1Z" /></svg>;
+}
+
+function TrashIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>;
 }
 
 function TypeGlyph({ cls }: { cls: string }) {
