@@ -281,7 +281,11 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
   };
 
   // ── 2. Derived values ───────────────────────────────────
-  const numberedDoc = numberDocument(doc);
+  // `numberDocument` is a pure function of `doc` (state, stable between edits),
+  // so memoise it: its result feeds the pagination, outline, figure/table/
+  // equation/footnote numbering memos and the caret-restore effect, all of which
+  // would otherwise recompute on every render (a fresh object defeats their deps).
+  const numberedDoc = useMemo(() => numberDocument(doc), [doc]);
   const TITLE_RESERVED = 100;   // constant, but must be above useMemo
 
   // ── 3. Paginate into columns/pages from measured heights ──
