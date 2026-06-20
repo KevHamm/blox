@@ -128,8 +128,10 @@ takes `readOnly`. Documents reuse this; design pages use `DesignViewer` + `Desig
   Report/Article/Book, or straight to beamer editor / cover designer). Templates show 9 previews +
   "Show more" (loads 10). **Heart** to favorite (top-right of card) → Favorites tab. **Hover
   actions**: *Open in editor* (opens + persists a copy to My projects) and *View* (read-only
-  template viewer with faded sliding prev/next, ←/→ + Esc, the slim ViewerBar: BLoX/BaCK ·
-  Open-in-editor · Save/Remove-favorite · theme · Export). The dev account includes a `wip`
+  template viewer — a **sliding carousel**: a persistent top bar (it never re-renders) above a
+  `.tv-track` that slides the current page out and the neighbour in on prev/next (←/→, always-on
+  edge buttons that hug the page, or Esc to close). Document panes use the Editor's `viewer.bare`
+  mode (no per-pane bar); design panes render `DesignPreview`. The dev account includes a `wip`
   **"Sandbox — 50-page stress test"** (opens to ~53 pages).
 - **User templates** (2026-06-20): the page designer's top bar has **"Save as template"**, which
   stores the current page in `blox-my-templates` (`utils/userTemplates.ts`). The **Templates** tab

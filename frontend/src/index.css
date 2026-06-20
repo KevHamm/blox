@@ -752,22 +752,37 @@ math-field::part(menu-toggle) {
 .doc-area-readonly .blox-page { pointer-events: none; }
 
 /* ── Read-only template viewer ────────────────────────────────────────── */
-.template-viewer { position: fixed; inset: 0; z-index: 120; }
-.tv-stage { position: absolute; inset: 0; animation: tvIn 0.34s cubic-bezier(0.16, 1, 0.3, 1); }
+.template-viewer { position: fixed; inset: 0; z-index: 120; display: flex; flex-direction: column; animation: tvIn 0.34s cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes tvIn { from { opacity: 0; transform: translateY(8px) scale(0.995); } to { opacity: 1; transform: none; } }
+/* One persistent bar; it stays put while panes slide beneath it. */
+.tv-topbar { flex: 0 0 auto; z-index: 6; }
+.tv-body { flex: 1 1 0; min-height: 0; position: relative; overflow: hidden; }
+/* The slide track: panes laid out left→right, each exactly one viewport wide,
+   overflowing the track box (clipped by .tv-body). A keyframe (keyed off
+   data-dir) walks the track from the outgoing pane to the incoming one; it
+   plays the moment the track renders, so no second-render/rAF trigger is
+   needed. `both` holds the end frame until the slide is finalised. */
+.tv-track { display: flex; width: 100%; height: 100%; }
+.tv-track[data-dir="1"] { animation: tvSlideNext 0.46s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.tv-track[data-dir="-1"] { animation: tvSlidePrev 0.46s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes tvSlideNext { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@keyframes tvSlidePrev { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+.tv-pane { flex: 0 0 100%; width: 100%; height: 100%; min-width: 0; }
+
+/* Prev/next: always visible, hugging the document (not the screen edge). */
 .tv-nav {
-  position: fixed; top: 50%; z-index: 130; width: 46px; height: 64px;
-  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
-  color: var(--ui-text); background: var(--panel-bg); border: 1px solid var(--ui-hairline);
+  position: fixed; top: calc(50% + 28px); transform: translateY(-50%); z-index: 130;
+  width: 48px; height: 74px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  color: var(--ui-text); background: var(--panel-bg); border: 1px solid var(--ui-hairline); border-radius: 15px;
   backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: 0 6px 20px rgba(20, 20, 50, 0.18); opacity: 0.42;
-  transition: opacity 0.22s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 8px 24px rgba(20, 20, 50, 0.18); opacity: 1;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, opacity 0.2s ease, background 0.15s ease;
 }
-.tv-prev { left: 0; border-radius: 0 12px 12px 0; transform: translateY(-50%) translateX(-58%); }
-.tv-next { right: 0; border-radius: 12px 0 0 12px; transform: translateY(-50%) translateX(58%); }
-.tv-prev:hover, .tv-prev:focus-visible { opacity: 1; transform: translateY(-50%) translateX(0); }
-.tv-next:hover, .tv-next:focus-visible { opacity: 1; transform: translateY(-50%) translateX(0); }
-.tv-nav:disabled { opacity: 0; pointer-events: none; }
+.tv-prev { left: max(16px, calc(50% - 482px)); }
+.tv-next { right: max(16px, calc(50% - 482px)); }
+.tv-nav:hover:not(:disabled) { transform: translateY(-50%) scale(1.07); box-shadow: 0 12px 30px rgba(20, 20, 50, 0.26); }
+.tv-nav:active:not(:disabled) { transform: translateY(-50%) scale(0.95); }
+.tv-nav:disabled { opacity: 0.3; cursor: default; }
 
 /* Viewer top bar (mirrors the editor's collapsed bar). */
 .viewer-bar {

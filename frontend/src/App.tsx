@@ -129,6 +129,10 @@ type ViewerProps = {
   onOpenInEditor: () => void;
   isFav: boolean;
   onToggleFav: () => void;
+  // When true the Editor renders content-only (no top bar) and fills its
+  // container, so a parent (the TemplateViewer carousel) can supply one
+  // persistent bar above a sliding track of panes.
+  bare?: boolean;
 };
 
 function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTheme, viewer }: { sidebarsIn?: boolean; template: TemplateLayout; project?: BloxProject | null; onBack?: () => void; dark: boolean; onToggleTheme: () => void; viewer?: ViewerProps }) {
@@ -557,10 +561,12 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
       onDragCancel={handleDragCancel}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
     >
-     <div className="editor-shell" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+     <div className="editor-shell" style={{ display: "flex", flexDirection: "column", height: viewer?.bare ? "100%" : "100vh", overflow: "hidden" }}>
       {/* Full-width top bar above the sidebars: logo, back, undo/redo and a
           live mini preview of the whole document. Wrapped so the edge toggle can
-          collapse its height to slide it out of view. */}
+          collapse its height to slide it out of view. Omitted in `bare` viewer
+          panes — the carousel renders one persistent bar above the slide track. */}
+      {!viewer?.bare && (
       <div
         style={{
           flex: "0 0 auto",
@@ -604,6 +610,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
         />
         )}
       </div>
+      )}
       <div
         className="editor-canvas"
         style={{
@@ -1126,35 +1133,34 @@ function copyForOpen(item: BloxProject): BloxProject {
   return { ...item, savedAt: new Date().toISOString() };
 }
 
-// Read-only viewer for a design page (covers): the slim viewer bar + the design
-// rendered at full page size. (Documents reuse the Editor in viewer mode.)
-function DesignViewer({
-  item, onBack, onOpenInEditor, isFav, onToggleFav, dark, onToggleTheme
+// A single content-only pane in the viewer carousel: a design page rendered at
+// full size, or the document rendered through the Editor's `bare` viewer mode
+// (no top bar — the carousel owns one persistent bar above the slide track).
+function ViewerPane({
+  item, shared, dark, onToggleTheme
 }: {
-  item: BloxProject; onBack: () => void; onOpenInEditor: () => void;
-  isFav: boolean; onToggleFav: () => void; dark: boolean; onToggleTheme: () => void;
+  item: BloxProject; shared: Omit<ViewerProps, "bare">; dark: boolean; onToggleTheme: () => void;
 }) {
-  const design = item.design!;
-  function exportThis() {
-    exportCover(design, item.title).catch(() =>
-      confirmDialog({ title: "Export failed", message: "Couldn't reach the export service — make sure the backend is running on localhost:8000.", confirmLabel: "OK", noCancel: true }));
-  }
-  return (
-    <div className="editor-shell" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
-      <div style={{ flex: "0 0 auto", height: TOPBAR_COLLAPSED_HEIGHT }}>
-        <ViewerBar onBack={onBack} onOpenInEditor={onOpenInEditor} isFav={isFav} onToggleFav={onToggleFav} dark={dark} onToggleTheme={onToggleTheme} onExport={exportThis} />
-      </div>
-      <div className="doc-area" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: 40, overflowY: "auto" }}>
-        <div className="blox-page" style={{ position: "relative", flex: "none", width: design.pageWidth, height: design.pageHeight, background: design.bg, borderRadius: 6, overflow: "hidden", boxShadow: "0 12px 40px rgba(55,45,25,0.10), 0 2px 6px rgba(55,45,25,0.06)" }}>
-          <DesignPreview design={design} />
+  if (item.kind === "design") {
+    const design = item.design!;
+    return (
+      <div className="editor-shell" style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div className="doc-area" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: 40, overflowY: "auto" }}>
+          <div className="blox-page" style={{ position: "relative", flex: "none", width: design.pageWidth, height: design.pageHeight, background: design.bg, borderRadius: 6, overflow: "hidden", boxShadow: "0 12px 40px rgba(55,45,25,0.10), 0 2px 6px rgba(55,45,25,0.06)" }}>
+            <DesignPreview design={design} />
+          </div>
         </div>
       </div>
-    </div>
+    );
+  }
+  return (
+    <Editor viewer={{ ...shared, bare: true }} project={item} template={templateFor(item.cls)} sidebarsIn dark={dark} onToggleTheme={onToggleTheme} onBack={shared.onBack} />
   );
 }
 
-// The template "View" overlay: a full-screen read-only preview with faded,
-// sliding prev/next buttons to walk the list.
+// The template "View" overlay: one persistent top bar above a horizontally
+// sliding track of read-only panes. Prev/next (buttons or ←/→) slide the
+// current document out and the neighbour in; the bar never re-renders.
 function TemplateViewer({
   list, startIndex, onClose, onOpen, dark, onToggleTheme
 }: {
@@ -1162,20 +1168,47 @@ function TemplateViewer({
   onOpen: (p: BloxProject) => void; dark: boolean; onToggleTheme: () => void;
 }) {
   const [index, setIndex] = useState(startIndex);
+  // An in-flight slide: `from` is the outgoing item, `dir` its direction
+  // (+1 next → content slides left, -1 prev → content slides right). A CSS
+  // keyframe (keyed off data-dir) plays the slide the instant the track renders.
+  const [anim, setAnim] = useState<{ from: number; dir: 1 | -1 } | null>(null);
+  const animating = useRef(false);
   const { isFav, toggle } = useFavorites();
+
   const item = list[Math.min(index, list.length - 1)];
   const key = favKey(item);
 
-  // Arrow keys walk the list; Escape closes.
+  function endAnim() { animating.current = false; setAnim(null); }
+
+  function go(dir: 1 | -1) {
+    if (animating.current) return;
+    const to = Math.max(0, Math.min(list.length - 1, index + dir));
+    if (to === index) return;
+    animating.current = true;
+    setAnim({ from: index, dir });
+    setIndex(to);
+  }
+
+  // End the slide when the keyframe finishes; a fallback timer covers the case
+  // where `animationend` doesn't fire (kept a touch above the animation length).
+  useEffect(() => {
+    if (!anim) return;
+    const t = window.setTimeout(endAnim, 560);
+    return () => window.clearTimeout(t);
+  }, [anim]);
+
+  // Arrow keys walk the list; Escape closes. Re-bound when `index` changes so
+  // `go` sees the current position.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") setIndex((i) => Math.max(0, i - 1));
-      else if (e.key === "ArrowRight") setIndex((i) => Math.min(list.length - 1, i + 1));
+      if (e.key === "ArrowLeft") go(-1);
+      else if (e.key === "ArrowRight") go(1);
       else if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [list.length, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, list.length, onClose]);
 
   function openInEditor() {
     const copy = copyForOpen(item);
@@ -1183,22 +1216,44 @@ function TemplateViewer({
     onClose();
     onOpen(copy);
   }
-  const shared = { onBack: onClose, onOpenInEditor: openInEditor, isFav: isFav(key), onToggleFav: () => toggle(key), dark, onToggleTheme };
-  const isDesign = item.kind === "design";
+
+  // Export the currently shown item (kept at this level so the hoisted bar's
+  // Export works without reaching into a pane's Editor).
+  function exportItem() {
+    const onFail = () => confirmDialog({ title: "Export failed", message: "Couldn't reach the export service — make sure the backend is running on localhost:8000.", confirmLabel: "OK", noCancel: true });
+    if (item.kind === "design") { exportCover(item.design!, item.title).catch(onFail); return; }
+    const L = item.layout ?? templateFor(item.cls);
+    exportLatex(numberDocument(item.doc), { cls: item.cls, title: item.title, columns: L.columns, fontSizePx: L.fontSize }).catch(onFail);
+  }
+
+  const shared = { onBack: onClose, onOpenInEditor: openInEditor, isFav: isFav(key), onToggleFav: () => toggle(key) };
+  const paneFor = (i: number) => (
+    <div className="tv-pane" key={`p${i}`}>
+      <ViewerPane item={list[i]} shared={shared} dark={dark} onToggleTheme={onToggleTheme} />
+    </div>
+  );
+  const panes = anim
+    ? (anim.dir === 1 ? [paneFor(anim.from), paneFor(index)] : [paneFor(index), paneFor(anim.from)])
+    : [paneFor(index)];
+
+  function onTrackEnd(e: React.AnimationEvent) {
+    if (e.target === e.currentTarget) endAnim();
+  }
 
   return (
     <div className="template-viewer">
-      <div className="tv-stage" key={index}>
-        {isDesign ? (
-          <DesignViewer item={item} {...shared} />
-        ) : (
-          <Editor viewer={shared} project={item} template={templateFor(item.cls)} sidebarsIn dark={dark} onToggleTheme={onToggleTheme} onBack={onClose} />
-        )}
+      <div className="tv-topbar" style={{ height: TOPBAR_COLLAPSED_HEIGHT }}>
+        <ViewerBar onBack={onClose} onOpenInEditor={openInEditor} isFav={isFav(key)} onToggleFav={() => toggle(key)} dark={dark} onToggleTheme={onToggleTheme} onExport={exportItem} />
       </div>
-      <button className="tv-nav tv-prev" disabled={index <= 0} onClick={() => setIndex((i) => Math.max(0, i - 1))} aria-label="Previous template">
+      <div className="tv-body">
+        <div className="tv-track" data-dir={anim ? anim.dir : undefined} onAnimationEnd={onTrackEnd}>
+          {panes}
+        </div>
+      </div>
+      <button className="tv-nav tv-prev" disabled={index <= 0} onClick={() => go(-1)} aria-label="Previous template">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 6 9 12 15 18" /></svg>
       </button>
-      <button className="tv-nav tv-next" disabled={index >= list.length - 1} onClick={() => setIndex((i) => Math.min(list.length - 1, i + 1))} aria-label="Next template">
+      <button className="tv-nav tv-next" disabled={index >= list.length - 1} onClick={() => go(1)} aria-label="Next template">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 6 15 12 9 18" /></svg>
       </button>
     </div>
