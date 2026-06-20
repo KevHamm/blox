@@ -619,8 +619,28 @@ math-field::part(menu-toggle) {
 @keyframes wsEnter { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 .ws-h { margin: 0; font-family: var(--ui-display); font-weight: 600; font-size: 14px; letter-spacing: 0.02em; color: var(--ui-text); }
 
-/* Tabs: own projects ⇆ templates. */
-.ws-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; align-self: flex-start; margin-bottom: 22px; background: var(--w3-soft); border: 1px solid var(--w3-hair); }
+/* Tabs row: the segmented tab control on the left, title search on the right. */
+.ws-tabsrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+.ws-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--w3-soft); border: 1px solid var(--w3-hair); }
+.ws-search {
+  display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto;
+  width: min(280px, 32vw); height: 40px; padding: 0 10px 0 12px; border-radius: 11px;
+  color: var(--ui-2nd); background: var(--w3-soft); border: 1px solid var(--w3-hair);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.ws-search:focus-within { color: var(--ui-text); background: var(--w3-card); border-color: var(--ui-blue); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.14); }
+.ws-search svg { flex: 0 0 auto; }
+.ws-search input {
+  flex: 1 1 auto; min-width: 0; border: none; outline: none; background: transparent;
+  font-family: var(--ui-font); font-size: 14px; color: var(--ui-text);
+}
+.ws-search input::placeholder { color: var(--ui-2nd); }
+.ws-search-clear {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 6px; cursor: pointer; padding: 0;
+  color: var(--ui-2nd); background: transparent; border: none; transition: color 0.14s ease, background 0.14s ease;
+}
+.ws-search-clear:hover { color: var(--ui-text); background: var(--w3-hair); }
 .ws-tab { padding: 8px 18px; border-radius: 9px; cursor: pointer; font-family: var(--ui-display); font-weight: 600; font-size: 14px; color: var(--ui-2nd); background: transparent; border: none; transition: color 0.15s ease, background 0.15s ease; }
 .ws-tab:hover { color: var(--ui-text); }
 .ws-tab.on { color: var(--ui-text); background: var(--w3-card); box-shadow: 0 1px 3px rgba(40, 30, 60, 0.12); }

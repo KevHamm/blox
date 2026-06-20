@@ -48,6 +48,15 @@ export function LibraryPanel({
   };
   const favCount = fav.documents.length + fav.presentations.length + fav.pages.length;
 
+  // Title search (right side of the tab row). Filters the visible lists by a
+  // case-insensitive substring of the document title.
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const matchTitle = (p: BloxProject) => !q || (p.title || "").toLowerCase().includes(q);
+  const a4f = a4.filter(matchTitle);
+  const beamerf = beamer.filter(matchTitle);
+  const minePagesf = mine.pages.filter(matchTitle);
+
   const [tab, setTab] = useState<"mine" | "favorites" | "templates">("mine");
   // Within the Templates tab: the user's own saved templates vs. the seeded
   // catalogue to browse. Default to "mine" once they've saved any.
@@ -99,6 +108,7 @@ export function LibraryPanel({
     ));
 
   function templateSection(key: SectionKey, title: string, items: BloxProject[], slide?: boolean) {
+    if (!items.length) return null; // hide a section emptied by the title search
     const n = shown[key];
     const visible = items.slice(0, n);
     const hasMore = items.length > n;
@@ -129,28 +139,53 @@ export function LibraryPanel({
 
   return (
     <div className="workspace">
-      <div className="ws-tabs" role="tablist">
-        <button role="tab" aria-selected={tab === "mine"} className={`ws-tab${tab === "mine" ? " on" : ""}`} onClick={() => switchTab("mine")}>My projects</button>
-        <button role="tab" aria-selected={tab === "favorites"} className={`ws-tab${tab === "favorites" ? " on" : ""}`} onClick={() => switchTab("favorites")}>
-          Favorites{favCount > 0 && <span className="ws-tab-n">{favCount}</span>}
-        </button>
-        <button role="tab" aria-selected={tab === "templates"} className={`ws-tab${tab === "templates" ? " on" : ""}`} onClick={() => switchTab("templates")}>Templates</button>
+      <div className="ws-tabsrow">
+        <div className="ws-tabs" role="tablist">
+          <button role="tab" aria-selected={tab === "mine"} className={`ws-tab${tab === "mine" ? " on" : ""}`} onClick={() => switchTab("mine")}>My projects</button>
+          <button role="tab" aria-selected={tab === "favorites"} className={`ws-tab${tab === "favorites" ? " on" : ""}`} onClick={() => switchTab("favorites")}>
+            Favorites{favCount > 0 && <span className="ws-tab-n">{favCount}</span>}
+          </button>
+          <button role="tab" aria-selected={tab === "templates"} className={`ws-tab${tab === "templates" ? " on" : ""}`} onClick={() => switchTab("templates")}>Templates</button>
+        </div>
+        <div className="ws-search">
+          <SearchIcon />
+          <input
+            type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by title…" aria-label="Search documents by title" spellCheck={false}
+          />
+          {query && (
+            <button className="ws-search-clear" onClick={() => setQuery("")} aria-label="Clear search"><ClearIcon /></button>
+          )}
+        </div>
       </div>
 
       {tab === "mine" ? (
         <div className="ws-flow">
           <div className="ws-track" style={{ transform: `translateX(-${flowIndex * 100}%)` }}>
             <div className="ws-browse lib-scroll ws-panel" aria-hidden={flow !== "browse"}>
-              <Section title="Documents" collapsed={isCol("documents")} onToggle={() => toggleCol("documents")} actions={<NewImport onNew={() => openNew("doc")} />}>
-                <div className="ws-grid">{a4.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={(rect) => onOpen(p, rect)} />)}</div>
-              </Section>
-              <Section title="Presentations" collapsed={isCol("presentations")} onToggle={() => toggleCol("presentations")} actions={<NewImport onNew={() => openNew("beamer")} />}>
-                <div className="ws-grid slide">{beamer.map((p) => <ItemCard key={p.savedAt + p.title} item={p} slide onOpen={(rect) => onOpen(p, rect)} />)}</div>
-              </Section>
-              {mine.pages.length > 0 && (
-                <Section title="Pages" collapsed={isCol("pages")} onToggle={() => toggleCol("pages")} actions={<NewImport onNew={() => openNew("page")} />}>
-                  <div className="ws-grid">{mine.pages.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={(rect) => onOpen(p, rect)} />)}</div>
-                </Section>
+              {q && !a4f.length && !beamerf.length && !minePagesf.length ? (
+                <div className="ws-empty">
+                  <SearchIcon size={26} />
+                  <p>No documents match “{query.trim()}”.</p>
+                </div>
+              ) : (
+                <>
+                  {(q ? a4f.length > 0 : true) && (
+                    <Section title="Documents" collapsed={isCol("documents")} onToggle={() => toggleCol("documents")} actions={<NewImport onNew={() => openNew("doc")} />}>
+                      <div className="ws-grid">{a4f.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={(rect) => onOpen(p, rect)} />)}</div>
+                    </Section>
+                  )}
+                  {(q ? beamerf.length > 0 : true) && (
+                    <Section title="Presentations" collapsed={isCol("presentations")} onToggle={() => toggleCol("presentations")} actions={<NewImport onNew={() => openNew("beamer")} />}>
+                      <div className="ws-grid slide">{beamerf.map((p) => <ItemCard key={p.savedAt + p.title} item={p} slide onOpen={(rect) => onOpen(p, rect)} />)}</div>
+                    </Section>
+                  )}
+                  {(q ? minePagesf.length > 0 : mine.pages.length > 0) && (
+                    <Section title="Pages" collapsed={isCol("pages")} onToggle={() => toggleCol("pages")} actions={<NewImport onNew={() => openNew("page")} />}>
+                      <div className="ws-grid">{minePagesf.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={(rect) => onOpen(p, rect)} />)}</div>
+                    </Section>
+                  )}
+                </>
               )}
             </div>
 
@@ -197,13 +232,19 @@ export function LibraryPanel({
               <HeartIcon size={26} />
               <p>No favorites yet — hover a template and tap the heart to save it here.</p>
             </div>
-          ) : (
-            <>
-              {favSection("documents", "Documents", fav.documents)}
-              {favSection("presentations", "Presentations", fav.presentations, true)}
-              {favSection("pages", "Pages", fav.pages)}
-            </>
-          )}
+          ) : (() => {
+            const fd = fav.documents.filter(matchTitle), fp = fav.presentations.filter(matchTitle), fg = fav.pages.filter(matchTitle);
+            if (q && !fd.length && !fp.length && !fg.length) {
+              return <div className="ws-empty"><SearchIcon size={26} /><p>No favorites match “{query.trim()}”.</p></div>;
+            }
+            return (
+              <>
+                {favSection("documents", "Documents", fd)}
+                {favSection("presentations", "Presentations", fp, true)}
+                {favSection("pages", "Pages", fg)}
+              </>
+            );
+          })()}
         </div>
       ) : (
         <div className="ws-list lib-scroll">
@@ -214,32 +255,44 @@ export function LibraryPanel({
             <button role="tab" aria-selected={tplSource === "browse"} className={`ws-subtab${tplSource === "browse" ? " on" : ""}`} onClick={() => setTplSource("browse")}>Browse templates</button>
           </div>
 
-          {tplSource === "browse" ? (
-            <>
-              {templateSection("documents", "Documents", tpl.documents)}
-              {templateSection("presentations", "Presentations", tpl.presentations, true)}
-              {templateSection("pages", "Pages", tpl.pages)}
-            </>
-          ) : userTemplates.length === 0 ? (
+          {tplSource === "browse" ? (() => {
+            const td = tpl.documents.filter(matchTitle), tp = tpl.presentations.filter(matchTitle), tg = tpl.pages.filter(matchTitle);
+            if (q && !td.length && !tp.length && !tg.length) {
+              return <div className="ws-empty"><SearchIcon size={26} /><p>No templates match “{query.trim()}”.</p></div>;
+            }
+            return (
+              <>
+                {templateSection("documents", "Documents", td)}
+                {templateSection("presentations", "Presentations", tp, true)}
+                {templateSection("pages", "Pages", tg)}
+              </>
+            );
+          })() : userTemplates.length === 0 ? (
             <div className="ws-empty">
               <BookmarkIcon />
               <p>You haven't saved any templates yet. Open the page designer, craft a page, and hit <strong>Save as template</strong> to keep it here.</p>
               <button className="ws-headbtn ghost" onClick={() => setTplSource("browse")}>Browse templates instead</button>
             </div>
-          ) : (
-            <Section title="My page templates" collapsed={isCol("mytemplates")} onToggle={() => toggleCol("mytemplates")}>
-              <div className="ws-grid">
-                {userTemplates.map((item, i) => (
-                  <ItemCard
-                    key={item.savedAt + item.title} item={item} template owned
-                    onView={() => onView(userTemplates, i)}
-                    onOpenInEditor={(rect) => useTemplate(item, rect)}
-                    onRemove={() => { removeUserTemplate(item); bumpTpl(); }}
-                  />
-                ))}
-              </div>
-            </Section>
-          )}
+          ) : (() => {
+            const ut = userTemplates.filter(matchTitle);
+            if (q && !ut.length) {
+              return <div className="ws-empty"><SearchIcon size={26} /><p>No templates match “{query.trim()}”.</p></div>;
+            }
+            return (
+              <Section title="My page templates" collapsed={isCol("mytemplates")} onToggle={() => toggleCol("mytemplates")}>
+                <div className="ws-grid">
+                  {ut.map((item, i) => (
+                    <ItemCard
+                      key={item.savedAt + item.title} item={item} template owned
+                      onView={() => onView(ut, i)}
+                      onOpenInEditor={(rect) => useTemplate(item, rect)}
+                      onRemove={() => { removeUserTemplate(item); bumpTpl(); }}
+                    />
+                  ))}
+                </div>
+              </Section>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -332,6 +385,14 @@ function Chevron() {
 
 function BookmarkIcon() {
   return <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1Z" /></svg>;
+}
+
+function SearchIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></svg>;
+}
+
+function ClearIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6 6 18" /></svg>;
 }
 
 function TrashIcon() {
