@@ -4,13 +4,14 @@ import { Logo, ThemeToggle } from "./chrome";
 import { PaperMockup } from "./welcome/PaperMockup";
 import { LoginModal } from "./welcome/LoginModal";
 import { LibraryPanel } from "./welcome/LibraryPanel";
-import { getLibrary } from "../utils/library";
+import { HowItWorks } from "./welcome/HowItWorks";
 import { type BloxProject } from "../utils/persistence";
 
 interface WelcomeProps {
   onStart: (preset?: string, rect?: DOMRect) => void;
   onOpen: (project: BloxProject, rect?: DOMRect) => void;
   onDesign: (kind: string, rect?: DOMRect) => void;
+  onView: (list: BloxProject[], index: number) => void;
   autosave: BloxProject | null;
   dark: boolean;
   onToggleTheme: () => void;
@@ -74,11 +75,11 @@ function TemplateGlyph({ id }: { id: string }) {
   );
 }
 
-export function Welcome({ onStart, onOpen, onDesign, dark, onToggleTheme, user, onLogin, onLogout }: WelcomeProps) {
+export function Welcome({ onStart, onOpen, onDesign, onView, dark, onToggleTheme, user, onLogin, onLogout }: WelcomeProps) {
   const [picking, setPicking] = useState(false);
   const [designing, setDesigning] = useState(false);
+  const [howto, setHowto] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
-  const library = getLibrary();
 
   // Close the sign-in modal once a login succeeds.
   function tryLogin(u: string, p: string) {
@@ -157,7 +158,7 @@ export function Welcome({ onStart, onOpen, onDesign, dark, onToggleTheme, user, 
   return (
     <div ref={rootRef} className="welcome3">
       <header className="hero-topbar">
-        <button className="hero-brand" onClick={() => { setPicking(false); setDesigning(false); }} aria-label="BLoX home">
+        <button className="hero-brand" onClick={() => { setPicking(false); setDesigning(false); setHowto(false); }} aria-label="BLoX home">
           <Logo flip={false} />
         </button>
         <div className="hero-topbar-right">
@@ -176,11 +177,11 @@ export function Welcome({ onStart, onOpen, onDesign, dark, onToggleTheme, user, 
 
       <main className="welcome3-stage">
         {user ? (
-          <LibraryPanel projects={library.projects} pages={library.pages} onOpen={onOpen} onStart={onStart} onDesign={onDesign} />
+          <LibraryPanel onOpen={onOpen} onStart={onStart} onDesign={onDesign} onView={onView} />
         ) : (
         <>
         {/* ── HERO ── */}
-        <section className="hero" data-hidden={picking || designing} aria-hidden={picking || designing}>
+        <section className="hero" data-hidden={picking || designing || howto} aria-hidden={picking || designing || howto}>
           <div className="hero-copy">
             <div className="hero-eyebrow">
               <span className="hero-eyebrow-mark" />Visual&nbsp;LaTeX&nbsp;editor
@@ -200,7 +201,7 @@ export function Welcome({ onStart, onOpen, onDesign, dark, onToggleTheme, user, 
               <button className="login-btn hero-login" onClick={() => setLoginOpen(true)}>
                 L<span className="login-o">o</span>GIN
               </button>
-              <button className="w3-btn w3-ghost" disabled>How it works</button>
+              <button className="w3-btn w3-ghost" onClick={() => setHowto(true)}>How it works</button>
             </div>
 
             <div className="hero-foot">
@@ -284,6 +285,11 @@ export function Welcome({ onStart, onOpen, onDesign, dark, onToggleTheme, user, 
               </button>
             ))}
           </div>
+        </section>
+
+        {/* ── HOW IT WORKS ── */}
+        <section className="picker howto-stage" data-hidden={!howto} aria-hidden={!howto}>
+          <HowItWorks onBack={() => setHowto(false)} />
         </section>
         </>
         )}

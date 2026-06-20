@@ -75,7 +75,7 @@ export function DraggableImage({ img, onDelete }: any) {
    block is being dragged, so a section can be dropped anywhere in the document
    (no visible drop zone) without interfering with image "drop outside to
    remove" behaviour. */
-export function DroppableDocArea({ children, visible = true, docFont }: any) {
+export function DroppableDocArea({ children, visible = true, docFont, readOnly = false }: any) {
   const { active } = useDndContext();
   const aid = String(active?.id ?? "");
   // These blocks have no visible insertion line — dropping anywhere in the
@@ -90,7 +90,7 @@ export function DroppableDocArea({ children, visible = true, docFont }: any) {
   return (
     <div
       ref={setNodeRef}
-      className="doc-area"
+      className={readOnly ? "doc-area doc-area-readonly" : "doc-area"}
       style={{
         flex: 1,
         display: "flex",

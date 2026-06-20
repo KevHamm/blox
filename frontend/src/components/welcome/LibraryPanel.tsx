@@ -1,8 +1,11 @@
 import { useState } from "react";
 import type { BloxProject } from "../../utils/persistence";
 import { timeAgo } from "../../utils/persistence";
-import { docFontCss } from "../../utils/fonts";
-import type { DesignElement, DesignPage } from "../../types/design";
+import { getTemplates } from "../../utils/library";
+import { getMyProjects, addToMyProjects } from "../../utils/myProjects";
+import { useFavorites, favKey } from "../../utils/favorites";
+import { DesignPreview } from "./DesignPreview";
+import { HeartIcon } from "./ViewerBar";
 
 const CLASS_LABEL: Record<string, string> = {
   beamer: "Beamer", article: "Article", report: "Report",
@@ -10,8 +13,6 @@ const CLASS_LABEL: Record<string, string> = {
 };
 const byRecent = (a: BloxProject, b: BloxProject) => Date.parse(b.savedAt) - Date.parse(a.savedAt);
 
-// A4 / US-Letter document types offered by "Start from empty". (Beamer and Page
-// skip this step.)
 const DOC_TYPES = [
   { cls: "report", label: "Report", desc: "Title page, chapters & sections." },
   { cls: "article", label: "Article", desc: "A single-column paper." },
@@ -19,147 +20,265 @@ const DOC_TYPES = [
 ];
 
 type FlowKind = "doc" | "beamer" | "page";
+type SectionKey = "documents" | "presentations" | "pages";
+const PAGE_SIZE = 9;
+const PAGE_STEP = 10;
 
-// The signed-in workspace: a centered page of the user's projects — A4/US
-// documents and Beamer presentations, then design Pages. Each section's title
-// row carries the New project / Import buttons; "New project" slides the listing
-// aside for the create flow.
 export function LibraryPanel({
-  projects, pages, onOpen, onStart, onDesign
+  onOpen, onStart, onDesign, onView
 }: {
-  projects: BloxProject[];
-  pages: BloxProject[];
   onOpen: (project: BloxProject, rect?: DOMRect) => void;
   onStart: (cls: string, rect?: DOMRect) => void;
   onDesign: (kind: string, rect?: DOMRect) => void;
+  onView: (list: BloxProject[], index: number) => void;
 }) {
-  const a4 = projects.filter((p) => p.cls !== "beamer").slice().sort(byRecent);
-  const beamer = projects.filter((p) => p.cls === "beamer").slice().sort(byRecent);
+  const { isFav, toggle } = useFavorites();
+  const mine = getMyProjects();
+  const a4 = mine.projects.filter((p) => p.cls !== "beamer").slice().sort(byRecent);
+  const beamer = mine.projects.filter((p) => p.cls === "beamer").slice().sort(byRecent);
+  const tpl = getTemplates();
+  const fav = {
+    documents: tpl.documents.filter((p) => isFav(favKey(p))),
+    presentations: tpl.presentations.filter((p) => isFav(favKey(p))),
+    pages: tpl.pages.filter((p) => isFav(favKey(p)))
+  };
+  const favCount = fav.documents.length + fav.presentations.length + fav.pages.length;
 
-  // Create flow: browse → new (Start from empty / Browse templates) → templates
-  // (A4/US type choice). Beamer & Page jump straight to their editor.
-  const [flow, setFlow] = useState<"browse" | "new" | "templates">("browse");
+  const [tab, setTab] = useState<"mine" | "favorites" | "templates">("mine");
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [shown, setShown] = useState<Record<SectionKey, number>>({ documents: PAGE_SIZE, presentations: PAGE_SIZE, pages: PAGE_SIZE });
+
+  const [flow, setFlow] = useState<"browse" | "new" | "doctype">("browse");
   const [flowKind, setFlowKind] = useState<FlowKind>("doc");
   const flowIndex = flow === "browse" ? 0 : flow === "new" ? 1 : 2;
+
+  const isCol = (key: string) => collapsed.has(`${tab}:${key}`);
+  const toggleCol = (key: string) => setCollapsed((prev) => {
+    const id = `${tab}:${key}`; const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id); return next;
+  });
+  function switchTab(t: "mine" | "favorites" | "templates") { setTab(t); setFlow("browse"); }
+  function showMore(key: SectionKey) { setShown((s) => ({ ...s, [key]: s[key] + PAGE_STEP })); }
 
   const rectOf = (e: React.MouseEvent) => e.currentTarget.getBoundingClientRect();
   function openNew(kind: FlowKind) { setFlowKind(kind); setFlow("new"); }
   function startEmpty(e: React.MouseEvent) {
     if (flowKind === "beamer") onStart("beamer", rectOf(e));
     else if (flowKind === "page") onDesign("cover", rectOf(e));
-    else setFlow("templates");
+    else setFlow("doctype");
   }
   const flowNoun = flowKind === "beamer" ? "presentation" : flowKind === "page" ? "page" : "project";
   const emptyDesc = flowKind === "beamer" ? "A blank slide deck."
     : flowKind === "page" ? "A blank page to design freely."
     : "A blank document — you pick the type.";
 
+  // Open a template as a fresh personal project (and persist it under My projects).
+  function useTemplate(item: BloxProject, rect?: DOMRect) {
+    const copy: BloxProject = { ...item, savedAt: new Date().toISOString() };
+    addToMyProjects(copy);
+    onOpen(copy, rect);
+  }
+
+  // Cards for a template/favorites section: the full list drives the viewer's
+  // prev/next, while only `visible` are rendered.
+  const templateCards = (visible: BloxProject[], full: BloxProject[], slide?: boolean) =>
+    visible.map((item, i) => (
+      <ItemCard
+        key={item.savedAt + item.title} item={item} slide={slide} template
+        isFav={isFav(favKey(item))} onToggleFav={() => toggle(favKey(item))}
+        onView={() => onView(full, i)}
+        onOpenInEditor={(rect) => useTemplate(item, rect)}
+      />
+    ));
+
+  function templateSection(key: SectionKey, title: string, items: BloxProject[], slide?: boolean) {
+    const n = shown[key];
+    const visible = items.slice(0, n);
+    const hasMore = items.length > n;
+    return (
+      <Section title={title} collapsed={isCol(key)} onToggle={() => toggleCol(key)}>
+        <div className={`ws-grid${slide ? " slide" : ""}`}>
+          {templateCards(visible, items, slide)}
+          {hasMore && (
+            <button className={`ws-showmore${slide ? " slide" : ""}`} onClick={() => showMore(key)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+              <span className="ws-showmore-h">Show more</span>
+              <span className="ws-showmore-n">{items.length - n} more</span>
+            </button>
+          )}
+        </div>
+      </Section>
+    );
+  }
+
+  function favSection(key: SectionKey, title: string, items: BloxProject[], slide?: boolean) {
+    if (!items.length) return null;
+    return (
+      <Section title={title} collapsed={isCol(key)} onToggle={() => toggleCol(key)}>
+        <div className={`ws-grid${slide ? " slide" : ""}`}>{templateCards(items, items, slide)}</div>
+      </Section>
+    );
+  }
+
   return (
     <div className="workspace">
-      <div className="ws-flow">
-        <div className="ws-track" style={{ transform: `translateX(-${flowIndex * 100}%)` }}>
-          {/* 0 — the project listing */}
-          <div className="ws-browse lib-scroll ws-panel" aria-hidden={flow !== "browse"}>
-            <Section title="Documents" onNew={() => openNew("doc")}>
-              <div className="ws-grid">
-                {a4.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={onOpen} />)}
-              </div>
-            </Section>
-            <Section title="Presentations" onNew={() => openNew("beamer")}>
-              <div className="ws-grid slide">
-                {beamer.map((p) => <ItemCard key={p.savedAt + p.title} item={p} slide onOpen={onOpen} />)}
-              </div>
-            </Section>
-            {pages.length > 0 && (
-              <Section title="Pages" onNew={() => openNew("page")}>
-                <div className="ws-grid">
-                  {pages.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={onOpen} />)}
-                </div>
-              </Section>
-            )}
-          </div>
+      <div className="ws-tabs" role="tablist">
+        <button role="tab" aria-selected={tab === "mine"} className={`ws-tab${tab === "mine" ? " on" : ""}`} onClick={() => switchTab("mine")}>My projects</button>
+        <button role="tab" aria-selected={tab === "favorites"} className={`ws-tab${tab === "favorites" ? " on" : ""}`} onClick={() => switchTab("favorites")}>
+          Favorites{favCount > 0 && <span className="ws-tab-n">{favCount}</span>}
+        </button>
+        <button role="tab" aria-selected={tab === "templates"} className={`ws-tab${tab === "templates" ? " on" : ""}`} onClick={() => switchTab("templates")}>Templates</button>
+      </div>
 
-          {/* 1 — start options */}
-          <div className="ws-panel ws-center" aria-hidden={flow !== "new"}>
-            <div className="ws-flowcard">
-              <button className="ws-back" onClick={() => setFlow("browse")} aria-label="Back">
-                <Chevron /> Back
-              </button>
-              <h2 className="ws-flow-title">New {flowNoun}</h2>
-              <p className="ws-flow-sub">How would you like to start?</p>
-              <div className="ws-options">
-                <button className="ws-option" onClick={startEmpty}>
-                  <span className="ws-option-h">Start from empty</span>
-                  <span className="ws-option-d">{emptyDesc}</span>
-                </button>
-                <button className="ws-option" disabled>
-                  <span className="ws-option-h">Browse templates</span>
-                  <span className="ws-option-d">Coming soon.</span>
-                </button>
+      {tab === "mine" ? (
+        <div className="ws-flow">
+          <div className="ws-track" style={{ transform: `translateX(-${flowIndex * 100}%)` }}>
+            <div className="ws-browse lib-scroll ws-panel" aria-hidden={flow !== "browse"}>
+              <Section title="Documents" collapsed={isCol("documents")} onToggle={() => toggleCol("documents")} actions={<NewImport onNew={() => openNew("doc")} />}>
+                <div className="ws-grid">{a4.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={(rect) => onOpen(p, rect)} />)}</div>
+              </Section>
+              <Section title="Presentations" collapsed={isCol("presentations")} onToggle={() => toggleCol("presentations")} actions={<NewImport onNew={() => openNew("beamer")} />}>
+                <div className="ws-grid slide">{beamer.map((p) => <ItemCard key={p.savedAt + p.title} item={p} slide onOpen={(rect) => onOpen(p, rect)} />)}</div>
+              </Section>
+              {mine.pages.length > 0 && (
+                <Section title="Pages" collapsed={isCol("pages")} onToggle={() => toggleCol("pages")} actions={<NewImport onNew={() => openNew("page")} />}>
+                  <div className="ws-grid">{mine.pages.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={(rect) => onOpen(p, rect)} />)}</div>
+                </Section>
+              )}
+            </div>
+
+            <div className="ws-panel ws-center" aria-hidden={flow !== "new"}>
+              <div className="ws-flowcard">
+                <button className="ws-back" onClick={() => setFlow("browse")} aria-label="Back"><Chevron /> Back</button>
+                <h2 className="ws-flow-title">New {flowNoun}</h2>
+                <p className="ws-flow-sub">How would you like to start?</p>
+                <div className="ws-options">
+                  <button className="ws-option" onClick={startEmpty}>
+                    <span className="ws-option-h">Start from empty</span>
+                    <span className="ws-option-d">{emptyDesc}</span>
+                  </button>
+                  <button className="ws-option" disabled>
+                    <span className="ws-option-h">Browse templates</span>
+                    <span className="ws-option-d">Coming soon.</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* 2 — A4/US document type */}
-          <div className="ws-panel ws-center" aria-hidden={flow !== "templates"}>
-            <div className="ws-flowcard">
-              <button className="ws-back" onClick={() => setFlow("new")} aria-label="Back">
-                <Chevron /> Back
-              </button>
-              <h2 className="ws-flow-title">Choose a document type</h2>
-              <p className="ws-flow-sub">All are A4 / US-Letter sized.</p>
-              <div className="ws-typerow">
-                {DOC_TYPES.map((t) => (
-                  <button key={t.cls} className="ws-type" onClick={(e) => onStart(t.cls, rectOf(e))}>
-                    <span className="ws-type-thumb"><TypeGlyph cls={t.cls} /></span>
-                    <span className="ws-type-label">{t.label}</span>
-                    <span className="ws-type-desc">{t.desc}</span>
-                  </button>
-                ))}
+            <div className="ws-panel ws-center" aria-hidden={flow !== "doctype"}>
+              <div className="ws-flowcard">
+                <button className="ws-back" onClick={() => setFlow("new")} aria-label="Back"><Chevron /> Back</button>
+                <h2 className="ws-flow-title">Choose a document type</h2>
+                <p className="ws-flow-sub">All are A4 / US-Letter sized.</p>
+                <div className="ws-typerow">
+                  {DOC_TYPES.map((t) => (
+                    <button key={t.cls} className="ws-type" onClick={(e) => onStart(t.cls, rectOf(e))}>
+                      <span className="ws-type-thumb"><TypeGlyph cls={t.cls} /></span>
+                      <span className="ws-type-label">{t.label}</span>
+                      <span className="ws-type-desc">{t.desc}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : tab === "favorites" ? (
+        <div className="ws-list lib-scroll">
+          {favCount === 0 ? (
+            <div className="ws-empty">
+              <HeartIcon size={26} />
+              <p>No favorites yet — hover a template and tap the heart to save it here.</p>
+            </div>
+          ) : (
+            <>
+              {favSection("documents", "Documents", fav.documents)}
+              {favSection("presentations", "Presentations", fav.presentations, true)}
+              {favSection("pages", "Pages", fav.pages)}
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="ws-list lib-scroll">
+          {templateSection("documents", "Documents", tpl.documents)}
+          {templateSection("presentations", "Presentations", tpl.presentations, true)}
+          {templateSection("pages", "Pages", tpl.pages)}
+        </div>
+      )}
     </div>
   );
 }
 
-// A section: title row (with New project / Import) + a grid of cards.
-function Section({ title, onNew, children }: { title: string; onNew: () => void; children: React.ReactNode }) {
+function Section({ title, collapsed, onToggle, actions, children }: {
+  title: string; collapsed: boolean; onToggle: () => void; actions?: React.ReactNode; children: React.ReactNode;
+}) {
   return (
     <section className="ws-section">
       <div className="ws-section-head">
-        <h2 className="ws-h">{title}</h2>
-        <div className="ws-section-actions">
-          <button className="ws-headbtn primary" onClick={onNew}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-            New project
-          </button>
-          <button className="ws-headbtn ghost" disabled title="Coming soon">Import</button>
-        </div>
+        <button className="ws-collapse" onClick={onToggle} aria-expanded={!collapsed}>
+          <svg className={`ws-caret${collapsed ? " col" : ""}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+          <span className="ws-h">{title}</span>
+        </button>
+        {actions}
       </div>
-      {children}
+      {!collapsed && children}
     </section>
   );
 }
 
-function ItemCard({ item, slide, onOpen }: { item: BloxProject; slide?: boolean; onOpen: (p: BloxProject, rect?: DOMRect) => void }) {
-  const design = item.kind === "design" ? item.design : undefined;
+function NewImport({ onNew }: { onNew: () => void }) {
   return (
-    <button
-      className="lib-card"
-      title={`Open “${item.title || "Untitled"}”`}
-      onClick={(e) => { const t = e.currentTarget.querySelector(".lib-thumb"); onOpen(item, (t ?? e.currentTarget).getBoundingClientRect()); }}
+    <div className="ws-section-actions">
+      <button className="ws-headbtn primary" onClick={onNew}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        New project
+      </button>
+      <button className="ws-headbtn ghost" disabled title="Coming soon">Import</button>
+    </div>
+  );
+}
+
+function ItemCard({
+  item, slide, template, isFav, onToggleFav, onView, onOpenInEditor, onOpen
+}: {
+  item: BloxProject; slide?: boolean; template?: boolean;
+  isFav?: boolean; onToggleFav?: () => void; onView?: () => void;
+  onOpenInEditor?: (rect: DOMRect) => void; onOpen?: (rect: DOMRect) => void;
+}) {
+  const design = item.kind === "design" ? item.design : undefined;
+  const typeLabel = design ? "Cover page" : (CLASS_LABEL[item.cls] ?? "Document");
+  function cardClick(e: React.SyntheticEvent) {
+    const t = (e.currentTarget as HTMLElement).querySelector(".lib-thumb");
+    const rect = (t ?? (e.currentTarget as HTMLElement)).getBoundingClientRect();
+    if (template) onView?.(); else onOpen?.(rect);
+  }
+  return (
+    <div
+      className="lib-card" role="button" tabIndex={0}
+      title={template ? `Preview “${item.title || "Untitled"}”` : `Open “${item.title || "Untitled"}”`}
+      onClick={cardClick}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); cardClick(e); } }}
     >
       <span className={`lib-thumb${slide ? " slide" : ""}`} style={design ? { background: design.bg } : undefined}>
-        {design ? <PageThumb design={design} /> : <ProjectThumb project={item} />}
+        {design ? <DesignPreview design={design} /> : <ProjectThumb project={item} />}
+        {template && (
+          <>
+            <button className={`lib-heart${isFav ? " on" : ""}`} title={isFav ? "Remove from favorites" : "Save as favorite"}
+              onClick={(e) => { e.stopPropagation(); onToggleFav?.(); }}>
+              <HeartIcon filled={isFav} size={16} />
+            </button>
+            <div className="lib-actions" onClick={(e) => e.stopPropagation()}>
+              <button className="lib-act primary" onClick={(e) => onOpenInEditor?.(e.currentTarget.getBoundingClientRect())}>Open in editor</button>
+              <button className="lib-act" onClick={() => onView?.()}>View</button>
+            </div>
+          </>
+        )}
       </span>
       <span className="lib-cap">
         <span className="lib-cap-title">{item.title || "Untitled"}</span>
-        <span className="lib-cap-meta">{design ? "Cover page" : (CLASS_LABEL[item.cls] ?? "Document")} · {timeAgo(item.savedAt)}</span>
+        <span className="lib-cap-meta">{template ? typeLabel : `${typeLabel} · ${timeAgo(item.savedAt)}`}</span>
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -191,8 +310,7 @@ function TypeGlyph({ cls }: { cls: string }) {
   );
 }
 
-// A simplified typeset-paper preview, echoing the welcome hero paper. Beamer
-// projects render as a 4:3 title slide.
+// A simplified typeset-paper preview. Beamer projects render a 4:3 title slide.
 function ProjectThumb({ project }: { project: BloxProject }) {
   if (project.cls === "beamer") {
     return (
@@ -213,49 +331,4 @@ function ProjectThumb({ project }: { project: BloxProject }) {
       <span className="mp-fig"><i /><i /><i /></span>
     </span>
   );
-}
-
-// A faithful, scaled-down render of a design page.
-function PageThumb({ design }: { design: DesignPage }) {
-  const { pageWidth: W, pageHeight: H, elements } = design;
-  const pc = (v: number, total: number) => `${(v / total) * 100}%`;
-  return (
-    <span className="mini-design">
-      {elements.map((el) => <Element key={el.id} el={el} W={W} H={H} pc={pc} />)}
-    </span>
-  );
-}
-
-function Element({ el, W, H, pc }: { el: DesignElement; W: number; H: number; pc: (v: number, t: number) => string }) {
-  const box = { position: "absolute" as const, left: pc(el.x, W), top: pc(el.y, H), width: pc(el.w, W) };
-  if (el.kind === "text") {
-    return (
-      <span style={{
-        ...box, height: pc(el.h, H),
-        fontFamily: docFontCss(el.fontFamily ?? "cm"),
-        fontSize: `${(el.fontSize ?? 24) / W * 100}cqw`,
-        fontWeight: el.bold ? 700 : 400,
-        fontStyle: el.italic ? "italic" : "normal",
-        textDecoration: el.underline ? "underline" : "none",
-        color: el.color ?? "#111111",
-        textAlign: (el.align ?? "left"),
-        lineHeight: 1.18, whiteSpace: "pre-wrap", overflow: "hidden", display: "block"
-      }}>{el.text}</span>
-    );
-  }
-  if (el.kind === "image" && el.src) {
-    return <img src={el.src} alt="" style={{ ...box, height: pc(el.h, H), objectFit: "contain" }} />;
-  }
-  if (el.kind === "rect") {
-    return <span style={{
-      ...box, height: pc(el.h, H), display: "block",
-      background: el.fill ?? "transparent",
-      border: (el.strokeWidth ?? 0) > 0 ? `${(el.strokeWidth ?? 0) / W * 100}cqw solid ${el.stroke ?? "#111"}` : "none",
-      boxSizing: "border-box"
-    }} />;
-  }
-  return <span style={{
-    ...box, height: `${Math.max((el.strokeWidth ?? 2) / H * 100, 0.4)}%`,
-    background: el.stroke ?? "#111", display: "block", minHeight: "1px"
-  }} />;
 }

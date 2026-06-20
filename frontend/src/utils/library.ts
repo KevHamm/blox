@@ -39,7 +39,8 @@ export const LIBRARY_PROJECTS: BloxProject[] = [
   doc("report", "Q3 Infrastructure Review", 27),
   doc("beamer", "Thesis Defense — Final", 51),
   doc("article", "A Note on Low-Rank Adaptation", 96),
-  doc("book", "Foundations of Typesetting", 220)
+  doc("book", "Foundations of Typesetting", 220),
+  doc("wip", "Sandbox — 50-page stress test", 300)
 ];
 
 // Free-form design pages (covers).
@@ -74,4 +75,55 @@ export const LIBRARY_PAGES: BloxProject[] = [
 
 export function getLibrary(): { projects: BloxProject[]; pages: BloxProject[] } {
   return { projects: LIBRARY_PROJECTS, pages: LIBRARY_PAGES };
+}
+
+// ── Starter templates ─────────────────────────────────────────────────────
+// A larger, deterministic catalogue grouped like the user's own work
+// (Documents / Presentations / Pages). Clicking one opens a fresh copy.
+const DOC_TEMPLATES: [string, string][] = [
+  ["article", "Academic Article"], ["report", "Technical Report"], ["book", "Textbook"],
+  ["article", "Conference Paper"], ["report", "Lab Report"], ["article", "Essay"],
+  ["book", "Thesis"], ["report", "Whitepaper"], ["article", "Journal Submission"],
+  ["report", "Business Report"], ["book", "Manual"], ["article", "Short Note"],
+  ["report", "Case Study"], ["article", "Literature Review"], ["report", "Project Proposal"],
+  ["book", "Lecture Notes"], ["article", "Research Statement"], ["report", "Annual Review"],
+  ["article", "CV / Résumé"], ["report", "Grant Application"], ["book", "Novel"],
+  ["article", "Memo"], ["report", "Survey"], ["article", "Cover Letter"]
+];
+export const TEMPLATE_DOCUMENTS: BloxProject[] = DOC_TEMPLATES.map(([cls, title], i) => doc(cls, title, i + 1));
+
+const BEAMER_TEMPLATES = [
+  "Conference Talk", "Thesis Defense", "Lecture Slides", "Pitch Deck", "Seminar",
+  "Lab Meeting", "Workshop", "Keynote", "Tutorial", "Poster Session", "Project Kickoff",
+  "Sprint Review", "Webinar", "Course Intro", "Demo Day", "Onboarding"
+];
+export const TEMPLATE_PRESENTATIONS: BloxProject[] = BEAMER_TEMPLATES.map((title, i) => doc("beamer", title, i + 1));
+
+// Cover-page templates cycle a few colourways so their previews read distinctly.
+const COVER_STYLES = [
+  { bg: "#0e0a1a", accent: "#7c3aed", ink: "#ffffff", sub: "#c4b5fd" },
+  { bg: "#f4f1ea", accent: "#e0392b", ink: "#1d1d1f", sub: "#555555" },
+  { bg: "#ffffff", accent: "#7c3aed", ink: "#111111", sub: "#444444" },
+  { bg: "#10243a", accent: "#38bdf8", ink: "#ffffff", sub: "#bae6fd" },
+  { bg: "#1f1147", accent: "#f5a623", ink: "#ffffff", sub: "#fcd34d" }
+];
+function coverTemplate(title: string, i: number): BloxProject {
+  const s = COVER_STYLES[i % COVER_STYLES.length];
+  return page(title, {
+    kind: "cover", pageWidth: 816, pageHeight: 1056, bg: s.bg,
+    elements: [
+      el({ kind: "rect", x: 120, y: 210, w: 576, h: 6, fill: s.accent, stroke: s.accent, strokeWidth: 0 }),
+      el({ kind: "text", x: 96, y: 420, w: 624, h: 180, text: title, fontSize: 66, fontFamily: "helvetica", color: s.ink, align: "center", bold: true }),
+      el({ kind: "text", x: 96, y: 640, w: 624, h: 50, text: "A BLoX template", fontSize: 24, fontFamily: "helvetica", color: s.sub, align: "center" })
+    ]
+  }, i + 1);
+}
+const PAGE_TEMPLATES = [
+  "Minimal", "Editorial", "Bold Serif", "Tech Report", "Academic", "Conference",
+  "Magazine", "Portfolio", "Newsletter", "Brochure", "Title Slide", "Programme"
+];
+export const TEMPLATE_PAGES: BloxProject[] = PAGE_TEMPLATES.map((t, i) => coverTemplate(t, i));
+
+export function getTemplates(): { documents: BloxProject[]; presentations: BloxProject[]; pages: BloxProject[] } {
+  return { documents: TEMPLATE_DOCUMENTS, presentations: TEMPLATE_PRESENTATIONS, pages: TEMPLATE_PAGES };
 }

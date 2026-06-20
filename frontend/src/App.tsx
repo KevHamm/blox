@@ -22,6 +22,11 @@ import {
   type BloxProject
 } from "./utils/persistence";
 import { CoverDesigner } from "./components/design/CoverDesigner";
+import { ViewerBar } from "./components/welcome/ViewerBar";
+import { DesignPreview } from "./components/welcome/DesignPreview";
+import { useFavorites, favKey } from "./utils/favorites";
+import { addToMyProjects } from "./utils/myProjects";
+import { exportCover } from "./utils/exportCover";
 import { blankDesign } from "./types/design";
 
 import {
@@ -117,7 +122,16 @@ function MarginField({ label, value, min, max, onChange }:
   );
 }
 
-function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTheme }: { sidebarsIn?: boolean; template: TemplateLayout; project?: BloxProject | null; onBack?: () => void; dark: boolean; onToggleTheme: () => void }) {
+// When set, the Editor renders as a read-only template viewer (slim bar, no
+// sidebars, content non-interactive) rather than the full editor.
+type ViewerProps = {
+  onBack: () => void;
+  onOpenInEditor: () => void;
+  isFav: boolean;
+  onToggleFav: () => void;
+};
+
+function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTheme, viewer }: { sidebarsIn?: boolean; template: TemplateLayout; project?: BloxProject | null; onBack?: () => void; dark: boolean; onToggleTheme: () => void; viewer?: ViewerProps }) {
   // ── 1. All state first ──────────────────────────────────
   // Starting content: the reopened project's tree, or fresh content for the
   // chosen class (article / report / letter / …).
@@ -217,17 +231,32 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
   // "Continue last session".
   const autosaveTimer = useRef<number | undefined>(undefined);
   useEffect(() => {
+    if (viewer) return; // a read-only preview never writes the autosave slot
     window.clearTimeout(autosaveTimer.current);
     autosaveTimer.current = window.setTimeout(() => {
       saveAutosave(buildProject(template.cls, documentTitle, layout, doc, images));
     }, 800);
     return () => window.clearTimeout(autosaveTimer.current);
-  }, [doc, documentTitle, layout, images, template.cls]);
+  }, [doc, documentTitle, layout, images, template.cls, viewer]);
 
   // Download the session as a .blox project file (re-openable from the
   // welcome screen's "Open project").
   function saveProject() {
     downloadProject(buildProject(template.cls, documentTitle, layout, doc, images));
+  }
+
+  // Export the current document to LaTeX (shared by the top bar and the viewer
+  // bar). `numberedDoc` is assigned below but only read when this is invoked.
+  function exportDoc() {
+    exportLatex(numberedDoc, {
+      cls: template.cls, title: documentTitle, columns: layout.columns, fontSizePx: layout.fontSize
+    }).catch(() =>
+      confirmDialog({
+        title: "Export failed",
+        message: "Couldn't reach the export service — make sure the backend is running on localhost:8000.",
+        confirmLabel: "OK", noCancel: true
+      })
+    );
   }
 
   const rendererProps = {
@@ -539,33 +568,30 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
           // matching maxHeight caps it, so the explicit collapsed height (56) is
           // honoured instead of snapping back to the TopBar's content height.
           minHeight: 0,
-          height: topOpen ? TOPBAR_HEIGHT : TOPBAR_COLLAPSED_HEIGHT,
-          maxHeight: topOpen ? TOPBAR_HEIGHT : TOPBAR_COLLAPSED_HEIGHT,
+          height: viewer ? TOPBAR_COLLAPSED_HEIGHT : (topOpen ? TOPBAR_HEIGHT : TOPBAR_COLLAPSED_HEIGHT),
+          maxHeight: viewer ? TOPBAR_COLLAPSED_HEIGHT : (topOpen ? TOPBAR_HEIGHT : TOPBAR_COLLAPSED_HEIGHT),
           overflow: "hidden",
           transition: "height 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
           zIndex: 5
         }}
       >
+        {viewer ? (
+          <ViewerBar
+            onBack={viewer.onBack}
+            onOpenInEditor={viewer.onOpenInEditor}
+            isFav={viewer.isFav}
+            onToggleFav={viewer.onToggleFav}
+            dark={dark}
+            onToggleTheme={onToggleTheme}
+            onExport={exportDoc}
+          />
+        ) : (
         <TopBar
           onBack={onBack}
           onUndo={undo}
           onRedo={redo}
           onSave={saveProject}
-          onExport={() =>
-            exportLatex(numberedDoc, {
-              cls: template.cls,
-              title: documentTitle,
-              columns: layout.columns,
-              fontSizePx: layout.fontSize
-            }).catch(() =>
-              confirmDialog({
-                title: "Export failed",
-                message: "Couldn't reach the export service — make sure the backend is running on localhost:8000.",
-                confirmLabel: "OK",
-                noCancel: true
-              })
-            )
-          }
+          onExport={exportDoc}
           canUndo={canUndo}
           canRedo={canRedo}
           visible={sidebarsIn}
@@ -576,6 +602,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
           dark={dark}
           onToggleTheme={onToggleTheme}
         />
+        )}
       </div>
       <div
         className="editor-canvas"
@@ -592,7 +619,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
             top bar's underside — so the sidebars read as pillars supporting the
             top bar. Spans the doc-area edges (which track sidebar collapse); the
             bottom is left open. */}
-        {sidebarsIn && (
+        {!viewer && sidebarsIn && (
           <div
             className="doc-window-frame"
             style={{ left: leftOpen ? 280 : 0, right: rightOpen ? 260 : 0 }}
@@ -624,6 +651,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
         )}
 
         {/* SIDEBAR — wrapper collapses its width to slide the panel away. */}
+        {!viewer && (
         <div
           style={{
             flex: "0 0 auto",
@@ -814,10 +842,11 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
 
         </div>
         </div>
+        )}
 
 
         {/* DOCUMENT */}
-        <DroppableDocArea visible={sidebarsIn} docFont={docFontCss(layout.fontFamily)}>
+        <DroppableDocArea visible={sidebarsIn} docFont={docFontCss(layout.fontFamily)} readOnly={!!viewer}>
                 {pages.map((cols: any[], pageIndex: number) => (
                   <Page
                     key={pageIndex}
@@ -947,6 +976,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
         </DroppableDocArea>
 
         {/* RIGHT SIDEBAR — IMAGES (wrapper collapses width to slide away) */}
+        {!viewer && (
         <div
           style={{
             flex: "0 0 auto",
@@ -1029,10 +1059,11 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
           ))}
         </div>
         </div>
+        )}
       </div>
 
       {/* Edge toggles to hide / show each panel (only once the editor is in). */}
-      {sidebarsIn && (
+      {!viewer && sidebarsIn && (
         <>
           <EdgeToggle edge="left"  open={leftOpen}  size={280}           onToggle={() => setLeftOpen((v) => !v)} />
           <EdgeToggle edge="right" open={rightOpen} size={260}           onToggle={() => setRightOpen((v) => !v)} />
@@ -1065,7 +1096,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
 
       {/* Floating text-selection toolbar (bold / italic / underline / footnote /
           quote) and the BibTeX entry editor it opens. */}
-      {!pendingFootnote && (
+      {!viewer && !pendingFootnote && (
         <SelectionToolbar
           onBold={() => applyInlineFormat("bold")}
           onItalic={() => applyInlineFormat("italic")}
@@ -1074,7 +1105,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
           onQuote={openQuoteForSelection}
         />
       )}
-      {citeEditor && (
+      {!viewer && citeEditor && (
         <CiteEditor
           initial={citeEditor.raw}
           isEdit={citeEditor.mode === "edit"}
@@ -1089,6 +1120,90 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
 
 type MorphRect = { left: number; top: number; width: number; height: number };
 const MORPH_EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
+
+// A copy of a template to open as a fresh personal project.
+function copyForOpen(item: BloxProject): BloxProject {
+  return { ...item, savedAt: new Date().toISOString() };
+}
+
+// Read-only viewer for a design page (covers): the slim viewer bar + the design
+// rendered at full page size. (Documents reuse the Editor in viewer mode.)
+function DesignViewer({
+  item, onBack, onOpenInEditor, isFav, onToggleFav, dark, onToggleTheme
+}: {
+  item: BloxProject; onBack: () => void; onOpenInEditor: () => void;
+  isFav: boolean; onToggleFav: () => void; dark: boolean; onToggleTheme: () => void;
+}) {
+  const design = item.design!;
+  function exportThis() {
+    exportCover(design, item.title).catch(() =>
+      confirmDialog({ title: "Export failed", message: "Couldn't reach the export service — make sure the backend is running on localhost:8000.", confirmLabel: "OK", noCancel: true }));
+  }
+  return (
+    <div className="editor-shell" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div style={{ flex: "0 0 auto", height: TOPBAR_COLLAPSED_HEIGHT }}>
+        <ViewerBar onBack={onBack} onOpenInEditor={onOpenInEditor} isFav={isFav} onToggleFav={onToggleFav} dark={dark} onToggleTheme={onToggleTheme} onExport={exportThis} />
+      </div>
+      <div className="doc-area" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: 40, overflowY: "auto" }}>
+        <div className="blox-page" style={{ position: "relative", flex: "none", width: design.pageWidth, height: design.pageHeight, background: design.bg, borderRadius: 6, overflow: "hidden", boxShadow: "0 12px 40px rgba(55,45,25,0.10), 0 2px 6px rgba(55,45,25,0.06)" }}>
+          <DesignPreview design={design} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The template "View" overlay: a full-screen read-only preview with faded,
+// sliding prev/next buttons to walk the list.
+function TemplateViewer({
+  list, startIndex, onClose, onOpen, dark, onToggleTheme
+}: {
+  list: BloxProject[]; startIndex: number; onClose: () => void;
+  onOpen: (p: BloxProject) => void; dark: boolean; onToggleTheme: () => void;
+}) {
+  const [index, setIndex] = useState(startIndex);
+  const { isFav, toggle } = useFavorites();
+  const item = list[Math.min(index, list.length - 1)];
+  const key = favKey(item);
+
+  // Arrow keys walk the list; Escape closes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") setIndex((i) => Math.max(0, i - 1));
+      else if (e.key === "ArrowRight") setIndex((i) => Math.min(list.length - 1, i + 1));
+      else if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [list.length, onClose]);
+
+  function openInEditor() {
+    const copy = copyForOpen(item);
+    addToMyProjects(copy);
+    onClose();
+    onOpen(copy);
+  }
+  const shared = { onBack: onClose, onOpenInEditor: openInEditor, isFav: isFav(key), onToggleFav: () => toggle(key), dark, onToggleTheme };
+  const isDesign = item.kind === "design";
+
+  return (
+    <div className="template-viewer">
+      <div className="tv-stage" key={index}>
+        {isDesign ? (
+          <DesignViewer item={item} {...shared} />
+        ) : (
+          <Editor viewer={shared} project={item} template={templateFor(item.cls)} sidebarsIn dark={dark} onToggleTheme={onToggleTheme} onBack={onClose} />
+        )}
+      </div>
+      <button className="tv-nav tv-prev" disabled={index <= 0} onClick={() => setIndex((i) => Math.max(0, i - 1))} aria-label="Previous template">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 6 9 12 15 18" /></svg>
+      </button>
+      <button className="tv-nav tv-next" disabled={index >= list.length - 1} onClick={() => setIndex((i) => Math.min(list.length - 1, i + 1))} aria-label="Next template">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 6 15 12 9 18" /></svg>
+      </button>
+    </div>
+  );
+}
 
 export default function App() {
   // welcome → morph (card grows into the page) → editor (sidebars slide in).
@@ -1129,6 +1244,9 @@ export default function App() {
     setUser(null);
     try { localStorage.removeItem("blox-user"); } catch { /* ignore */ }
   }
+  // The read-only template "View" overlay (a list of items + the current index).
+  const [viewerState, setViewerState] = useState<{ list: BloxProject[]; index: number } | null>(null);
+  function openView(list: BloxProject[], index: number) { setViewerState({ list, index }); }
   // Dark mode for the whole app (welcome + editor chrome). Persisted and applied
   // as data-theme on <html> so scoped CSS re-skins everything; the document
   // paper itself stays white.
@@ -1272,6 +1390,7 @@ export default function App() {
             onStart={start}
             onOpen={openProject}
             onDesign={startDesign}
+            onView={openView}
             autosave={autosave}
             dark={dark}
             onToggleTheme={toggleTheme}
@@ -1300,6 +1419,18 @@ export default function App() {
             zIndex: 60,
             pointerEvents: "none"
           }}
+        />
+      )}
+
+      {/* Read-only template viewer overlay. */}
+      {viewerState && (
+        <TemplateViewer
+          list={viewerState.list}
+          startIndex={viewerState.index}
+          onClose={() => setViewerState(null)}
+          onOpen={(p) => { setViewerState(null); openProject(p); }}
+          dark={dark}
+          onToggleTheme={toggleTheme}
         />
       )}
 
