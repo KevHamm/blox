@@ -7,7 +7,7 @@ import { buildProject, buildDesignProject, type BloxProject, type ProjectLayout 
 import { templateFor, templateDoc } from "./templates";
 import type { DesignElement, DesignPage } from "../types/design";
 
-function layoutFor(cls: string): ProjectLayout {
+export function layoutFor(cls: string): ProjectLayout {
   const t = templateFor(cls);
   return {
     pageWidth: t.pageWidth, pageHeight: t.pageHeight,

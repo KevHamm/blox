@@ -144,8 +144,9 @@ takes `readOnly`. Documents reuse this; design pages use `DesignViewer` + `Desig
 ## Deferred / not-real (good next-step candidates)
 
 - The **Browse** catalogue is **seeded sample data** — no server-side storage or real accounts.
-  ("My templates" are real, but localStorage-only: `blox-my-templates`.) "Import" and the
-  create-flow's "Browse templates" button are still intentionally disabled.
+  ("My templates" are real, but localStorage-only: `blox-my-templates`.) The create-flow's "Browse
+  templates" button is still intentionally disabled. **Import now works**: it reads a `.tex` file
+  (`utils/importLatex.ts`, a best-effort LaTeX→`DocumentNode` parser) and opens it in the editor.
 - Only **page (design) templates** can be saved by the user today — there's no "save document as
   template" yet. The "My templates" Templates source therefore only ever holds design pages.
 - Design pages: only **cover** type exists; **bibliography** and **section-divider** types are

@@ -1,10 +1,12 @@
-import { useReducer, useState } from "react";
+import { useReducer, useRef, useState } from "react";
 import type { BloxProject } from "../../utils/persistence";
-import { timeAgo } from "../../utils/persistence";
-import { getTemplates } from "../../utils/library";
+import { timeAgo, buildProject } from "../../utils/persistence";
+import { getTemplates, layoutFor } from "../../utils/library";
 import { getMyProjects, addToMyProjects } from "../../utils/myProjects";
 import { getUserTemplates, removeUserTemplate } from "../../utils/userTemplates";
 import { useFavorites, favKey } from "../../utils/favorites";
+import { parseLatex } from "../../utils/importLatex";
+import { confirmDialog } from "../ConfirmDialog";
 import { DesignPreview } from "./DesignPreview";
 import { HeartIcon } from "./ViewerBar";
 
@@ -95,6 +97,29 @@ export function LibraryPanel({
     onOpen(copy, rect);
   }
 
+  // Import a .tex file: parse it into a document tree, persist it under My
+  // projects, and open it in the editor. Lossy bits are surfaced as a summary.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const triggerImport = () => fileRef.current?.click();
+  async function importTex(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-importing the same file
+    if (!file) return;
+    let parsed: ReturnType<typeof parseLatex> | null = null;
+    try { parsed = parseLatex(await file.text()); } catch { parsed = null; }
+    if (!parsed || !parsed.doc.children?.length) {
+      await confirmDialog({ title: "Couldn’t import that file", message: "We couldn’t find any LaTeX content to read. Make sure it’s a .tex document.", confirmLabel: "OK", noCancel: true });
+      return;
+    }
+    const title = parsed.title || file.name.replace(/\.(tex|latex)$/i, "") || "Imported document";
+    const project = buildProject(parsed.cls, title, layoutFor(parsed.cls), parsed.doc, []);
+    addToMyProjects(project);
+    if (parsed.notes.length) {
+      await confirmDialog({ title: "Imported — a few things were simplified", message: parsed.notes.join("  ·  "), confirmLabel: "Open in editor", noCancel: true });
+    }
+    onOpen(project);
+  }
+
   // Cards for a template/favorites section: the full list drives the viewer's
   // prev/next, while only `visible` are rendered.
   const templateCards = (visible: BloxProject[], full: BloxProject[], slide?: boolean) =>
@@ -139,6 +164,7 @@ export function LibraryPanel({
 
   return (
     <div className="workspace">
+      <input ref={fileRef} type="file" accept=".tex,.latex,text/x-tex,text/plain" style={{ display: "none" }} onChange={importTex} />
       <div className="ws-tabsrow">
         <div className="ws-tabs" role="tablist">
           <button role="tab" aria-selected={tab === "mine"} className={`ws-tab${tab === "mine" ? " on" : ""}`} onClick={() => switchTab("mine")}>My projects</button>
@@ -171,17 +197,17 @@ export function LibraryPanel({
               ) : (
                 <>
                   {(q ? a4f.length > 0 : true) && (
-                    <Section title="Documents" collapsed={isCol("documents")} onToggle={() => toggleCol("documents")} actions={<NewImport onNew={() => openNew("doc")} />}>
+                    <Section title="Documents" collapsed={isCol("documents")} onToggle={() => toggleCol("documents")} actions={<NewImport onNew={() => openNew("doc")} onImport={triggerImport} />}>
                       <div className="ws-grid">{a4f.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={(rect) => onOpen(p, rect)} />)}</div>
                     </Section>
                   )}
                   {(q ? beamerf.length > 0 : true) && (
-                    <Section title="Presentations" collapsed={isCol("presentations")} onToggle={() => toggleCol("presentations")} actions={<NewImport onNew={() => openNew("beamer")} />}>
+                    <Section title="Presentations" collapsed={isCol("presentations")} onToggle={() => toggleCol("presentations")} actions={<NewImport onNew={() => openNew("beamer")} onImport={triggerImport} />}>
                       <div className="ws-grid slide">{beamerf.map((p) => <ItemCard key={p.savedAt + p.title} item={p} slide onOpen={(rect) => onOpen(p, rect)} />)}</div>
                     </Section>
                   )}
                   {(q ? minePagesf.length > 0 : mine.pages.length > 0) && (
-                    <Section title="Pages" collapsed={isCol("pages")} onToggle={() => toggleCol("pages")} actions={<NewImport onNew={() => openNew("page")} />}>
+                    <Section title="Pages" collapsed={isCol("pages")} onToggle={() => toggleCol("pages")} actions={<NewImport onNew={() => openNew("page")} onImport={triggerImport} />}>
                       <div className="ws-grid">{minePagesf.map((p) => <ItemCard key={p.savedAt + p.title} item={p} onOpen={(rect) => onOpen(p, rect)} />)}</div>
                     </Section>
                   )}
@@ -316,14 +342,14 @@ function Section({ title, collapsed, onToggle, actions, children }: {
   );
 }
 
-function NewImport({ onNew }: { onNew: () => void }) {
+function NewImport({ onNew, onImport }: { onNew: () => void; onImport: () => void }) {
   return (
     <div className="ws-section-actions">
       <button className="ws-headbtn primary" onClick={onNew}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
         New project
       </button>
-      <button className="ws-headbtn ghost" disabled title="Coming soon">Import</button>
+      <button className="ws-headbtn ghost" onClick={onImport} title="Import a .tex file">Import</button>
     </div>
   );
 }
