@@ -1043,6 +1043,20 @@ math-field::part(menu-toggle) {
   box-shadow: 0 4px 14px var(--ui-accent-ring) !important;
   transform: translateY(-1px);
 }
+/* Page-sized "+" button that imports a page (leftmost overview slot + deck). */
+.outline-plus {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 4px; cursor: pointer; color: var(--ui-2nd);
+  background: var(--ctrl-surface);
+  border: 1.5px dashed var(--ctrl-border);
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+.outline-plus:hover {
+  color: var(--ui-blue);
+  border-color: var(--ui-blue);
+  background: var(--ui-accent-soft);
+  transform: translateY(-1px);
+}
 .outline-tab {
   flex: 0 0 auto;
   max-width: 200px;
@@ -1410,6 +1424,64 @@ math-field::part(menu-toggle) {
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* ── Import-a-page modal ──────────────────────────────────────────────── */
+.imp-card {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  box-sizing: border-box;
+  padding: 22px 22px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--ui-hairline);
+  box-shadow: inset 0 1px 0 var(--panel-glint), 0 24px 80px rgba(40, 12, 60, 0.4);
+  animation: confirmPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.imp-x {
+  position: absolute; top: 14px; right: 14px; display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
+  background: var(--ctrl-surface); border: 1px solid var(--ctrl-border); color: var(--ui-2nd);
+}
+.imp-x:hover { color: var(--ui-text); }
+.imp-head { margin-bottom: 14px; padding-right: 30px; }
+.imp-title { font-family: var(--ui-display); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: var(--ui-text); }
+.imp-sub { font-family: var(--ui-font); font-size: 13px; line-height: 1.5; color: var(--ui-2nd); margin-top: 4px; }
+
+.imp-tabs { display: inline-flex; gap: 4px; padding: 3px; border-radius: 10px; margin-bottom: 16px; background: var(--ctrl-surface); border: 1px solid var(--ctrl-border); }
+.imp-tab { display: inline-flex; align-items: center; padding: 6px 16px; border-radius: 8px; cursor: pointer; font-family: var(--ui-display); font-weight: 600; font-size: 13px; color: var(--ui-2nd); background: transparent; border: none; transition: color 0.15s ease, background 0.15s ease; }
+.imp-tab:hover { color: var(--ui-text); }
+.imp-tab.on { color: var(--ui-text); background: var(--ui-accent-soft); box-shadow: 0 1px 3px rgba(40, 30, 60, 0.12); }
+
+.imp-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px;
+  max-height: 52vh; overflow-y: auto; overflow-x: hidden; padding: 2px; overscroll-behavior: contain;
+}
+.imp-item { display: flex; flex-direction: column; gap: 7px; padding: 0; background: transparent; border: none; cursor: pointer; text-align: left; }
+.imp-thumb {
+  display: block; position: relative; width: 100%; aspect-ratio: 1 / 1.294; border-radius: 7px; overflow: hidden;
+  border: 1px solid var(--ctrl-border); box-shadow: 0 8px 22px -14px rgba(40, 30, 60, 0.5); transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.imp-item:hover .imp-thumb { transform: translateY(-3px); box-shadow: 0 16px 32px -16px rgba(40, 30, 60, 0.55); border-color: var(--ui-blue); }
+.imp-cap { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; }
+.imp-cap-title { font-family: var(--ui-display); font-weight: 600; font-size: 12.5px; color: var(--ui-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.imp-cap-size { flex: 0 0 auto; font-family: var(--ui-font); font-size: 10px; font-weight: 600; color: #92610a; background: #fff7e6; border: 1px solid #f0c674; border-radius: 999px; padding: 1px 6px; }
+.imp-empty { grid-column: 1 / -1; padding: 36px 0; text-align: center; font-family: var(--ui-font); font-size: 13px; color: var(--ui-2nd); }
+
+.imp-back { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 8px; padding: 4px 8px 4px 4px; border-radius: 7px; cursor: pointer; background: var(--ctrl-surface); border: 1px solid var(--ctrl-border); color: var(--ui-2nd); font-family: var(--ui-font); font-size: 12.5px; font-weight: 600; }
+.imp-back:hover { color: var(--ui-text); }
+.imp-place { display: flex; gap: 20px; align-items: flex-start; }
+.imp-thumb-lg { flex: 0 0 200px; width: 200px; cursor: default; }
+.imp-item:hover .imp-thumb-lg, .imp-thumb-lg:hover { transform: none; }
+.imp-place-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding-top: 4px; }
+.imp-field { display: flex; flex-direction: column; gap: 7px; }
+.imp-field-lbl { font-family: var(--ui-display); font-weight: 600; font-size: 13px; color: var(--ui-text); }
+.imp-warn {
+  display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border-radius: 10px;
+  background: #fff7e6; border: 1px solid #f0c674; color: #92610a;
+  font-family: var(--ui-font); font-size: 12.5px; line-height: 1.45;
+}
+.imp-warn svg { flex: 0 0 auto; margin-top: 1px; }
+.imp-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 
 /* Every button inside the document page is faded until hovered. */
 .doc-area button {

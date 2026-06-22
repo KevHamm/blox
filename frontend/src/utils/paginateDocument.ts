@@ -30,6 +30,9 @@ export const isContainerType = (t: string) => CONTAINERS.has(t);
 // A beamer frame holds children like a container, but it is never split: each
 // frame is laid out as exactly one page (one slide).
 export const isFrameType = (t: string) => t === "frame";
+// A node that always occupies exactly one page of its own, wherever it sits in
+// the content run: beamer frames (slides) and imported design pages.
+export const isOwnPageType = (t: string) => isFrameType(t) || t === "designpage";
 
 function heightsUnchanged(
   prev: Record<string, number>,
@@ -209,10 +212,10 @@ export function paginateColumns(
   // so a cover page always pushes the body to the next page. The body's first
   // page carries the document title, so it reserves room for it.
   //
-  // Beamer frames each occupy their own page (one slide), so they never split
-  // and never spill onto the next slide. Any non-frame content between frames
-  // still flows normally.
-  if (content.some((c: any) => isFrameType(c.type))) {
+  // Beamer frames and imported design pages each occupy their own page, so they
+  // never split and never spill onto the next page. Any other content between
+  // them still flows normally.
+  if (content.some((c: any) => isOwnPageType(c.type))) {
     let run: any[] = [];
     const flush = () => {
       if (run.length) {
@@ -221,7 +224,7 @@ export function paginateColumns(
       }
     };
     for (const node of content) {
-      if (isFrameType(node.type)) { flush(); out.push([[fullChunk(node)]]); }
+      if (isOwnPageType(node.type)) { flush(); out.push([[fullChunk(node)]]); }
       else run.push(node);
     }
     flush();

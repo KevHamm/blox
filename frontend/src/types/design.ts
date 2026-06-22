@@ -50,3 +50,16 @@ export const A4: { pageWidth: number; pageHeight: number } = { pageWidth: 794, p
 export function blankDesign(kind: DesignPage["kind"] = "cover"): DesignPage {
   return { kind, pageWidth: LETTER.pageWidth, pageHeight: LETTER.pageHeight, bg: "#ffffff", elements: [] };
 }
+
+// A friendly name for a page size, used in the import size-mismatch warning.
+export function pageSizeLabel(w: number, h: number): string {
+  if (w === LETTER.pageWidth && h === LETTER.pageHeight) return "US-Letter";
+  if (w === A4.pageWidth && h === A4.pageHeight) return "A4";
+  return "a custom size";
+}
+
+// Whether two page sizes differ enough that importing one into the other would
+// distort the design (any difference in width or height).
+export function pageSizeDiffers(aw: number, ah: number, bw: number, bh: number): boolean {
+  return Math.round(aw) !== Math.round(bw) || Math.round(ah) !== Math.round(bh);
+}

@@ -207,6 +207,8 @@ export function nodeHasContent(node: any): boolean {
       return (node.rows ?? []).some((row: string[]) => row.some((c) => (c ?? "").trim()));
     case "figure":
       return (node.images ?? []).length > 0;
+    case "designpage":
+      return true; // an imported page always carries its design
     case "section":
     case "subsection":
     case "subsubsection":

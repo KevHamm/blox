@@ -8,21 +8,24 @@ export type ExportMeta = {
   fontSizePx: number;
 };
 
-// True when any figure carries a real (data-URL) image — those exports go
-// through /export-zip so the decoded image files ship next to the .tex.
-function hasFigureImages(node: any): boolean {
+const isDataUrl = (s: any) => typeof s === "string" && s.startsWith("data:");
+
+// True when any figure or imported design page carries a real (data-URL) image —
+// those exports go through /export-zip so the decoded image files ship next to
+// the .tex.
+function hasBundledImages(node: any): boolean {
   if (!node) return false;
-  if (
-    node.type === "figure" &&
-    (node.images ?? []).some((im: any) => typeof im?.src === "string" && im.src.startsWith("data:"))
-  ) {
+  if (node.type === "figure" && (node.images ?? []).some((im: any) => isDataUrl(im?.src))) {
     return true;
   }
-  return (node.children ?? []).some(hasFigureImages);
+  if (node.type === "designpage" && (node.design?.elements ?? []).some((el: any) => isDataUrl(el?.src))) {
+    return true;
+  }
+  return (node.children ?? []).some(hasBundledImages);
 }
 
 export async function exportLatex(doc: any, meta: ExportMeta) {
-  const zip = hasFigureImages(doc);
+  const zip = hasBundledImages(doc);
   const endpoint = zip ? "export-zip" : "export-latex";
 
   const res = await fetch(`http://localhost:8000/${endpoint}`, {

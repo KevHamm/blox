@@ -11,7 +11,7 @@ import { useShapes } from "./hooks/useShapes";
 import { useCitations } from "./hooks/useCitations";
 import { useEditorDnd } from "./hooks/useEditorDnd";
 import { numberDocument } from "./utils/numberDocument";
-import { paginateColumns, heightsUnchanged } from "./utils/paginateDocument";
+import { paginateColumns, heightsUnchanged, isSpecialPage, isOwnPageType } from "./utils/paginateDocument";
 import { exportLatex } from "./utils/exportLatex";
 import {
   buildProject,
@@ -71,6 +71,7 @@ import {
   LayoutIcon
 } from "./components/blocks";
 import { ShapeLayer } from "./components/shapes";
+import { PageImportModal, type InsertPos } from "./components/PageImportModal";
 import { ConfirmHost, confirmDialog } from "./components/ConfirmDialog";
 import { SelectionToolbar, CiteEditor } from "./components/citations";
 import {
@@ -93,7 +94,8 @@ const DELETE_LABELS: Record<string, string> = {
   table: "table",
   math: "equation",
   figure: "figure",
-  frame: "slide"
+  frame: "slide",
+  designpage: "page"
 };
 
 // A compact labelled integer field (px) used for the 2×2 margins grid.
@@ -156,7 +158,8 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
     addTableColumn, deleteTableColumnAt, updateTableColWidths,
     updateTableCaption, updateTableColors, deleteTableColumn,
     toggleTableBorder, toggleCellBorder, reorderTableColumn, reorderTableRow,
-    moveSection, moveSubsection
+    moveSection, moveSubsection,
+    insertDesignPage, reorderTopLevel
   } = useDocument(initialDoc);
   const [editingId, setEditingId] = useState<string | null>(null);
   // Which sidebar tab is showing (Typography controls vs the Blox palette).
@@ -167,6 +170,9 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
   const [topOpen, setTopOpen] = useState(true);
   // While true, the next click on a paragraph word attaches a footnote there.
   const [pendingFootnote, setPendingFootnote] = useState(false);
+  // When set, the "Import a page" modal is open; the value is the default insert
+  // position (from whichever "+" button opened it).
+  const [importTarget, setImportTarget] = useState<InsertPos | null>(null);
   const [documentTitle, setDocumentTitle] = useState(project?.title ?? template.title);
   // Measured heights: every flow leaf (paragraph/table/figure) and every
   // container header (section/subsection/subsubsection).
@@ -278,6 +284,11 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
     onTyping: setTyping, onCaret: setCaret,
     // LaTeX letters are block-style: no first-line paragraph indent.
     blockParagraphs: template.cls === "letter",
+    // Imported design pages render full-bleed and need the document's page size
+    // (to detect a size mismatch); read-only viewers suppress their controls.
+    docPageWidth: layout.pageWidth,
+    docPageHeight: layout.pageHeight,
+    readOnly: !!viewer,
   };
 
   // ── 2. Derived values ───────────────────────────────────
@@ -311,7 +322,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
   // indices it occupies, plus a human label. Sections that span several pages
   // carry all of them so the preview can stack / spread them.
   const outline = useMemo(() => {
-    const OUTLINE_TYPES = new Set(["coverpage", "toc", "bibliography", "section", "frame"]);
+    const OUTLINE_TYPES = new Set(["coverpage", "toc", "bibliography", "section", "frame", "designpage"]);
     // node.id → sorted unique page indices where a top-level chunk for it appears.
     const nodePages = new Map<string, number[]>();
     pages.forEach((cols: any[], pi: number) => {
@@ -333,6 +344,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
         node.type === "coverpage" ? "Cover"
         : node.type === "toc" ? "Table of Contents"
         : node.type === "bibliography" ? "Bibliography"
+        : node.type === "designpage" ? (node.title ?? "Page")
         : node.type === "section" ? `${node.sectionNumber ?? ""} ${node.title ?? ""}`.trim() || "Section"
         : (node.title ?? "Slide");
       out.push({ key: node.id, type: node.type, label, pages: pgs, first: pgs[0] });
@@ -369,11 +381,18 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
     placeCaretAt(target, local);
   }, [pages]);
 
-  // The document title lives on the body's first page — i.e. after any leading
-  // cover page / table of contents.
-  const titlePageIndex = (numberedDoc.children ?? []).filter(
-    (c: any) => c.type === "coverpage" || c.type === "toc"
-  ).length;
+  // The document title lives on the body's first page — i.e. the first page that
+  // isn't a stand-alone page (cover / TOC / bibliography / imported design page /
+  // frame). An empty body page (no chunks) still counts, so the title shows on a
+  // blank new document.
+  const titlePageIndex = useMemo(() => {
+    const isPageNode = (t: string) => isSpecialPage(t) || isOwnPageType(t);
+    const i = pages.findIndex((cols: any[]) => {
+      const chunks = cols.flat();
+      return !(chunks.length > 0 && chunks.every((ch: any) => isPageNode(ch.node.type)));
+    });
+    return i < 0 ? pages.length : i;
+  }, [pages]);
 
   // ── 4. Measure rendered leaf/header heights for pagination ──
   useLayoutEffect(() => {
@@ -611,6 +630,8 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
           layout={layout}
           dark={dark}
           onToggleTheme={onToggleTheme}
+          onRequestImport={(pos: InsertPos) => setImportTarget(pos)}
+          onReorder={reorderTopLevel}
         />
         )}
       </div>
@@ -1123,6 +1144,19 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
           onSave={saveCiteEditor}
           onCancel={() => setCiteEditor(null)}
           onDelete={citeEditor.mode === "edit" ? () => deleteCiteEntry(citeEditor.entryId) : undefined}
+        />
+      )}
+
+      {/* "Import a page" picker — opened by the "+" buttons in the top-bar
+          pages preview. Inserts a free-form design page into the document. */}
+      {!viewer && importTarget && (
+        <PageImportModal
+          outline={outline}
+          docPageWidth={layout.pageWidth}
+          docPageHeight={layout.pageHeight}
+          defaultPos={importTarget}
+          onImport={insertDesignPage}
+          onClose={() => setImportTarget(null)}
         />
       )}
     </DndContext>

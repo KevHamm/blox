@@ -625,6 +625,48 @@ export function useDocument(initial?: DocumentNode) {
   }
 
   // -----------------------------
+  // IMPORT A DESIGN PAGE
+  // -----------------------------
+  // Insert an imported free-form design page as a top-level node, before the
+  // child with id `beforeId` (or at the end when `beforeId` is null).
+  function insertDesignPage(design: any, title: string, beforeId: string | null) {
+    setDoc((prev) => {
+      const children = [...(prev.children ?? [])];
+      const node: DocumentNode = {
+        id: crypto.randomUUID(),
+        type: "designpage",
+        title: title || "Page",
+        design
+      };
+      let at = beforeId == null ? children.length : children.findIndex((c: any) => c.id === beforeId);
+      if (at < 0) at = children.length;
+      children.splice(at, 0, node);
+      return { ...prev, children };
+    });
+  }
+
+  // -----------------------------
+  // REORDER A TOP-LEVEL NODE
+  // -----------------------------
+  // Move the top-level child `fromId` so it sits immediately before `beforeId`
+  // (or at the end when `beforeId` is null). Section numbering recomputes from
+  // the new order via numberDocument; cover/toc/bibliography keep their pinned
+  // positions through pagination regardless of array order.
+  function reorderTopLevel(fromId: string, beforeId: string | null) {
+    setDoc((prev) => {
+      const children = [...(prev.children ?? [])];
+      const from = children.findIndex((c: any) => c.id === fromId);
+      if (from === -1) return prev;
+      if (beforeId === fromId) return prev;
+      const [moved] = children.splice(from, 1);
+      let at = beforeId == null ? children.length : children.findIndex((c: any) => c.id === beforeId);
+      if (at < 0) at = children.length;
+      children.splice(at, 0, moved);
+      return { ...prev, children };
+    });
+  }
+
+  // -----------------------------
   // MOVE SECTION UP / DOWN
   // -----------------------------
   function moveSection(sectionId: string, direction: -1 | 1) {
@@ -747,6 +789,8 @@ export function useDocument(initial?: DocumentNode) {
     reorderTableColumn,
     reorderTableRow,
     moveSection,
-    moveSubsection
+    moveSubsection,
+    insertDesignPage,
+    reorderTopLevel
   };
 }

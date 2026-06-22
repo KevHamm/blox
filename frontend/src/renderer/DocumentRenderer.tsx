@@ -10,6 +10,7 @@ import { FigureBlock } from "./FigureBlock";
 import { TableBlock } from "./TableBlock";
 import { Subsection, Subsubsection, Section } from "./SectionBlocks";
 import { PageBlock } from "./PageBlock";
+import { DesignPageBlock } from "./DesignPageBlock";
 import { ListBlock } from "./ListBlock";
 import { FrameBlock } from "./FrameBlock";
 import { CodeBlock } from "./CodeBlock";
@@ -132,6 +133,17 @@ function renderChunk(chunk: Chunk, props: any, firstChild = false): any {
       <div data-leaf-id={node.id}>
         <PageBlock node={node} {...props} />
       </div>
+    );
+  }
+  if (node.type === "designpage") {
+    return (
+      <DesignPageBlock
+        node={node}
+        docPageWidth={props.docPageWidth}
+        docPageHeight={props.docPageHeight}
+        deleteNodeById={props.deleteNodeById}
+        readOnly={props.readOnly}
+      />
     );
   }
   if (node.type === "figure") {

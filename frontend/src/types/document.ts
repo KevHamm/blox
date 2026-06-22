@@ -1,3 +1,5 @@
+import type { DesignPage } from "./design";
+
 // A free-form vector shape that floats over the document (not part of the text
 // flow). Anchored to a page by index, positioned/sized in page pixels measured
 // from the page's top-left corner (margins included). Lines/arrows are drawn
@@ -30,6 +32,9 @@ export interface DocumentNode {
     | "coverpage"
     | "toc"
     | "bibliography"
+    // A free-form design page (cover-style) imported into the document. Carries
+    // its own `design` payload and occupies one full-bleed page of its own.
+    | "designpage"
     | "section"
     | "subsection"
     | "subsubsection"
@@ -89,4 +94,7 @@ export interface DocumentNode {
   children?: DocumentNode[];
   // Free-form overlay shapes (only meaningful on the root document node).
   shapes?: Shape[];
+  // The embedded page payload for a "designpage" node (a free-form page imported
+  // into the document). Rendered full-bleed and exported as a design page.
+  design?: DesignPage;
 }
