@@ -149,7 +149,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
     undo, redo, canUndo, canRedo,
     updateTextById, updateRichText, updateSectionTitle, updateFigureCaption,
     updateMathItem, deleteMathItem, setFootnoteText, removeFootnote,
-    updateListItem, addListItem, deleteListItem, setListStyle,
+    updateListItem, addListItem, deleteListItem, setListStyle, updateNodeFields,
     addSectionAfter, updateFigureWidth,
     deleteFigureImage, addSubsection, addSubsubsection, updateTableCell,
     deleteNodeById, addTableRow, deleteTableRow, deleteTableRowAt,
@@ -274,7 +274,7 @@ function Editor({ sidebarsIn = true, template, project, onBack, dark, onToggleTh
     lineHeight: layout.lineHeight, fontSize: layout.fontSize,
     moveSection, moveSubsection, updateFigureCaption, updateFigureWidth,
     deleteFigureImage, updateMathItem, deleteMathItem,
-    updateListItem, addListItem, deleteListItem, setListStyle,
+    updateListItem, addListItem, deleteListItem, setListStyle, updateNodeFields,
     onTyping: setTyping, onCaret: setCaret,
     // LaTeX letters are block-style: no first-line paragraph indent.
     blockParagraphs: template.cls === "letter",

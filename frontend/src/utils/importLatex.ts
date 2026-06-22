@@ -151,12 +151,29 @@ function stripComments(s: string): string {
   let out = "";
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
-    if (c === "\\") { out += c + (s[i + 1] ?? ""); i++; continue; }
+    if (c === "\\") {
+      // Verbatim-like environments are copied through untouched — `%` is literal
+      // there, not a comment.
+      const m = s.startsWith("\\begin{", i) ? /^\\begin\{(verbatim|lstlisting|minted|Verbatim)\}/.exec(s.slice(i)) : null;
+      if (m) {
+        const endTok = `\\end{${m[1]}}`;
+        const end = s.indexOf(endTok, i + m[0].length);
+        const stop = end < 0 ? s.length : end + endTok.length;
+        out += s.slice(i, stop);
+        i = stop - 1;
+        continue;
+      }
+      out += c + (s[i + 1] ?? ""); i++; continue;
+    }
     if (c === "%") { while (i < s.length && s[i] !== "\n") i++; out += "\n"; continue; }
     out += c;
   }
   return out;
 }
+
+// Strip exactly one leading + one trailing newline (how verbatim/code content is
+// wrapped on export), keeping all interior whitespace.
+const trimVerbatim = (s: string) => s.replace(/^\r?\n/, "").replace(/\r?\n[ \t]*$/, "");
 
 function envBody(src: string, env: string, from: number): { body: string; next: number } {
   const open = `\\begin{${env}}`, close = `\\end{${env}}`;
@@ -306,6 +323,15 @@ export function parseLatex(tex: string): ParseResult {
         else if (env === "table" || env === "tabular") { const t = parseTable(env === "tabular" ? `\\begin{tabular}${inner}\\end{tabular}` : inner, notes); if (t) emit(t); }
         else if (env === "figure") emit(parseFigure(inner, notes));
         else if (["equation", "equation*", "align", "align*", "displaymath", "eqnarray", "gather", "multline"].includes(env)) emit(mathNode(inner));
+        else if (env === "verbatim" || env === "Verbatim") emit({ id: uid(), type: "verbatim", text: trimVerbatim(inner) });
+        else if (env === "lstlisting" || env === "minted") {
+          let rest = inner, lang = "text";
+          const optM = /^\s*\[([^\]]*)\]/.exec(rest);          // lstlisting [language=…]
+          const braceM = /^\s*\{([^}]*)\}/.exec(rest);          // minted {lang}
+          if (optM) { const lm = /language\s*=\s*\{?([A-Za-z0-9+#.]+)\}?/i.exec(optM[1]); if (lm) lang = lm[1]; rest = rest.slice(optM[0].length); }
+          else if (env === "minted" && braceM) { lang = braceM[1].trim() || "text"; rest = rest.slice(braceM[0].length); }
+          emit({ id: uid(), type: "code", language: lang, text: trimVerbatim(rest) });
+        }
         else if (env === "center") { const p = paragraphNode(inner, notes); if (p) { p.align = "center"; emit(p); } }
         else if (env === "titlepage") { const t = inlineText(inner, notes).split("\n").map((l) => l.trim()).find((l) => l.length) || "Cover Page"; if (!title) title = t; emit({ id: uid(), type: "coverpage", title: t }); }
         else if (env === "thebibliography") emit({ id: uid(), type: "bibliography", title: "Bibliography" });

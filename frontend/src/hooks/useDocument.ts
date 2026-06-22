@@ -14,6 +14,7 @@ import {
   addListItemTree,
   deleteListItemTree,
   setListStyleTree,
+  patchNodeTree,
   toggleTableCellBorderTree
 } from "../utils/docTree";
 
@@ -202,6 +203,10 @@ export function useDocument(initial?: DocumentNode) {
   }
   function setListStyle(listId: string, style: "dash" | "dot" | "number") {
     setDoc((prev) => setListStyleTree(prev, listId, style));
+  }
+  // Discrete field edits on any node (e.g. a code block's language).
+  function updateNodeFields(id: string, patch: Record<string, any>) {
+    setDoc((prev) => patchNodeTree(prev, id, patch));
   }
 
   // -----------------------------
@@ -720,6 +725,7 @@ export function useDocument(initial?: DocumentNode) {
     addListItem,
     deleteListItem,
     setListStyle,
+    updateNodeFields,
     addSectionAfter,
     updateFigureWidth,
     deleteFigureImage,

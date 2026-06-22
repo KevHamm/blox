@@ -9,6 +9,8 @@ import {
   newAbstract,
   newList,
   newEquation,
+  newVerbatim,
+  newCode,
   mathNode,
   MATH_TEMPLATES,
   ARROW_COMMANDS,
@@ -143,6 +145,29 @@ export function ListGlyph() {
   );
 }
 
+// Code glyph: angle brackets around a slash (</>).
+export function CodeGlyph() {
+  return (
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="8 8 4 12 8 16" />
+      <polyline points="16 8 20 12 16 16" />
+      <line x1="13.5" y1="6" x2="10.5" y2="18" />
+    </svg>
+  );
+}
+
+// Verbatim glyph: monospace lines of even width inside a faint frame.
+export function VerbatimGlyph() {
+  return (
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <rect x="3" y="4" width="18" height="16" rx="1.5" opacity="0.4" />
+      <line x1="6" y1="9" x2="14" y2="9" />
+      <line x1="6" y1="12" x2="18" y2="12" />
+      <line x1="6" y1="15" x2="11" y2="15" />
+    </svg>
+  );
+}
+
 // A footnote glyph: a text line with a superscript marker and a rule + note.
 export function FootnoteGlyph() {
   return (
@@ -197,6 +222,8 @@ export const BLOCK_DEFS: Record<string, { label: string; icon: () => any; make: 
       )
     })
   },
+  "block::verbatim": { label: "Verbatim", icon: () => <VerbatimGlyph />, make: () => newVerbatim() },
+  "block::code":      { label: "Code",     icon: () => <CodeGlyph />,     make: () => newCode() },
   "block::equation": {
     label: "Equation",
     icon: () => <KatexIcon tex="a=b" size={18} />,
@@ -270,6 +297,8 @@ export const DOCUMENT_ORDER = [
   "block::footnote",
   "block::list",
   "block::table",
+  "block::verbatim",
+  "block::code",
   "block::page::cover",
   "block::page::toc",
   "block::page::bibliography"

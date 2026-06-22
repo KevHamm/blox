@@ -12,6 +12,7 @@ import { Subsection, Subsubsection, Section } from "./SectionBlocks";
 import { PageBlock } from "./PageBlock";
 import { ListBlock } from "./ListBlock";
 import { FrameBlock } from "./FrameBlock";
+import { CodeBlock } from "./CodeBlock";
 
 // Re-exported so existing importers (App.tsx) keep working.
 export { HeadingInput } from "./shared";
@@ -116,6 +117,13 @@ function renderChunk(chunk: Chunk, props: any, firstChild = false): any {
     return (
       <div data-leaf-id={node.id}>
         <MathBlock node={node} {...props} equationNumber={props.equationNumbers?.[node.id]} />
+      </div>
+    );
+  }
+  if (node.type === "verbatim" || node.type === "code") {
+    return (
+      <div data-leaf-id={node.id}>
+        <CodeBlock node={node} {...props} />
       </div>
     );
   }

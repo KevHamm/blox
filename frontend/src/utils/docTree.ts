@@ -160,6 +160,29 @@ export const newEquation = (): DocumentNode => ({
   items: [{ id: crypto.randomUUID(), latex: "" }]
 });
 
+// Preformatted blocks. Content lives in `text` (stored + exported raw — no LaTeX
+// escaping). Verbatim has no language; code carries a listings language ("text"
+// = none) shown in a picker.
+export const newVerbatim = (): DocumentNode => ({
+  id: crypto.randomUUID(),
+  type: "verbatim" as any,
+  text: ""
+});
+export const newCode = (): DocumentNode => ({
+  id: crypto.randomUUID(),
+  type: "code" as any,
+  language: "text",
+  text: ""
+});
+
+// Merge `patch` into the node with `id`, anywhere in the tree (used for discrete
+// field edits like a code block's language).
+export function patchNodeTree(node: any, id: string, patch: Record<string, any>): any {
+  if (node.id === id) return { ...node, ...patch };
+  if (!node.children) return node;
+  return { ...node, children: node.children.map((c: any) => patchNodeTree(c, id, patch)) };
+}
+
 // Find a node anywhere in the tree by id.
 export function findNodeById(node: any, id: string): any | null {
   if (node?.id === id) return node;

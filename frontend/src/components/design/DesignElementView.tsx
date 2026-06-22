@@ -31,10 +31,14 @@ export function DesignElementView({
   // only once, on release).
   const [live, setLive] = useState<Geom | null>(null);
   const g: Geom = live ?? { x: el.x, y: el.y, w: el.w, h: el.h };
+  // Live rotation while the rotate handle is dragged (committed once on release).
+  const [liveRot, setLiveRot] = useState<number | null>(null);
+  const rot = liveRot ?? el.rotation ?? 0;
   // Text elements toggle into an editing mode on double-click.
   const [editing, setEditing] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   const isText = el.kind === "text";
   const isLine = el.kind === "line";
@@ -127,6 +131,34 @@ export function DesignElementView({
     window.addEventListener("pointerup", up);
   }
 
+  // Free rotation about the element's centre. The unrotated wrapper's bounding
+  // box gives a stable centre (rotation is body-only, so the centre never moves);
+  // angles snap to the 90° marks within 4°.
+  function startRotate(e: React.PointerEvent) {
+    e.stopPropagation();
+    onSelect();
+    const rect = wrapRef.current!.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+    const start = el.rotation ?? 0;
+    const a0 = Math.atan2(e.clientY - cy, e.clientX - cx);
+    const compute = (ev: PointerEvent) => {
+      let deg = start + (Math.atan2(ev.clientY - cy, ev.clientX - cx) - a0) * 180 / Math.PI;
+      deg = ((Math.round(deg) % 360) + 360) % 360;
+      for (const s of [0, 90, 180, 270, 360]) if (Math.abs(deg - s) <= 4) deg = s % 360;
+      return deg;
+    };
+    const move = (ev: PointerEvent) => setLiveRot(compute(ev));
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      const deg = compute(ev);
+      setLiveRot(null);
+      if (deg !== (el.rotation ?? 0)) onPatch({ rotation: deg || undefined });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
   function onReplaceFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -171,7 +203,7 @@ export function DesignElementView({
     );
   } else if (el.kind === "image") {
     body = (
-      <div style={{ width: "100%", height: "100%", cursor: "move", pointerEvents: "auto" }} onPointerDown={startMove}>
+      <div style={{ width: "100%", height: "100%", cursor: "move", pointerEvents: "auto", transform: rot ? `rotate(${rot}deg)` : undefined, transformOrigin: "center" }} onPointerDown={startMove}>
         {el.src
           ? <img src={el.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none", display: "block" }} />
           : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontFamily: "var(--ui-font)", fontSize: 12, background: "rgba(0,0,0,0.04)" }}>No image</div>}
@@ -202,7 +234,7 @@ export function DesignElementView({
   }
 
   return (
-    <div data-design-el style={{ position: "absolute", left: g.x, top: g.y, width: W, height: H, pointerEvents: "none" }}>
+    <div ref={wrapRef} data-design-el style={{ position: "absolute", left: g.x, top: g.y, width: W, height: H, pointerEvents: "none" }}>
       {body}
 
       {selected && (
@@ -227,6 +259,22 @@ export function DesignElementView({
               }}
             />
           ))}
+
+          {/* rotate handle (images) — a knob on a short stem above the box */}
+          {el.kind === "image" && (
+            <>
+              <div style={{ position: "absolute", left: "50%", top: -26, width: 1, height: 26, background: "var(--ui-blue)", transform: "translateX(-50%)", pointerEvents: "none" }} />
+              <div
+                title="Rotate"
+                onPointerDown={startRotate}
+                style={{
+                  position: "absolute", left: "50%", top: -37, width: 14, height: 14, marginLeft: -7,
+                  borderRadius: "50%", background: "#fff", border: "1.5px solid var(--ui-blue)",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.3)", cursor: "grab", pointerEvents: "auto", touchAction: "none"
+                }}
+              />
+            </>
+          )}
 
           {/* per-kind floating toolbar */}
           <div
@@ -268,6 +316,12 @@ export function DesignElementView({
               <>
                 <button className="design-tg wide" title="Replace image" onClick={() => fileRef.current?.click()}>Replace</button>
                 <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onReplaceFile} />
+                <span className="design-div" />
+                <span className="design-lbl">Rotate</span>
+                <button className="shape-step" title="Rotate 90° left" onClick={() => onPatch({ rotation: (((el.rotation ?? 0) - 90 + 360) % 360) || undefined })}>⟲</button>
+                <span className="design-num">{Math.round(rot)}°</span>
+                <button className="shape-step" title="Rotate 90° right" onClick={() => onPatch({ rotation: (((el.rotation ?? 0) + 90) % 360) || undefined })}>⟳</button>
+                {rot ? <button className="shape-step" title="Reset rotation" onClick={() => onPatch({ rotation: undefined })}>✕</button> : null}
               </>
             )}
 

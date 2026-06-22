@@ -113,11 +113,14 @@ takes `readOnly`. Documents reuse this; design pages use `DesignViewer` + `Desig
 
 - **Document editor**: blocks (sections/sub/subsub, paragraphs w/ bold-italic-underline marks +
   footnotes + inline citations, abstract, lists, tables w/ per-cell color, figures w/ uploaded
-  images, display + inline math, beamer frames), drag-and-drop, **live pagination**, Typography
-  panel (font, size, line spacing, all four margins, columns, citation style), free-form shape
-  overlay, undo/redo, **export to compilable LaTeX** (figures bundled to a zip).
-- **Cover page designer**: free-form text / image / rect / line, move/resize/select, per-element
-  toolbar, page background + size, exports a TikZ titlepage (`/export-cover`).
+  images, display + inline math, **verbatim + code listings** (monospace leaf blocks; code has a
+  language picker → `lstlisting`, verbatim → `verbatim`), beamer frames), drag-and-drop,
+  **live pagination**, Typography panel (font, size, line spacing, all four margins, columns,
+  citation style), free-form shape overlay, undo/redo, **export to compilable LaTeX** (figures
+  bundled to a zip). Import a `.tex` back in (`utils/importLatex.ts`).
+- **Cover page designer**: free-form text / image / rect / line, move/resize/**rotate** (images:
+  a rotate handle + 90° toolbar buttons → `rotation` deg, exported as TikZ `rotate`), select,
+  per-element toolbar, page background + size, exports a TikZ titlepage (`/export-cover`).
 - **Welcome (logged out)**: hero with **LoGIN** (primary, opens modal) + **How it works** (6-step
   tutorial that slides in/out) + paper mockup. (New document / Design a page / Open project /
   Resume were removed — the logged-out app is essentially a sign-in gate; the old pickers still

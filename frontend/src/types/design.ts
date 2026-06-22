@@ -25,6 +25,7 @@ export interface DesignElement {
   align?: "left" | "center" | "right";
   // --- image ------------------------------------------------------------
   src?: string;                 // data URL
+  rotation?: number;            // clockwise degrees, about the element's centre
   // --- shapes (rect / line) --------------------------------------------
   fill?: string | null;         // rect fill, or null for none
   stroke?: string;              // stroke / line colour (hex)

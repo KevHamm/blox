@@ -401,6 +401,25 @@ def _collect_table_colors(node, out):
 # Section depth → command.
 _SECTION_CMD = {0: "section", 1: "subsection", 2: "subsubsection"}
 
+# Code-block language (editor picker / imported value, lowercased) → the name the
+# LaTeX ``listings`` package knows. Languages listings doesn't ship (JS, Go, Rust,
+# …) are absent → the listing is emitted with no ``language=`` option.
+_LST_LANGS = {
+    "python": "Python", "java": "Java", "c": "C", "c++": "C++", "ruby": "Ruby",
+    "php": "PHP", "sql": "SQL", "html": "HTML", "xml": "XML", "r": "R",
+    "matlab": "Matlab", "haskell": "Haskell", "bash": "bash", "perl": "Perl",
+    "pascal": "Pascal", "fortran": "Fortran",
+}
+
+
+def _has_node_type(node, type_name: str) -> bool:
+    """True when any node in the tree has ``type == type_name``."""
+    if not node:
+        return False
+    if node.get("type") == type_name:
+        return True
+    return any(_has_node_type(c, type_name) for c in node.get("children", []) or [])
+
 
 def node_to_latex(node, depth: int = 0, ctx=None) -> str:
     # `ctx` threads the figure counter and (for bundle exports) the list that
@@ -435,6 +454,16 @@ def node_to_latex(node, depth: int = 0, ctx=None) -> str:
             return "\\begin{equation}\n" + body + "\n\\end{equation}"
         return "\\[\n" + body + "\n\\]"
 
+    # Preformatted blocks — content is emitted RAW (never escaped).
+    if t == "verbatim":
+        return "\\begin{verbatim}\n" + (node.get("text") or "") + "\n\\end{verbatim}"
+
+    if t == "code":
+        lang = (node.get("language") or "").strip().lower()
+        mapped = _LST_LANGS.get(lang)
+        opt = f"[language={mapped}]" if mapped else ""
+        return "\\begin{lstlisting}" + opt + "\n" + (node.get("text") or "") + "\n\\end{lstlisting}"
+
     if t == "coverpage":
         return "\\begin{titlepage}\n\\centering\n\\vspace*{\\fill}\n{\\Huge " \
                + text_to_latex(node.get("title", "")) + "}\n\\vspace*{\\fill}\n\\end{titlepage}"
@@ -456,11 +485,15 @@ def node_to_latex(node, depth: int = 0, ctx=None) -> str:
     if t == "frame":  # beamer slide
         title = text_to_latex(strip_prefix(node.get("title", "")))
         inner = "\n".join(node_to_latex(c, 0, ctx) for c in node.get("children", []))
+        # A frame holding verbatim / lstlisting must be \begin{frame}[fragile].
+        fragile = _has_node_type(node, "verbatim") or _has_node_type(node, "code")
         if node.get("frameVariant") == "title":
             # The centered title slide: big title, content (author / date) below.
-            return ("\\begin{frame}[plain]\n\\centering\n\\vfill\n{\\LARGE "
+            opt = "[plain,fragile]" if fragile else "[plain]"
+            return ("\\begin{frame}" + opt + "\n\\centering\n\\vfill\n{\\LARGE "
                     + title + "\\par}\n\\bigskip\n" + inner + "\n\\vfill\n\\end{frame}")
-        return "\\begin{frame}{" + title + "}\n" + inner + "\n\\end{frame}"
+        opt = "[fragile]" if fragile else ""
+        return "\\begin{frame}" + opt + "{" + title + "}\n" + inner + "\n\\end{frame}"
 
     if t in ("section", "subsection", "subsubsection"):
         cmd = {"section": "section", "subsection": "subsection",
@@ -527,6 +560,10 @@ def export_bundle(doc, meta=None, bundle_assets=True):
         # The editor's letter template is article geometry with 1-inch margins
         # (the letter class has no \section, so article + geometry mirrors it).
         preamble.append("\\usepackage[margin=1in]{geometry}")
+    if doc and _has_node_type(doc, "code"):
+        # `listings` powers the code blocks; verbatim needs no package.
+        preamble.append("\\usepackage{listings}")
+        preamble.append("\\lstset{basicstyle=\\ttfamily\\small, breaklines=true, columns=fullflexible, frame=single, framesep=4pt, xleftmargin=4pt}")
     if not is_beamer:
         if table_colors:
             preamble.append("\\usepackage[table]{xcolor}")  # also loads colortbl
@@ -651,6 +688,11 @@ def _design_el_tikz(el, page_h_bp: float, index: int, assets) -> str:
         else:
             fname = name  # placeholder the user supplies next to the .tex
         inc = f"\\includegraphics[width={Wbp}bp,height={Hbp}bp]{{{fname}}}"
+        rot = _num(el.get("rotation"))
+        if rot:
+            # Rotate about the element centre (screen CW → TikZ CCW, so negate).
+            cx, cy = round(X + Wbp / 2, 2), round(Y_top - Hbp / 2, 2)
+            return f"\\node[anchor=center, rotate={round(-rot, 2)}, inner sep=0pt] at ({cx},{cy}) {{{inc}}};"
         return f"\\node[anchor=north west, inner sep=0pt] at ({X},{Y_top}) {{{inc}}};"
 
     # text

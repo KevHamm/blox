@@ -39,7 +39,9 @@ export interface DocumentNode {
     | "list"
     | "table"
     | "figure"
-    | "math";
+    | "math"
+    | "verbatim"
+    | "code";
   title?: string;
   text?: string;
   // Inline character formatting for paragraph text (bold / italic / underline),
@@ -73,6 +75,9 @@ export interface DocumentNode {
   // BibTeX style and the list of raw entries citations point at.
   bib?: { style: string; entries: { id: string; key: string; raw: string }[] };
   listStyle?: "dash" | "dot" | "number";
+  // Source-code listing language (only meaningful on a "code" node); "text" = no
+  // language. Verbatim/code content lives in `text`, stored and exported raw.
+  language?: string;
   items?: { id: string; text?: string; latex?: string }[];
   // A math node rendered as a numbered display equation (\begin{equation}).
   display?: boolean;
