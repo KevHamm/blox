@@ -398,6 +398,23 @@ def _collect_table_colors(node, out):
         _collect_table_colors(ch, out)
 
 
+def _collect_design_colors(node, out):
+    """Walk the tree gathering every imported design-page colour (background and
+    element colours), keyed name → hex."""
+    if node.get("type") == "designpage":
+        design = node.get("design") or {}
+        bg = design.get("bg")
+        if bg:
+            out[_color_name(bg)] = bg.lstrip("#").upper()
+        for el in design.get("elements", []) or []:
+            for key in ("color", "fill", "stroke"):
+                c = el.get(key)
+                if c:
+                    out[_color_name(c)] = c.lstrip("#").upper()
+    for ch in node.get("children", []) or []:
+        _collect_design_colors(ch, out)
+
+
 # Section depth → command.
 _SECTION_CMD = {0: "section", 1: "subsection", 2: "subsubsection"}
 
@@ -421,12 +438,47 @@ def _has_node_type(node, type_name: str) -> bool:
     return any(_has_node_type(c, type_name) for c in node.get("children", []) or [])
 
 
+def _design_page_to_latex(node, ctx=None) -> str:
+    """An imported design page → its own full page: a TikZ picture (background +
+    every element) scaled to the text width. Reuses the design-element drawing
+    used by the standalone cover export. Image elements are decoded into the
+    bundle assets (a running per-document counter keeps their filenames unique)."""
+    design = node.get("design") or {}
+    elements = design.get("elements", []) or []
+    pw = _num(design.get("pageWidth")) or 816.0
+    ph = _num(design.get("pageHeight")) or 1056.0
+    pw_bp, ph_bp = round(pw * _BP, 2), round(ph * _BP, 2)
+    bg = design.get("bg") or "#ffffff"
+    assets = ctx.get("assets") if ctx else None
+
+    gidx = ctx.get("design_eli", 0) if ctx is not None else 0
+    draws = [f"\\fill[{_color_name(bg)}] (0,0) rectangle ({pw_bp},{ph_bp});"]
+    for el in elements:
+        if not el.get("kind"):
+            gidx += 1
+            continue
+        draws.append(_design_el_tikz(el, ph_bp, gidx, assets))
+        gidx += 1
+    if ctx is not None:
+        ctx["design_eli"] = gidx
+
+    pic = ["\\begin{tikzpicture}[x=1bp,y=1bp]"] + ["  " + d for d in draws] + ["\\end{tikzpicture}"]
+    return (
+        "\\clearpage\n{\\thispagestyle{empty}%\n\\begin{center}%\n"
+        "\\resizebox{\\textwidth}{!}{%\n" + "\n".join(pic) + "}%\n"
+        "\\end{center}}\n\\clearpage"
+    )
+
+
 def node_to_latex(node, depth: int = 0, ctx=None) -> str:
     # `ctx` threads the figure counter and (for bundle exports) the list that
     # decoded image files are appended to; `assets` of None means "tex only".
     if ctx is None:
         ctx = {"fig": 0, "assets": None}
     t = node.get("type")
+
+    if t == "designpage":
+        return _design_page_to_latex(node, ctx)
 
     if t == "paragraph":
         body = text_to_latex(node.get("text", ""), node.get("marks"), node.get("footnotes"),
@@ -523,11 +575,15 @@ def export_bundle(doc, meta=None, bundle_assets=True):
     cls = (meta.get("cls") or "").lower()
     is_beamer = cls == "beamer" or any(c.get("type") == "frame" for c in children)
 
+    has_designpage = bool(doc) and _has_node_type(doc, "designpage")
+
     shape_colors, hook_lines = _shapes_to_latex(doc.get("shapes") if doc else None)
     table_colors = {}
+    design_colors = {}
     if doc:
         _collect_table_colors(doc, table_colors)
-    all_colors = {**shape_colors, **table_colors}
+        _collect_design_colors(doc, design_colors)
+    all_colors = {**shape_colors, **table_colors, **design_colors}
     color_lines = [f"\\definecolor{{{name}}}{{HTML}}{{{hexv}}}"
                    for name, hexv in sorted(all_colors.items())]
 
@@ -569,14 +625,13 @@ def export_bundle(doc, meta=None, bundle_assets=True):
             preamble.append("\\usepackage[table]{xcolor}")  # also loads colortbl
         elif all_colors:
             preamble.append("\\usepackage{xcolor}")
-    if hook_lines:
-        # Overlay shapes need TikZ (with the Latex arrow tip) and eso-pic's
-        # per-page foreground hook to place them at absolute page coordinates.
-        preamble += [
-            "\\usepackage{tikz}",
-            "\\usetikzlibrary{arrows.meta}",
-            "\\usepackage{eso-pic}",
-        ]
+    if hook_lines or has_designpage:
+        # Overlay shapes and imported design pages are drawn with TikZ (the Latex
+        # arrow tip is used by overlay arrows); only the per-page overlay shapes
+        # also need eso-pic's foreground shipout hook.
+        preamble += ["\\usepackage{tikz}", "\\usetikzlibrary{arrows.meta}"]
+        if hook_lines:
+            preamble.append("\\usepackage{eso-pic}")
     preamble += color_lines
     preamble += hook_lines
 
